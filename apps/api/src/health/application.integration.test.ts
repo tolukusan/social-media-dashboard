@@ -1059,6 +1059,43 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       );
       if (!reportResponse.ok)
         throw new Error('Filtered analytics report request failed.');
+      const anonymousReportPreview = await fetch(
+        `${baseUrl}/api/v1/reports/preview?${analyticsParams}`,
+      );
+      if (anonymousReportPreview.status !== 401)
+        throw new Error('Anonymous report preview access was not denied.');
+      const reportPreviewResponse = await fetch(
+        `${baseUrl}/api/v1/reports/preview?${analyticsParams}&comparisonPeriod=CUSTOM`,
+        { headers: { cookie: managementAuth.cookie } },
+      );
+      const reportPreview = (await reportPreviewResponse.json()) as {
+        title: string;
+        period: { from: string | null; to: string | null };
+        summary: {
+          recordCount: number;
+          kpis: Array<{ code: string; value: number | null }>;
+        };
+        comparison: { metric: string } | null;
+        trend: {
+          metric: string;
+          points: Array<{ bucket: string; value: number | null }>;
+        } | null;
+      };
+      if (
+        !reportPreviewResponse.ok ||
+        reportPreview.title !== 'Digital Marketing Performance Report' ||
+        reportPreview.period.from?.slice(0, 10) !== '2024-01-05' ||
+        reportPreview.period.to?.slice(0, 10) !== '2024-01-05' ||
+        reportPreview.summary.recordCount !== 1 ||
+        reportPreview.summary.kpis[0]?.code !==
+          countMapping.metricDefinition.code ||
+        reportPreview.summary.kpis[0]?.value !== 0 ||
+        reportPreview.comparison === null ||
+        reportPreview.trend?.points[0]?.value !== 0
+      )
+        throw new Error(
+          'Report preview diverged from the filtered dashboard, comparison, or trend data.',
+        );
       const targetedReportParams = new URLSearchParams(targetParams);
       const targetedReportResponse = await fetch(
         `${baseUrl}/api/v1/reports/dashboard.pdf?${targetedReportParams}`,

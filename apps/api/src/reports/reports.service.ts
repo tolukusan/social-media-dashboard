@@ -11,6 +11,20 @@ function pdfText(value: string) {
     .replace(/[^\x20-\x7e]/g, ' ');
 }
 
+function reportValue(
+  value: number | null,
+  unit: string | undefined,
+  currencyCode: string | null,
+) {
+  if (value === null) return 'Unavailable';
+  if (unit === 'PERCENT') return `${value.toFixed(2)}%`;
+  if (unit === 'CURRENCY')
+    return `${currencyCode ?? 'Currency unset'} ${value.toFixed(2)}`;
+  if (unit === 'POSITION') return value.toFixed(2);
+  if (unit === 'COUNT') return new Intl.NumberFormat('en').format(value);
+  return String(value);
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
@@ -65,18 +79,19 @@ export class ReportsService {
       `Platform: ${platform?.name ?? (query.platformId ? 'Unavailable' : 'All platforms')}`,
       `Metric filter: ${labels.get(comparisonMetric)?.label ?? 'All metrics'}`,
       `Target period: ${query.targetPeriod ?? 'off'}`,
+      `Reporting currency: ${result.reportingContext.currencyCode ?? 'unset'}`,
       `Records included: ${result.recordCount}`,
       `Campaigns in scope: ${result.campaignCount}`,
       `Active channels in scope: ${result.channelCount}`,
       ...(comparison
         ? [
             `Comparison: ${comparison.currentPeriod.from.toISOString().slice(0, 10)} to ${comparison.currentPeriod.to.toISOString().slice(0, 10)} vs ${comparison.previousPeriod.from.toISOString().slice(0, 10)} to ${comparison.previousPeriod.to.toISOString().slice(0, 10)} (${comparison.isPartial ? 'partial calendar period' : comparison.type})`,
-            `${labels.get(comparisonMetric)?.label ?? comparisonMetric} difference: ${comparison.difference[comparisonMetric] ?? 'Unavailable'}; change: ${comparison.percentageChange[comparisonMetric] == null ? 'Unavailable' : `${comparison.percentageChange[comparisonMetric]}%`}`,
+            `${labels.get(comparisonMetric)?.label ?? comparisonMetric}: current ${reportValue(comparison.current.kpis[comparisonMetric] ?? null, labels.get(comparisonMetric)?.unit, result.reportingContext.currencyCode)}; previous ${reportValue(comparison.previous.kpis[comparisonMetric] ?? null, labels.get(comparisonMetric)?.unit, result.reportingContext.currencyCode)}; difference ${reportValue(comparison.difference[comparisonMetric] ?? null, labels.get(comparisonMetric)?.unit, result.reportingContext.currencyCode)}; change ${comparison.percentageChange[comparisonMetric] == null ? 'Unavailable' : `${comparison.percentageChange[comparisonMetric]}%`}`,
           ]
         : ['Trend/comparison unavailable: choose both start and end dates.']),
       ...(trendPoints?.length
         ? [
-            `Trend (${trend?.grain ?? 'period'}): ${trendPoints.map((point) => `${point.bucket}=${point.value ?? 'Unavailable'}`).join(', ')}`,
+            `Trend: ${trendPoints.length} ${trend?.grain?.toLowerCase() ?? 'period'} buckets; full series is listed in the report preview.`,
           ]
         : ['Trend: no dated series available.']),
       '',
@@ -85,16 +100,12 @@ export class ReportsService {
         const note = metric?.aggregationNote
           ? ` (${metric.aggregationNote})`
           : '';
-        const rendered =
-          value === null
-            ? 'Unavailable'
-            : `${value} ${metric?.unit ?? ''}`.trim();
-        return `${metric?.label ?? code}: ${rendered}${note}`;
+        return `${metric?.label ?? code}: ${reportValue(value, metric?.unit, result.reportingContext.currencyCode)}${note}`;
       }),
       ...Object.entries(result.targetEvaluations ?? {}).map(
         ([code, evaluation]) => {
           const target = evaluation.target
-            ? `${evaluation.target.value} (${evaluation.target.comparisonRule}, ${evaluation.target.scopeType} ${evaluation.target.periodType})`
+            ? `${reportValue(evaluation.target.value, labels.get(code)?.unit, result.reportingContext.currencyCode)} (${evaluation.target.comparisonRule}, ${evaluation.target.scopeType} ${evaluation.target.periodType})`
             : 'No target';
           return `${labels.get(code)?.label ?? code} target: ${target}; status: ${evaluation.status ?? 'Status decision required'}`;
         },
@@ -105,6 +116,9 @@ export class ReportsService {
       generatedAt,
       timeZone,
       reportingTimeZoneConfigured: result.reportingContext.timeZone !== null,
+      reportingCurrency: result.reportingContext.currencyCode,
+      reportingCurrencyConfigured:
+        result.reportingContext.currencyCode !== null,
       period: { from: query.from ?? null, to: query.to ?? null },
       filters: {
         campaign: campaign?.name ?? null,

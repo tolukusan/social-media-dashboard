@@ -19,6 +19,8 @@ type ReportPreview = {
   generatedAt: string;
   timeZone: string;
   reportingTimeZoneConfigured: boolean;
+  reportingCurrency: string | null;
+  reportingCurrencyConfigured: boolean;
   period: { from: string | null; to: string | null };
   filters: {
     campaign: string | null;
@@ -159,6 +161,12 @@ export function Reports({ filters }: { filters: ReportFilters }) {
                 Reporting timezone is unset; timestamps are shown in UTC.
               </span>
             )}
+            {!preview.reportingCurrencyConfigured && (
+              <span>
+                Reporting currency is unset; currency values are not labelled
+                with a currency code.
+              </span>
+            )}
             <span>
               Period: {(preview.period.from ?? from) || 'All dates'} →{' '}
               {(preview.period.to ?? to) || 'All dates'}
@@ -180,6 +188,12 @@ export function Reports({ filters }: { filters: ReportFilters }) {
               {preview.summary.campaignCount} · Channels:{' '}
               {preview.summary.channelCount}
             </span>
+            {preview.summary.recordCount === 0 && (
+              <div className="notice" role="status">
+                No records match these filters. KPI values are unavailable, not
+                zero.
+              </div>
+            )}
             <label htmlFor="report-comparison-period">Comparison period</label>
             <select
               id="report-comparison-period"
@@ -225,9 +239,7 @@ export function Reports({ filters }: { filters: ReportFilters }) {
                   </tbody>
                 </table>
               </div>
-            ) : (
-              <span>No records match these report filters.</span>
-            )}
+            ) : null}
             {preview.comparison && (
               <span>
                 {preview.comparison.metric} comparison:{' '}
@@ -259,12 +271,33 @@ export function Reports({ filters }: { filters: ReportFilters }) {
               </span>
             )}
             {preview.trend && (
-              <span>
-                Trend: {preview.trend.metric} by{' '}
-                {preview.trend.grain.toLowerCase()} (
-                {preview.trend.points.length} buckets; empty buckets remain
-                unavailable).
-              </span>
+              <div className="table-scroll">
+                <table>
+                  <caption>
+                    {preview.trend.metric} trend by{' '}
+                    {preview.trend.grain.toLowerCase()}
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Period</th>
+                      <th scope="col">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.trend.points.map((point) => (
+                      <tr key={point.bucket}>
+                        <th scope="row">{point.bucket}</th>
+                        <td>{valueLabel(point.value, preview.trend!.unit)}</td>
+                      </tr>
+                    ))}
+                    {!preview.trend.points.length && (
+                      <tr>
+                        <td colSpan={2}>No trend buckets in this period.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             )}
             {preview.caveats.map((note) => (
               <span key={note}>Data note: {note}</span>

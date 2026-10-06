@@ -135,6 +135,19 @@ test('authenticated user can load views and logout', async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole('table').first()).toBeVisible();
   await expect(page.getByRole('table').nth(1)).toBeVisible();
+  await page.getByRole('button', { name: 'Reports', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Reports' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('table', { name: 'Report KPI summary' }),
+  ).toBeVisible();
+  await expect(page.getByText('Records: 1')).toBeVisible();
+  const reportDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download PDF' }).click();
+  expect((await reportDownload).suggestedFilename()).toMatch(
+    /^marketing-performance-report_.*\.pdf$/,
+  );
   await page.getByRole('button', { name: 'Overview' }).click();
   await page.getByRole('button', { name: 'Performance' }).click();
   await performanceRow.getByRole('button', { name: 'Edit' }).click();
