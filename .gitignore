@@ -7,14 +7,10 @@ playwright-report/
 test-results/
 .env
 .env.*
-docs/
-*.md
-.ai/
 *.log
 apps/api/prisma/*.db
 apps/api/prisma/*.db-journal
 apps/api/src/generated/
-.reorganisation-backup/
 *.tsbuildinfo
 performance/runtime/
 apps/api/.test-database

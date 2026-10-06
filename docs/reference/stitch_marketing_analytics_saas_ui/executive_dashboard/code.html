@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Lumina EdPublish - Executive Dashboard</title>
+<!-- Google Fonts & Material Symbols -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS v3 -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-tertiary-fixed-variant": "#38485d",
+            "surface-container-lowest": "#ffffff",
+            "surface-container-low": "#f2f4f6",
+            "inverse-surface": "#2d3133",
+            "surface-container": "#eceef0",
+            "primary-fixed": "#dae2fd",
+            "surface-bright": "#f7f9fb",
+            "error-container": "#ffdad6",
+            "on-error-container": "#93000a",
+            "primary-fixed-dim": "#bec6e0",
+            "on-surface": "#191c1e",
+            "on-secondary-fixed": "#002113",
+            "primary": "#000000",
+            "background": "#f7f9fb",
+            "inverse-on-surface": "#eff1f3",
+            "on-background": "#191c1e",
+            "on-tertiary-container": "#75859d",
+            "surface-dim": "#d8dadc",
+            "on-primary-container": "#7c839b",
+            "surface-variant": "#e0e3e5",
+            "tertiary-container": "#0b1c30",
+            "outline-variant": "#c6c6cd",
+            "secondary-container": "#6cf8bb",
+            "on-primary-fixed": "#131b2e",
+            "tertiary": "#000000",
+            "surface-container-highest": "#e0e3e5",
+            "surface": "#f7f9fb",
+            "on-secondary-fixed-variant": "#005236",
+            "on-tertiary": "#ffffff",
+            "secondary-fixed-dim": "#4edea3",
+            "outline": "#76777d",
+            "on-tertiary-fixed": "#0b1c30",
+            "tertiary-fixed-dim": "#b7c8e1",
+            "on-surface-variant": "#45464d",
+            "secondary-fixed": "#6ffbbe",
+            "primary-container": "#131b2e",
+            "on-error": "#ffffff",
+            "on-secondary-container": "#00714d",
+            "secondary": "#006c49",
+            "on-primary-fixed-variant": "#3f465c",
+            "inverse-primary": "#bec6e0",
+            "on-secondary": "#ffffff",
+            "error": "#ba1a1a",
+            "surface-tint": "#565e74",
+            "surface-container-high": "#e6e8ea",
+            "on-primary": "#ffffff",
+            "tertiary-fixed": "#d3e4fe"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "1.75rem",
+            "space-xs": "0.25rem",
+            "space-lg": "1.25rem",
+            "gutter": "1.25rem",
+            "space-2xl": "2.5rem",
+            "space-sm": "0.5rem",
+            "space-md": "0.75rem",
+            "margin": "2rem"
+          },
+          "fontFamily": {
+            "data-mono": ["JetBrains Mono", "monospace"],
+            "body-lg": ["Inter", "sans-serif"],
+            "headline-md": ["Inter", "sans-serif"],
+            "headline-sm": ["Inter", "sans-serif"],
+            "title-md": ["Inter", "sans-serif"],
+            "body-sm": ["Inter", "sans-serif"],
+            "label-md": ["Inter", "sans-serif"],
+            "display-lg": ["Inter", "sans-serif"],
+            "headline-lg": ["Inter", "sans-serif"],
+            "data-metric": ["Inter", "sans-serif"],
+            "body-md": ["Inter", "sans-serif"],
+            "label-sm": ["Inter", "sans-serif"]
+          },
+          "fontSize": {
+            "data-mono": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "body-lg": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+            "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.005em", "fontWeight": "600" }],
+            "title-md": ["16px", { "lineHeight": "22px", "fontWeight": "500" }],
+            "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+            "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "data-metric": ["32px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.02em", "fontWeight": "600" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 20px;
+      line-height: 1;
+      display: inline-block;
+    }
+    @keyframes spin-slow {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .animate-spin-custom {
+      animation: spin-slow 1.6s linear infinite;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased font-body-md min-h-screen selection:bg-secondary-container selection:text-on-secondary-container">
+<!-- ========================================================================= -->
+<!-- 1. LEFT SIDE NAVIGATION RAIL (Shared Component: SideNavBar)                -->
+<!-- ========================================================================= -->
+<aside aria-label="Main Navigation" class="h-screen w-64 flex flex-col fixed left-0 top-0 border-r border-outline-variant bg-surface-container-lowest z-40 shadow-sm">
+<div class="w-64 h-full flex flex-col justify-between p-4">
+<!-- Top Section: Workspace Identifier & Main Nav List -->
+<div class="flex flex-col gap-4">
+<!-- Organization Workspace Switcher -->
+<div class="flex items-center gap-3 px-2 py-2 border-b border-outline-variant/60 pb-3">
+<div class="w-9 h-9 rounded-lg bg-tertiary-container flex items-center justify-center text-on-tertiary font-headline-sm shadow-xs">
+<span class="text-secondary-fixed font-bold font-headline-sm">L</span>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<span class="text-headline-sm font-headline-sm font-bold text-primary tracking-tight truncate">Lumina EdPublish</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant truncate">Higher-Ed &amp; K-12 Division</span>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors p-1" title="Switch Organization">
+<span class="material-symbols-outlined" data-icon="unfold_more">unfold_more</span>
+</button>
+</div>
+<!-- Primary Navigation Links -->
+<nav class="flex flex-col gap-1 mt-1">
+<!-- Active Tab: Dashboard -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-container-low text-secondary font-semibold border-l-2 border-secondary transition-colors duration-150" href="#dashboard">
+<span class="material-symbols-outlined" data-icon="dashboard" data-weight="fill" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="text-label-md font-label-md">Dashboard</span>
+</a>
+<!-- Inactive Tab: Campaigns -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#campaigns">
+<span class="material-symbols-outlined" data-icon="campaign">campaign</span>
+<span class="text-label-md font-label-md">Campaigns</span>
+</a>
+<!-- Inactive Tab: Performance Data -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#performance">
+<span class="material-symbols-outlined" data-icon="trending_up">trending_up</span>
+<span class="text-label-md font-label-md">Performance Data</span>
+</a>
+<!-- Inactive Tab: Analytics -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#analytics">
+<span class="material-symbols-outlined" data-icon="insights">insights</span>
+<span class="text-label-md font-label-md">Analytics</span>
+</a>
+<!-- Inactive Tab: Reports -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#reports">
+<span class="material-symbols-outlined" data-icon="assessment">assessment</span>
+<span class="text-label-md font-label-md">Reports</span>
+</a>
+<!-- Inactive Tab: Users -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#users">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="text-label-md font-label-md">Users</span>
+</a>
+<!-- Inactive Tab: Channels & Platforms -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#channels">
+<span class="material-symbols-outlined" data-icon="hub">hub</span>
+<span class="text-label-md font-label-md">Channels &amp; Platforms</span>
+</a>
+<!-- Inactive Tab: Settings -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#settings">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="text-label-md font-label-md">Settings</span>
+</a>
+</nav>
+<!-- Primary Rail CTA Button -->
+<div class="pt-2">
+<button class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary hover:bg-primary-container font-label-md text-label-md py-2 px-3 rounded-lg shadow-sm transition-colors duration-150">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+<span>New Campaign</span>
+</button>
+</div>
+</div>
+<!-- Bottom Nav Section -->
+<div class="flex flex-col gap-1 border-t border-outline-variant/60 pt-3">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" href="#account">
+<span class="material-symbols-outlined" data-icon="shield_person">shield_person</span>
+<span class="text-label-md font-label-md">Account &amp; Security</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" href="#docs">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+<span class="text-label-md font-label-md">Documentation</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- ========================================================================= -->
+<!-- 2. TOP APP BAR (Shared Component: TopNavBar)                               -->
+<!-- ========================================================================= -->
+<header class="h-16 w-[calc(100%-16rem)] ml-64 border-b border-outline-variant fixed top-0 right-0 z-30 bg-surface-container-lowest shadow-sm">
+<div class="flex items-center justify-between px-8 w-full max-w-[1600px] h-full mx-auto">
+<!-- Left: Brand / Section Context + Search -->
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<span class="text-title-md font-title-md font-semibold text-on-surface">PubliMetrics</span>
+<span class="text-outline-variant">/</span>
+<span class="text-body-sm font-body-sm text-on-surface-variant font-medium">Dashboard Overview</span>
+</div>
+<div class="relative w-72">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+<input class="w-full h-[38px] pl-9 pr-3 rounded-lg border border-outline-variant bg-surface text-body-sm font-body-sm placeholder:text-outline focus:outline-none focus:border-primary focus:ring-1 focus:ring-secondary transition-all" placeholder="Search institutions, ISBNs, campaigns..." type="text"/>
+</div>
+</div>
+<!-- Right: Navigation links, Global Filters, Actions & Profile -->
+<div class="flex items-center gap-4">
+<!-- Date Selector Badge Link -->
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface hover:bg-surface-container-low transition-colors text-body-sm font-body-sm text-on-surface">
+<span class="material-symbols-outlined text-outline" data-icon="calendar_today">calendar_today</span>
+<span class="text-primary font-semibold border-b-2 border-secondary pb-0.5">Last 30 Days: Oct 1 - Oct 31, 2024</span>
+<span class="material-symbols-outlined text-outline" data-icon="expand_more">expand_more</span>
+</button>
+<div class="h-5 w-px bg-outline-variant"></div>
+<!-- Trailing Actions -->
+<button class="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface hover:bg-surface-container-low text-body-sm font-body-sm font-medium transition-colors">
+          Quick Actions
+        </button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-on-primary hover:bg-primary-container text-body-sm font-body-sm font-medium shadow-xs transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="file_download">file_download</span>
+<span>Export Report</span>
+</button>
+<!-- Icon Actions -->
+<button class="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors relative" title="Notifications">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="w-2 h-2 rounded-full bg-secondary absolute top-1.5 right-1.5"></span>
+</button>
+<button class="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" title="Settings / Tune">
+<span class="material-symbols-outlined" data-icon="tune">tune</span>
+</button>
+<!-- User Profile Pill -->
+<div class="flex items-center gap-2 pl-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant overflow-hidden">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="person">person</span>
+</div>
+<div class="flex flex-col text-left">
+<span class="text-label-sm font-label-sm text-on-surface font-semibold leading-tight">Dr. A. Vance</span>
+<span class="text-[10px] text-on-surface-variant leading-tight">Marketing Director</span>
+</div>
+</div>
+</div>
+</div>
+</header>
+<!-- ========================================================================= -->
+<!-- 3. MAIN WORKSPACE CANVAS                                                  -->
+<!-- ========================================================================= -->
+<main class="ml-64 pt-16 min-h-screen">
+<div class="w-full max-w-[1600px] mx-auto px-8 py-7 flex flex-col gap-6">
+<!-- Page Headline & Subtitle Anchor -->
+<div class="flex items-start justify-between">
+<div>
+<h1 class="text-headline-lg font-headline-lg text-primary tracking-tight">Executive Dashboard</h1>
+<p class="text-body-sm font-body-sm text-on-surface-variant mt-0.5">Educational Publishing Performance &amp; Curriculum Adoption Q4 • Higher-Ed Institutional Tracking</p>
+</div>
+<div class="flex items-center gap-2">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-label-sm font-label-sm bg-secondary-container/40 text-on-secondary-fixed-variant border border-secondary-fixed-dim">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+            Sync Active: 41 Institutional Repositories
+          </span>
+</div>
+</div>
+<!-- ===================================================================== -->
+<!-- 4. TOP KPI SUMMARY METRIC CARDS (4-Column Grid)                       -->
+<!-- ===================================================================== -->
+<section aria-label="Key Performance Indicators" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-space-lg">
+<!-- KPI Card 1: Curriculum Lead Inquiries -->
+<div class="bg-surface-container-lowest border border-outline-variant/80 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<span class="text-label-md font-label-md text-on-surface-variant">Curriculum Lead Inquiries</span>
+<span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-secondary-container/30 text-secondary border border-secondary/20">
+<span class="material-symbols-outlined text-[14px]" data-icon="arrow_upward">arrow_upward</span>
+              18.4%
+            </span>
+</div>
+<div class="mt-3">
+<div class="text-data-metric font-data-metric text-primary">14,820</div>
+<div class="flex items-center justify-between mt-1 text-label-sm font-label-sm text-on-surface-variant">
+<span>vs. prev cycle (12,518)</span>
+<span class="font-data-mono text-secondary">STEM +22%</span>
+</div>
+</div>
+</div>
+<!-- KPI Card 2: Institutional Sample Requests (Styled referencing active users) -->
+<div class="bg-surface-container-lowest border border-outline-variant/80 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<span class="text-label-md font-label-md text-on-surface-variant">Institutional Sample Requests</span>
+<span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-secondary-container/30 text-secondary border border-secondary/20">
+<span class="material-symbols-outlined text-[14px]" data-icon="arrow_upward">arrow_upward</span>
+              12.1%
+            </span>
+</div>
+<div class="mt-3">
+<div class="text-data-metric font-data-metric text-primary flex items-baseline gap-2">
+<span>3,842</span>
+<span class="text-body-sm font-body-sm text-secondary font-medium">Active Instructors</span>
+</div>
+<div class="flex items-center justify-between mt-1 text-label-sm font-label-sm text-on-surface-variant">
+<span>YoY Baseline Normalized</span>
+<span class="font-data-mono text-primary font-medium">84.2% verified</span>
+</div>
+</div>
+</div>
+<!-- KPI Card 3: Blended CAC (Higher-Ed) -->
+<div class="bg-surface-container-lowest border border-outline-variant/80 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<span class="text-label-md font-label-md text-on-surface-variant">Blended CAC (Higher-Ed)</span>
+<span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-secondary-container/30 text-secondary border border-secondary/20">
+<span class="material-symbols-outlined text-[14px]" data-icon="arrow_downward">arrow_downward</span>
+              6.8%
+            </span>
+</div>
+<div class="mt-3">
+<div class="text-data-metric font-data-metric text-primary">$142.50</div>
+<div class="flex items-center justify-between mt-1 text-label-sm font-label-sm text-on-surface-variant">
+<span>Target: &lt; $155.00</span>
+<span class="font-data-mono text-secondary">-$10.40 saved/acq</span>
+</div>
+</div>
+</div>
+<!-- KPI Card 4: Attributed Courseware Revenue -->
+<div class="bg-surface-container-lowest border border-outline-variant/80 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<span class="text-label-md font-label-md text-on-surface-variant">Attributed Courseware Revenue</span>
+<span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-secondary-container/30 text-secondary border border-secondary/20">
+<span class="material-symbols-outlined text-[14px]" data-icon="arrow_upward">arrow_upward</span>
+              24.5%
+            </span>
+</div>
+<div class="mt-3">
+<div class="text-data-metric font-data-metric text-primary">$2.84M</div>
+<div class="flex items-center justify-between mt-1 text-label-sm font-label-sm text-on-surface-variant">
+<span>Pacing: 114% to Fall Target</span>
+<span class="font-data-mono text-on-surface-variant">Goal $2.48M</span>
+</div>
+</div>
+</div>
+</section>
+<!-- ===================================================================== -->
+<!-- 5. MAIN HERO ANALYTICS CHART & PROCESS CALLOUT OVERLAY                 -->
+<!-- ===================================================================== -->
+<section aria-label="Curriculum Engagement Chart" class="bg-surface-container-lowest border border-outline-variant/80 rounded-xl p-6 shadow-sm relative overflow-hidden">
+<!-- Header Row of Chart Card -->
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-outline-variant/50">
+<div>
+<div class="flex items-center gap-2">
+<h2 class="text-headline-sm font-headline-sm text-primary">Curriculum Engagement &amp; Inquiry Velocity</h2>
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-data-mono bg-surface-container-low text-on-surface-variant border border-outline-variant">
+                2016 - 2023 Historical / 2024 Actual
+              </span>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant mt-0.5">Faculty course evaluation copies, syllabus integration mentions, and institutional bookstore orders</p>
+</div>
+<!-- Controls: Granularity switcher -->
+<div class="flex items-center gap-2">
+<div class="inline-flex rounded-lg border border-outline-variant p-0.5 bg-surface">
+<button class="px-2.5 py-1 text-label-sm font-label-sm text-on-surface-variant hover:text-on-surface rounded">Daily</button>
+<button class="px-2.5 py-1 text-label-sm font-label-sm text-on-surface-variant hover:text-on-surface rounded">Weekly</button>
+<button class="px-2.5 py-1 text-label-sm font-label-sm text-on-surface-variant hover:text-on-surface rounded">Monthly</button>
+<button class="px-2.5 py-1 text-label-sm font-label-sm bg-primary text-on-primary font-semibold rounded shadow-xs">Yearly</button>
+</div>
+<button class="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-outline-variant text-body-sm font-body-sm hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[16px] text-outline" data-icon="tune">tune</span>
+<span class="text-label-sm font-label-sm">Filters</span>
+</button>
+</div>
+</div>
+<!-- Chart Visualization Viewport with Absolute Popovers Matching Reference Image -->
+<div class="relative w-full h-80 pt-6 pb-2">
+<!-- ================================================================= -->
+<!-- FLOATING REFERENCE CARD 1: Stat Pill "3.8K Active Users"         -->
+<!-- ================================================================= -->
+<div class="absolute right-16 top-4 z-20 bg-surface-container-lowest border border-outline-variant/90 rounded-xl px-5 py-3 shadow-[0_10px_25px_-5px_rgba(15,23,42,0.08),0_8px_10px_-6px_rgba(15,23,42,0.04)] transition-transform hover:-translate-y-0.5">
+<div class="text-[26px] font-bold tracking-tight text-primary leading-tight font-headline-md">3.8K</div>
+<div class="text-label-md font-label-md text-secondary font-medium flex items-center gap-1.5 mt-0.5">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+              Active Users
+            </div>
+</div>
+<!-- ================================================================= -->
+<!-- FLOATING REFERENCE CARD 2: "Processing: Data Ignition..."         -->
+<!-- ================================================================= -->
+<div class="absolute left-1/4 top-2 z-20 bg-surface-container-lowest border border-outline-variant/90 rounded-2xl p-4 w-64 shadow-[0_12px_28px_-6px_rgba(15,23,42,0.10),0_8px_10px_-6px_rgba(15,23,42,0.04)]">
+<div class="text-headline-sm font-headline-sm text-primary mb-3">Processing</div>
+<div class="flex flex-col gap-2.5">
+<!-- Item 1: Data Ignition (Checked) -->
+<div class="flex items-center justify-between">
+<span class="text-body-sm font-body-sm text-on-surface font-medium">Data Ignition</span>
+<span class="material-symbols-outlined text-secondary text-[20px]" data-icon="check_circle">check_circle</span>
+</div>
+<!-- Item 2: Pattern Recognition (Checked) -->
+<div class="flex items-center justify-between">
+<span class="text-body-sm font-body-sm text-on-surface font-medium">Pattern Recognition</span>
+<span class="material-symbols-outlined text-secondary text-[20px]" data-icon="check_circle">check_circle</span>
+</div>
+<!-- Item 3: Insight Generation (In-progress Spinner) -->
+<div class="flex items-center justify-between">
+<span class="text-body-sm font-body-sm text-on-surface font-medium">Insight Generation</span>
+<span class="material-symbols-outlined text-outline text-[20px] animate-spin-custom" data-icon="progress_activity">progress_activity</span>
+</div>
+</div>
+</div>
+<!-- SVG Analytical Line Chart with Mint Gradient & Precise Hairline Grid -->
+<svg class="w-full h-full overflow-visible" preserveaspectratio="none" viewbox="0 0 1000 240">
+<defs>
+<!-- Mint Area Gradient matching prompt specs -->
+<lineargradient id="chartMintGrad" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#10B981" stop-opacity="0.22"></stop>
+<stop offset="65%" stop-color="#10B981" stop-opacity="0.06"></stop>
+<stop offset="100%" stop-color="#10B981" stop-opacity="0.0"></stop>
+</lineargradient>
+<pattern height="40" id="grid-pattern" patternunits="userSpaceOnUse" width="125">
+<path d="M 125 0 L 0 0 0 40" fill="none" stroke="#EDF2F7" stroke-width="1"></path>
+</pattern>
+</defs>
+<!-- Hairline Background Grid Lines -->
+<line stroke="#EDF2F7" stroke-dasharray="3,3" stroke-width="1" x1="40" x2="980" y1="20" y2="20"></line>
+<line stroke="#EDF2F7" stroke-dasharray="3,3" stroke-width="1" x1="40" x2="980" y1="65" y2="65"></line>
+<line stroke="#EDF2F7" stroke-dasharray="3,3" stroke-width="1" x1="40" x2="980" y1="110" y2="110"></line>
+<line stroke="#EDF2F7" stroke-dasharray="3,3" stroke-width="1" x1="40" x2="980" y1="155" y2="155"></line>
+<line stroke="#E2E8F0" stroke-width="1.5" x1="40" x2="980" y1="200" y2="200"></line>
+<!-- Y Axis Numeric Reference Labels -->
+<text fill="#94A3B8" font-family="JetBrains Mono" font-size="11" text-anchor="end" x="32" y="24">100k</text>
+<text fill="#94A3B8" font-family="JetBrains Mono" font-size="11" text-anchor="end" x="32" y="69">50k</text>
+<text fill="#94A3B8" font-family="JetBrains Mono" font-size="11" text-anchor="end" x="32" y="114">20k</text>
+<text fill="#94A3B8" font-family="JetBrains Mono" font-size="11" text-anchor="end" x="32" y="159">10k</text>
+<text fill="#94A3B8" font-family="JetBrains Mono" font-size="11" text-anchor="end" x="32" y="204">0</text>
+<!-- Chart Filled Polygonal Area -->
+<!-- Coordinates accurately reflecting reference chart curve: (2016 -> 2023) -->
+<!-- (70, 185) -> (195, 175) -> (320, 130) -> (450, 105) -> (580, 185) -> (710, 160) -> (840, 85) -> (960, 45) -->
+<polygon fill="url(#chartMintGrad)" points="70,185 195,175 320,130 450,105 580,185 710,160 840,85 960,45 960,200 70,200"></polygon>
+<!-- Primary Series Curve (2px Mint line with crisp dash style from reference) -->
+<polyline fill="none" points="70,185 195,175 320,130 450,105 580,185 710,160 840,85 960,45" stroke="#10B981" stroke-dasharray="3,3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></polyline>
+<!-- Data Point Markers -->
+<circle cx="70" cy="185" fill="#FFFFFF" r="3.5" stroke="#10B981" stroke-width="2"></circle>
+<circle cx="195" cy="175" fill="#FFFFFF" r="3.5" stroke="#10B981" stroke-width="2"></circle>
+<circle cx="320" cy="130" fill="#FFFFFF" r="3.5" stroke="#10B981" stroke-width="2"></circle>
+<circle cx="450" cy="105" fill="#FFFFFF" r="3.5" stroke="#10B981" stroke-width="2"></circle>
+<circle cx="580" cy="185" fill="#FFFFFF" r="3.5" stroke="#10B981" stroke-width="2"></circle>
+<circle cx="710" cy="160" fill="#FFFFFF" r="3.5" stroke="#10B981" stroke-width="2"></circle>
+<circle cx="840" cy="85" fill="#FFFFFF" r="3.5" stroke="#10B981" stroke-width="2"></circle>
+<circle cx="960" cy="45" fill="#FFFFFF" r="4.5" stroke="#10B981" stroke-width="2.5"></circle>
+<!-- Highlight halo on highest metric -->
+<circle cx="960" cy="45" fill="#10B981" fill-opacity="0.15" r="9"></circle>
+<!-- Vertical grid marker lines at key milestones -->
+<line stroke="#CBD5E1" stroke-dasharray="2,2" stroke-width="1" x1="450" x2="450" y1="105" y2="200"></line>
+<line stroke="#CBD5E1" stroke-dasharray="2,2" stroke-width="1" x1="960" x2="960" y1="45" y2="200"></line>
+<!-- X-Axis Labels (2016 - 2023) -->
+<text fill="#64748B" font-family="Inter" font-size="12" text-anchor="middle" x="70" y="222">2016</text>
+<text fill="#64748B" font-family="Inter" font-size="12" text-anchor="middle" x="195" y="222">2017</text>
+<text fill="#64748B" font-family="Inter" font-size="12" text-anchor="middle" x="320" y="222">2018</text>
+<text fill="#64748B" font-family="Inter" font-size="12" text-anchor="middle" x="450" y="222">2019</text>
+<text fill="#64748B" font-family="Inter" font-size="12" text-anchor="middle" x="580" y="222">2020</text>
+<text fill="#64748B" font-family="Inter" font-size="12" text-anchor="middle" x="710" y="222">2021</text>
+<text fill="#64748B" font-family="Inter" font-size="12" text-anchor="middle" x="840" y="222">2022</text>
+<text fill="#0F172A" font-family="Inter" font-size="12" font-weight="600" text-anchor="middle" x="960" y="222">2023</text>
+</svg>
+</div>
+<!-- Footer Data Annotation bar -->
+<div class="mt-4 pt-3 border-t border-outline-variant/40 flex flex-wrap items-center justify-between text-body-sm font-body-sm text-on-surface-variant">
+<div class="flex items-center gap-4">
+<span class="flex items-center gap-1.5">
+<span class="w-3 h-0.5 bg-secondary"></span>
+<span>Observed Faculty Inquiries</span>
+</span>
+<span class="flex items-center gap-1.5 text-on-surface-variant">
+<span class="w-3 h-0.5 bg-outline-variant stroke-dasharray"></span>
+<span>Projected Course Syllabus Baseline</span>
+</span>
+</div>
+<div class="flex items-center gap-2 text-label-sm font-label-sm">
+<span class="text-secondary font-medium">99.4% Algorithm Confidence</span>
+<span>•</span>
+<span class="font-data-mono">Source: Higher-Ed Registrar Ingest &amp; LMS API</span>
+</div>
+</div>
+</section>
+<!-- ===================================================================== -->
+<!-- 6. SECONDARY BENTO MODULES (Adoption Funnel & Channel Attribution)    -->
+<!-- ===================================================================== -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
+<!-- Left: Adoption Funnel Conversion (7 cols) -->
+<div class="lg:col-span-7 bg-surface-container-lowest border border-outline-variant/80 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-1">
+<h3 class="text-headline-sm font-headline-sm text-primary">Adoption Funnel Conversion</h3>
+<span class="text-label-sm font-label-sm font-data-mono text-secondary bg-secondary-container/30 px-2 py-0.5 rounded border border-secondary/20">Stage Velocity: 14.2 days avg</span>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant mb-4">Progression from digital evaluation copy request to university bookstore purchase order</p>
+<div class="flex flex-col gap-3.5">
+<!-- Funnel Stage 1 -->
+<div>
+<div class="flex justify-between items-center text-body-sm font-body-sm mb-1.5">
+<span class="font-medium text-on-surface flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-surface-container flex items-center justify-center text-label-sm font-label-sm text-on-surface-variant">1</span>
+                    Inspection copies requested
+                  </span>
+<div class="flex items-center gap-3">
+<span class="font-data-mono text-on-surface-variant">14,820 inquiries</span>
+<span class="font-semibold text-primary">100%</span>
+</div>
+</div>
+<div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 100%;"></div>
+</div>
+</div>
+<!-- Funnel Stage 2 -->
+<div>
+<div class="flex justify-between items-center text-body-sm font-body-sm mb-1.5">
+<span class="font-medium text-on-surface flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-surface-container flex items-center justify-center text-label-sm font-label-sm text-on-surface-variant">2</span>
+                    Syllabus review download
+                  </span>
+<div class="flex items-center gap-3">
+<span class="font-data-mono text-on-surface-variant">8,150 faculty</span>
+<span class="font-semibold text-primary">55.0%</span>
+</div>
+</div>
+<div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 55%;"></div>
+</div>
+</div>
+<!-- Funnel Stage 3 -->
+<div>
+<div class="flex justify-between items-center text-body-sm font-body-sm mb-1.5">
+<span class="font-medium text-on-surface flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-surface-container flex items-center justify-center text-label-sm font-label-sm text-on-surface-variant">3</span>
+                    Department committee approval
+                  </span>
+<div class="flex items-center gap-3">
+<span class="font-data-mono text-on-surface-variant">3,842 programs</span>
+<span class="font-semibold text-primary">25.9%</span>
+</div>
+</div>
+<div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 25.9%;"></div>
+</div>
+</div>
+<!-- Funnel Stage 4 -->
+<div>
+<div class="flex justify-between items-center text-body-sm font-body-sm mb-1.5">
+<span class="font-medium text-on-surface flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-surface-container flex items-center justify-center text-label-sm font-label-sm text-on-surface-variant">4</span>
+                    Bookstore order / LMS integration
+                  </span>
+<div class="flex items-center gap-3">
+<span class="font-data-mono text-on-surface-variant">1,940 campuses</span>
+<span class="font-semibold text-secondary">13.1%</span>
+</div>
+</div>
+<div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 13.1%;"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-4 pt-3 border-t border-outline-variant/40 flex items-center justify-between text-label-sm font-label-sm text-on-surface-variant">
+<span>Overall Inspection-to-Adoption: <strong class="text-secondary font-semibold">13.1%</strong> (+2.4% vs Industry Average)</span>
+<a class="text-primary hover:underline font-medium flex items-center gap-0.5" href="#reports">
+<span>View Cohort Matrix</span>
+<span class="material-symbols-outlined text-[14px]" data-icon="chevron_right">chevron_right</span>
+</a>
+</div>
+</div>
+<!-- Right: Channel Attribution Share (5 cols) -->
+<div class="lg:col-span-5 bg-surface-container-lowest border border-outline-variant/80 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-1">
+<h3 class="text-headline-sm font-headline-sm text-primary">Channel Attribution Share</h3>
+<span class="material-symbols-outlined text-outline cursor-pointer" data-icon="more_horiz">more_horiz</span>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant mb-4">Multi-touch attribution for university lead generation</p>
+<div class="space-y-3.5">
+<!-- Channel 1 -->
+<div>
+<div class="flex justify-between text-body-sm font-body-sm mb-1">
+<span class="text-on-surface font-medium">Academic Conferences &amp; Symposia</span>
+<span class="font-data-mono font-semibold text-primary">32%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 32%;"></div>
+</div>
+</div>
+<!-- Channel 2 -->
+<div>
+<div class="flex justify-between text-body-sm font-body-sm mb-1">
+<span class="text-on-surface font-medium">Institutional Targeted Email</span>
+<span class="font-data-mono font-semibold text-secondary">28%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 28%;"></div>
+</div>
+</div>
+<!-- Channel 3 -->
+<div>
+<div class="flex justify-between text-body-sm font-body-sm mb-1">
+<span class="text-on-surface font-medium">Search &amp; Academic PPC</span>
+<span class="font-data-mono font-semibold text-on-surface">24%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-on-surface-variant rounded-full" style="width: 24%;"></div>
+</div>
+</div>
+<!-- Channel 4 -->
+<div>
+<div class="flex justify-between text-body-sm font-body-sm mb-1">
+<span class="text-on-surface font-medium">Educator Masterclass Webinars</span>
+<span class="font-data-mono font-semibold text-on-surface">16%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-outline rounded-full" style="width: 16%;"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-4 pt-3 border-t border-outline-variant/40 flex items-center justify-between text-label-sm font-label-sm">
+<span class="text-on-surface-variant">Top ROI: <strong class="text-on-surface font-semibold">Webinars (4.8x Return)</strong></span>
+<button class="text-secondary font-semibold hover:underline">Reallocate Budget</button>
+</div>
+</div>
+</section>
+<!-- ===================================================================== -->
+<!-- 7. BOTTOM TABLE: Recent High-Impact Campaigns                          -->
+<!-- ===================================================================== -->
+<section aria-label="Campaign Overview" class="bg-surface-container-lowest border border-outline-variant/80 rounded-xl overflow-hidden shadow-sm">
+<div class="p-5 border-b border-outline-variant/60 flex items-center justify-between flex-wrap gap-3">
+<div>
+<h3 class="text-headline-sm font-headline-sm text-primary">Recent High-Impact Campaigns</h3>
+<p class="text-body-sm font-body-sm text-on-surface-variant mt-0.5">Discipline-focused marketing programs deployed across Higher-Ed and K-12 systems</p>
+</div>
+<div class="flex items-center gap-2">
+<button class="px-3 py-1.5 rounded-lg border border-outline-variant text-body-sm font-body-sm hover:bg-surface-container-low transition-colors">
+              Filter by Discipline
+            </button>
+<button class="px-3 py-1.5 rounded-lg bg-primary text-on-primary hover:bg-primary-container text-body-sm font-body-sm font-medium transition-colors">
+              View All Campaigns
+            </button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface border-b border-outline-variant/70">
+<th class="py-3 px-5 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-wider">Campaign Name</th>
+<th class="py-3 px-5 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-wider">Discipline</th>
+<th class="py-3 px-5 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-wider">Status</th>
+<th class="py-3 px-5 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-wider">Targeted Faculties</th>
+<th class="py-3 px-5 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-wider">Conversion Rate</th>
+<th class="py-3 px-5 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-wider text-right">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/40 text-body-sm font-body-sm">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low/50 transition-colors">
+<td class="py-3.5 px-5 font-medium text-primary">
+<div class="flex items-center gap-2.5">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span>Fall 2025 STEM Textbook Pre-adoption</span>
+</div>
+</td>
+<td class="py-3.5 px-5 text-on-surface-variant">Natural Sciences &amp; Engineering</td>
+<td class="py-3.5 px-5">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-secondary-container/40 text-secondary border border-secondary/20">
+                    Active
+                  </span>
+</td>
+<td class="py-3.5 px-5 font-data-mono text-on-surface">1,420 Departments</td>
+<td class="py-3.5 px-5">
+<div class="flex items-center gap-2">
+<span class="font-data-mono font-medium text-secondary">19.4%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 78%;"></div>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-5 text-right">
+<a class="text-primary hover:text-secondary font-medium inline-flex items-center gap-0.5" href="#campaign-details">
+<span>Manage</span>
+<span class="material-symbols-outlined text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low/50 transition-colors">
+<td class="py-3.5 px-5 font-medium text-primary">
+<div class="flex items-center gap-2.5">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span>Nursing Clinical Simulation Portal</span>
+</div>
+</td>
+<td class="py-3.5 px-5 text-on-surface-variant">Health Sciences &amp; Allied Health</td>
+<td class="py-3.5 px-5">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-secondary-container/40 text-secondary border border-secondary/20">
+                    Active
+                  </span>
+</td>
+<td class="py-3.5 px-5 font-data-mono text-on-surface">880 Nursing Schools</td>
+<td class="py-3.5 px-5">
+<div class="flex items-center gap-2">
+<span class="font-data-mono font-medium text-secondary">23.8%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 92%;"></div>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-5 text-right">
+<a class="text-primary hover:text-secondary font-medium inline-flex items-center gap-0.5" href="#campaign-details">
+<span>Manage</span>
+<span class="material-symbols-outlined text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low/50 transition-colors">
+<td class="py-3.5 px-5 font-medium text-primary">
+<div class="flex items-center gap-2.5">
+<span class="w-2 h-2 rounded-full bg-amber-500"></span>
+<span>Introductory Macroeconomics Adaptive Courseware</span>
+</div>
+</td>
+<td class="py-3.5 px-5 text-on-surface-variant">Business &amp; Social Sciences</td>
+<td class="py-3.5 px-5">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-amber-50 text-amber-800 border border-amber-200">
+                    In Review
+                  </span>
+</td>
+<td class="py-3.5 px-5 font-data-mono text-on-surface">650 Colleges</td>
+<td class="py-3.5 px-5">
+<div class="flex items-center gap-2">
+<span class="font-data-mono font-medium text-on-surface-variant">11.2%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-outline rounded-full" style="width: 44%;"></div>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-5 text-right">
+<a class="text-primary hover:text-secondary font-medium inline-flex items-center gap-0.5" href="#campaign-details">
+<span>Manage</span>
+<span class="material-symbols-outlined text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-low/50 transition-colors">
+<td class="py-3.5 px-5 font-medium text-primary">
+<div class="flex items-center gap-2.5">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span>K-12 Early Literacy Interactive Decodables</span>
+</div>
+</td>
+<td class="py-3.5 px-5 text-on-surface-variant">Elementary Education &amp; Reading</td>
+<td class="py-3.5 px-5">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-secondary-container/40 text-secondary border border-secondary/20">
+                    Active
+                  </span>
+</td>
+<td class="py-3.5 px-5 font-data-mono text-on-surface">310 School Districts</td>
+<td class="py-3.5 px-5">
+<div class="flex items-center gap-2">
+<span class="font-data-mono font-medium text-secondary">27.5%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 95%;"></div>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-5 text-right">
+<a class="text-primary hover:text-secondary font-medium inline-flex items-center gap-0.5" href="#campaign-details">
+<span>Manage</span>
+<span class="material-symbols-outlined text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</main>
+</body></html>

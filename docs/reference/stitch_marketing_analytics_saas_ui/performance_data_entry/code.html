@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Performance Record Entry - Lumina EdPublish</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-tertiary-fixed-variant": "#38485d",
+            "surface-container-lowest": "#ffffff",
+            "surface-container-low": "#f2f4f6",
+            "inverse-surface": "#2d3133",
+            "surface-container": "#eceef0",
+            "primary-fixed": "#dae2fd",
+            "surface-bright": "#f7f9fb",
+            "error-container": "#ffdad6",
+            "on-error-container": "#93000a",
+            "primary-fixed-dim": "#bec6e0",
+            "on-surface": "#191c1e",
+            "on-secondary-fixed": "#002113",
+            "primary": "#000000",
+            "background": "#f7f9fb",
+            "inverse-on-surface": "#eff1f3",
+            "on-background": "#191c1e",
+            "on-tertiary-container": "#75859d",
+            "surface-dim": "#d8dadc",
+            "on-primary-container": "#7c839b",
+            "surface-variant": "#e0e3e5",
+            "tertiary-container": "#0b1c30",
+            "outline-variant": "#c6c6cd",
+            "secondary-container": "#6cf8bb",
+            "on-primary-fixed": "#131b2e",
+            "tertiary": "#000000",
+            "surface-container-highest": "#e0e3e5",
+            "surface": "#f7f9fb",
+            "on-secondary-fixed-variant": "#005236",
+            "on-tertiary": "#ffffff",
+            "secondary-fixed-dim": "#4edea3",
+            "outline": "#76777d",
+            "on-tertiary-fixed": "#0b1c30",
+            "tertiary-fixed-dim": "#b7c8e1",
+            "on-surface-variant": "#45464d",
+            "secondary-fixed": "#6ffbbe",
+            "primary-container": "#131b2e",
+            "on-error": "#ffffff",
+            "on-secondary-container": "#00714d",
+            "secondary": "#006c49",
+            "on-primary-fixed-variant": "#3f465c",
+            "inverse-primary": "#bec6e0",
+            "on-secondary": "#ffffff",
+            "error": "#ba1a1a",
+            "surface-tint": "#565e74",
+            "surface-container-high": "#e6e8ea",
+            "on-primary": "#ffffff",
+            "tertiary-fixed": "#d3e4fe"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "1.75rem",
+            "space-xs": "0.25rem",
+            "space-lg": "1.25rem",
+            "gutter": "1.25rem",
+            "space-2xl": "2.5rem",
+            "space-sm": "0.5rem",
+            "space-md": "0.75rem",
+            "margin": "2rem"
+          },
+          "fontFamily": {
+            "data-mono": ["JetBrains Mono", "monospace"],
+            "body-lg": ["Inter", "sans-serif"],
+            "headline-md": ["Inter", "sans-serif"],
+            "headline-sm": ["Inter", "sans-serif"],
+            "title-md": ["Inter", "sans-serif"],
+            "body-sm": ["Inter", "sans-serif"],
+            "label-md": ["Inter", "sans-serif"],
+            "display-lg": ["Inter", "sans-serif"],
+            "headline-lg": ["Inter", "sans-serif"],
+            "data-metric": ["Inter", "sans-serif"],
+            "body-md": ["Inter", "sans-serif"],
+            "label-sm": ["Inter", "sans-serif"]
+          },
+          "fontSize": {
+            "data-mono": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "body-lg": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+            "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.005em", "fontWeight": "600" }],
+            "title-md": ["16px", { "lineHeight": "22px", "fontWeight": "500" }],
+            "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+            "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "data-metric": ["32px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.02em", "fontWeight": "600" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      font-size: 20px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+      border-color: #0F172A !important;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased min-h-screen flex">
+<!-- ========================================================================= -->
+<!-- SIDE NAVIGATION (Source: Shared Components JSON)                         -->
+<!-- ========================================================================= -->
+<aside class="h-screen w-64 flex flex-col fixed left-0 top-0 border-r border-outline-variant bg-surface-container-lowest z-40">
+<div class="w-64 h-full flex flex-col justify-between p-4">
+<!-- Top Section & Workspace Selector -->
+<div class="flex flex-col gap-4">
+<div class="flex items-center gap-3 px-2 py-1.5 border-b border-outline-variant pb-3">
+<div class="w-9 h-9 rounded-lg bg-primary-container text-surface-container-lowest flex items-center justify-center font-bold font-headline-sm text-headline-sm">
+            L
+          </div>
+<div class="flex flex-col overflow-hidden">
+<span class="text-headline-sm font-headline-sm font-bold text-primary tracking-tight truncate">Lumina EdPublish</span>
+<span class="text-label-md font-label-md text-on-surface-variant truncate">Higher-Ed &amp; K-12 Division</span>
+</div>
+</div>
+<!-- Quick CTA -->
+<button class="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface font-label-md text-label-md font-semibold transition-colors duration-150 border border-outline-variant">
+<span class="material-symbols-outlined">add_circle</span>
+<span>New Campaign</span>
+</button>
+<!-- Nav Items -->
+<nav class="flex flex-col gap-1 mt-1">
+<!-- Dashboard -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<!-- Campaigns -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">campaign</span>
+<span class="font-label-md text-label-md">Campaigns</span>
+</a>
+<!-- Performance Data (ACTIVE: Intent is Performance Record Entry) -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-container-low text-secondary font-semibold border-l-2 border-secondary" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+<span class="font-label-md text-label-md">Performance Data</span>
+</a>
+<!-- Analytics -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">insights</span>
+<span class="font-label-md text-label-md">Analytics</span>
+</a>
+<!-- Reports -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">assessment</span>
+<span class="font-label-md text-label-md">Reports</span>
+</a>
+<!-- Users -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-label-md text-label-md">Users</span>
+</a>
+<!-- Channels & Platforms -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">hub</span>
+<span class="font-label-md text-label-md">Channels &amp; Platforms</span>
+</a>
+<!-- Settings -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+</nav>
+</div>
+<!-- Bottom Utility Nav Items -->
+<div class="flex flex-col gap-1 border-t border-outline-variant pt-3">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">shield_person</span>
+<span class="font-label-md text-label-md">Account &amp; Security</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-label-md text-label-md">Documentation</span>
+</a>
+<!-- Logged in identity card -->
+<div class="mt-2 p-2.5 rounded-lg bg-surface-container-low flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary text-on-secondary flex items-center justify-center font-label-md text-label-md font-semibold">
+            EV
+          </div>
+<div class="flex flex-col truncate">
+<span class="font-label-md text-label-md font-semibold text-on-surface leading-tight truncate">Eleanor Vance</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant leading-tight truncate">Sr. Marketing Analyst</span>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- ========================================================================= -->
+<!-- MAIN WORKSPACE                                                            -->
+<!-- ========================================================================= -->
+<div class="ml-64 w-[calc(100%-16rem)] flex flex-col min-h-screen">
+<!-- TOP NAVBAR (Source: Shared Components JSON) -->
+<header class="h-16 w-[calc(100%-16rem)] ml-64 border-b border-outline-variant fixed top-0 right-0 z-30 bg-surface-container-lowest shadow-sm flex items-center justify-between px-8">
+<!-- Left: Contextual Search / Breadcrumb Filter -->
+<div class="flex items-center gap-4">
+<span class="text-title-md font-title-md font-semibold text-on-surface">PubliMetrics</span>
+<span class="text-outline-variant">/</span>
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container-low border border-outline-variant text-body-sm font-body-sm text-on-surface">
+<span class="material-symbols-outlined text-outline">calendar_today</span>
+<span>Last 30 Days: Oct 1 - Oct 31, 2024</span>
+</div>
+</div>
+<!-- Right: Action Icons & Profile -->
+<div class="flex items-center gap-3">
+<button class="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface hover:bg-surface-container-low text-label-md font-label-md flex items-center gap-1.5 transition-colors">
+<span class="material-symbols-outlined">download</span>
+<span>Export Report</span>
+</button>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface text-label-md font-label-md flex items-center gap-1.5 transition-colors">
+<span class="material-symbols-outlined">bolt</span>
+<span>Quick Actions</span>
+</button>
+<div class="h-5 w-px bg-outline-variant mx-1"></div>
+<button class="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined">tune</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container border border-outline-variant flex items-center justify-center font-bold text-on-surface text-label-sm ml-1" title="Marketing Director Avatar">
+          MD
+        </div>
+</div>
+</header>
+<!-- STICKY ACTION & STATUS BAR (Data Entry Sub-header) -->
+<div class="sticky top-16 z-20 bg-surface-container-lowest border-b border-outline-variant px-8 py-3.5 flex items-center justify-between shadow-sm">
+<div class="flex flex-col">
+<div class="flex items-center gap-2 font-label-md text-label-md text-on-surface-variant mb-0.5">
+<a class="hover:text-secondary hover:underline" href="#">Performance Data</a>
+<span>/</span>
+<span class="text-on-surface font-semibold">New Entry Log</span>
+</div>
+<div class="flex items-center gap-3">
+<h1 class="font-headline-md text-headline-md text-on-surface">Performance Record Entry</h1>
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+            Operational Mode: Strict Ledger
+          </span>
+</div>
+</div>
+<!-- Action Cluster -->
+<div class="flex items-center gap-4">
+<!-- Auto-save state indicator -->
+<div class="flex items-center gap-2 text-body-sm font-body-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-secondary" style="font-size: 16px;">cloud_done</span>
+<span>Last auto-saved 2 minutes ago</span>
+</div>
+<div class="h-6 w-px bg-outline-variant"></div>
+<button class="px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low text-on-surface font-label-md text-label-md transition-colors" type="button">
+          Cancel
+        </button>
+<button class="px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low text-on-surface font-label-md text-label-md transition-colors flex items-center gap-1.5" type="button">
+<span class="material-symbols-outlined text-on-surface-variant">draft</span>
+<span>Save as Draft</span>
+</button>
+<button class="px-5 py-2 rounded-lg bg-tertiary-container hover:bg-primary-container text-on-tertiary font-label-md text-label-md font-semibold flex items-center gap-2 shadow-sm transition-all" form="performance-entry-form" type="submit">
+<span class="material-symbols-outlined text-secondary-container">task_alt</span>
+<span>Submit &amp; Verify Performance Record</span>
+</button>
+</div>
+</div>
+<!-- CANVAS BODY -->
+<main class="flex-1 p-8 bg-background max-w-[1600px] w-full mx-auto">
+<!-- Subtitle description bar -->
+<div class="mb-6 flex items-center justify-between">
+<p class="font-body-md text-body-md text-on-surface-variant">
+          Log external campaign metrics, platform spends, and institutional inquiries into the Lumina validated ledger.
+        </p>
+<div class="flex items-center gap-2 font-data-mono text-data-mono text-on-surface-variant">
+<span class="text-outline">ENTRY-SESSION-ID:</span>
+<span class="bg-surface-container px-2 py-0.5 rounded text-on-surface font-medium">LUM-REC-2024-10X</span>
+</div>
+</div>
+<!-- FORM CONTENT WITH 4 HIGH-CLARITY SECTIONS -->
+<form class="space-y-6" id="performance-entry-form">
+<!-- ===================================================================== -->
+<!-- SECTION 1: Campaign & Attribution Metadata                             -->
+<!-- ===================================================================== -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+<div class="flex items-center justify-between border-b border-outline-variant pb-4 mb-6">
+<div class="flex items-center gap-2.5">
+<span class="w-7 h-7 rounded-md bg-surface-container text-on-surface flex items-center justify-center font-label-md text-label-md font-bold">1</span>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Campaign &amp; Attribution Metadata</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Anchor incoming metrics to academic product catalogs and institutional fiscal cycles.</p>
+</div>
+</div>
+<span class="text-label-sm font-label-sm text-secondary bg-surface-container-low px-2.5 py-1 rounded-full border border-secondary-container">
+              Verified Schema v4.2
+            </span>
+</div>
+<div class="grid grid-cols-12 gap-5">
+<!-- Campaign Selector (Searchable Dropdown) -->
+<div class="col-span-12 lg:col-span-6">
+<label class="block font-label-md text-label-md font-semibold text-on-surface mb-1.5" for="campaign-select">
+                Target Academic Campaign <span class="text-error">*</span>
+</label>
+<div class="relative">
+<select class="w-full h-[38px] px-3 pr-10 rounded-lg border border-outline-variant bg-surface-container-lowest font-body-sm text-body-sm text-on-surface appearance-none focus:outline-none" id="campaign-select">
+<option selected="">AP Biology 12th Ed. Adoption Push (CMP-2024-88)</option>
+<option>University Calculus Early Transcendentals (CMP-2024-91)</option>
+<option>Introduction to Sociology OpenAccess Bundle (CMP-2024-74)</option>
+<option>K-12 State Framework Literature Series (CMP-2024-65)</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-2.5 pointer-events-none text-outline">unfold_more</span>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1.5 flex items-center gap-1">
+<span class="material-symbols-outlined" style="font-size: 14px;">info</span>
+                Linked to Lumina Product Ledger #8892-BIO
+              </p>
+</div>
+<!-- Discipline & Segment (Auto-populated Tag) -->
+<div class="col-span-12 lg:col-span-6">
+<label class="block font-label-md text-label-md font-semibold text-on-surface mb-1.5">
+                Discipline &amp; Segment <span class="font-normal text-on-surface-variant">(Auto-Resolved)</span>
+</label>
+<div class="h-[38px] px-3.5 rounded-lg border border-outline-variant bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface">K-12 STEM / Secondary Curriculum</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-data-mono">TAXONOMY: SC-BIO-12</span>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1.5">Determined by institutional adoption category rules.</p>
+</div>
+<!-- Target Fiscal Quarter / Term -->
+<div class="col-span-12 md:col-span-4">
+<label class="block font-label-md text-label-md font-semibold text-on-surface mb-1.5" for="fiscal-term">
+                Target Fiscal Quarter / Term <span class="text-error">*</span>
+</label>
+<div class="relative">
+<select class="w-full h-[38px] px-3 pr-10 rounded-lg border border-outline-variant bg-surface-container-lowest font-body-sm text-body-sm text-on-surface appearance-none focus:outline-none" id="fiscal-term">
+<option selected="">Q4 2024 - Fall Adoption Cycle</option>
+<option>Q1 2025 - Spring Supplementary</option>
+<option>Q2 2025 - State Textbook Caravan</option>
+<option>Q3 2025 - Back-to-School Peak</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-2.5 pointer-events-none text-outline">arrow_drop_down</span>
+</div>
+</div>
+<!-- Reporting Period Date Range Picker -->
+<div class="col-span-12 md:col-span-4">
+<label class="block font-label-md text-label-md font-semibold text-on-surface mb-1.5" for="date-range">
+                Reporting Period Window <span class="text-error">*</span>
+</label>
+<div class="relative">
+<input class="w-full h-[38px] pl-9 pr-3 rounded-lg border border-outline-variant bg-surface-container-lowest font-body-sm text-body-sm text-on-surface font-data-mono focus:outline-none" id="date-range" type="text" value="2024-10-01 to 2024-10-15"/>
+<span class="material-symbols-outlined absolute left-2.5 top-2.5 text-outline pointer-events-none">date_range</span>
+</div>
+</div>
+<!-- Responsible Analyst / Submitter -->
+<div class="col-span-12 md:col-span-4">
+<label class="block font-label-md text-label-md font-semibold text-on-surface mb-1.5" for="submitter-analyst">
+                Responsible Analyst / Submitter
+              </label>
+<div class="relative">
+<input class="w-full h-[38px] pl-9 pr-3 rounded-lg border border-outline-variant bg-surface-container-low font-body-sm text-body-sm text-on-surface focus:outline-none cursor-not-allowed" id="submitter-analyst" readonly="" type="text" value="Eleanor Vance (Senior Marketing Analyst)"/>
+<span class="material-symbols-outlined absolute left-2.5 top-2.5 text-outline pointer-events-none">badge</span>
+</div>
+</div>
+</div>
+</section>
+<!-- ===================================================================== -->
+<!-- SECTION 2: Channel & Platform Placement                               -->
+<!-- ===================================================================== -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+<div class="border-b border-outline-variant pb-4 mb-6">
+<div class="flex items-center gap-2.5">
+<span class="w-7 h-7 rounded-md bg-surface-container text-on-surface flex items-center justify-center font-label-md text-label-md font-bold">2</span>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Channel &amp; Platform Placement</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Classify the promotional vehicle, vendor delivery system, and destination parameters.</p>
+</div>
+</div>
+</div>
+<!-- Channel Selection Segmented Pills -->
+<div class="mb-6">
+<label class="block font-label-md text-label-md font-semibold text-on-surface mb-2.5">
+              Marketing Channel Grouping <span class="text-error">*</span>
+</label>
+<div class="grid grid-cols-2 md:grid-cols-5 gap-2.5">
+<label class="cursor-pointer">
+<input class="sr-only peer" name="channel_group" type="radio" value="direct"/>
+<div class="p-3 rounded-lg border border-outline-variant bg-surface-container-lowest peer-checked:border-secondary peer-checked:bg-surface-container-low flex flex-col items-start gap-1 transition-all">
+<span class="material-symbols-outlined text-outline peer-checked:text-secondary">contact_mail</span>
+<span class="font-label-md text-label-md text-on-surface">Institutional Direct</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Direct Mail &amp; Outreach</span>
+</div>
+</label>
+<label class="cursor-pointer">
+<input checked="" class="sr-only peer" name="channel_group" type="radio" value="paid_search"/>
+<div class="p-3 rounded-lg border-2 border-secondary bg-surface-container-low flex flex-col items-start gap-1 transition-all">
+<span class="material-symbols-outlined text-secondary">search_insights</span>
+<span class="font-label-md text-label-md font-semibold text-on-surface">Paid Search</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Google Academic Ads</span>
+</div>
+</label>
+<label class="cursor-pointer">
+<input class="sr-only peer" name="channel_group" type="radio" value="social"/>
+<div class="p-3 rounded-lg border border-outline-variant bg-surface-container-lowest peer-checked:border-secondary peer-checked:bg-surface-container-low flex flex-col items-start gap-1 transition-all">
+<span class="material-symbols-outlined text-outline peer-checked:text-secondary">share</span>
+<span class="font-label-md text-label-md text-on-surface">Social &amp; Networks</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">LinkedIn &amp; EdTech Assocs</span>
+</div>
+</label>
+<label class="cursor-pointer">
+<input class="sr-only peer" name="channel_group" type="radio" value="conferences"/>
+<div class="p-3 rounded-lg border border-outline-variant bg-surface-container-lowest peer-checked:border-secondary peer-checked:bg-surface-container-low flex flex-col items-start gap-1 transition-all">
+<span class="material-symbols-outlined text-outline peer-checked:text-secondary">inventory_2</span>
+<span class="font-label-md text-label-md text-on-surface">Conferences &amp; Kits</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Sample Kits &amp; Exhibits</span>
+</div>
+</label>
+<label class="cursor-pointer">
+<input class="sr-only peer" name="channel_group" type="radio" value="webinar"/>
+<div class="p-3 rounded-lg border border-outline-variant bg-surface-container-lowest peer-checked:border-secondary peer-checked:bg-surface-container-low flex flex-col items-start gap-1 transition-all">
+<span class="material-symbols-outlined text-outline peer-checked:text-secondary">video_camera_front</span>
+<span class="font-label-md text-label-md text-on-surface">Webinars / Virtual</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Faculty Workshops</span>
+</div>
+</label>
+</div>
+</div>
+<!-- Placement Specs Grid -->
+<div class="grid grid-cols-12 gap-5">
+<!-- Platform Dropdown -->
+<div class="col-span-12 md:col-span-4">
+<label class="block font-label-md text-label-md font-semibold text-on-surface mb-1.5" for="specific-platform">
+                Specific Platform Vendor <span class="text-error">*</span>
+</label>
+<div class="relative">
+<select class="w-full h-[38px] px-3 pr-10 rounded-lg border border-outline-variant bg-surface-container-lowest font-body-sm text-body-sm text-on-surface appearance-none focus:outline-none" id="specific-platform">
+<option selected="">Google Ads - HigherEd Scholar Campaigns</option>
+<option>Chronicle of Higher Education Native Ads</option>
+<option>LinkedIn Sponsored Content (Deans Network)</option>
+<option>NSTA Annual Convention Direct Lead Ingestion</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-2.5 pointer-events-none text-outline">arrow_drop_down</span>
+</div>
+</div>
+<!-- Placement / Ad Group ID -->
+<div class="col-span-12 md:col-span-4">
+<label class="block font-label-md text-label-md font-semibold text-on-surface mb-1.5" for="adgroup-id">
+                Placement / Ad Group ID <span class="text-error">*</span>
+</label>
+<input class="w-full h-[38px] px-3 rounded-lg border border-outline-variant bg-surface-container-lowest font-data-mono text-data-mono text-on-surface focus:outline-none" id="adgroup-id" type="text" value="AG-STEM-BIO-FALL24"/>
+</div>
+<!-- Destination URL -->
+<div class="col-span-12 md:col-span-4">
+<label class="block font-label-md text-label-md font-semibold text-on-surface mb-1.5" for="destination-url">
+                Landing Page / Destination URL <span class="text-error">*</span>
+</label>
+<div class="relative">
+<input class="w-full h-[38px] pl-8 pr-3 rounded-lg border border-outline-variant bg-surface-container-lowest font-data-mono text-data-mono text-on-surface focus:outline-none" id="destination-url" type="url" value="https://luminaed.com/catalog/stem/ap-bio-12e/sample-request"/>
+<span class="material-symbols-outlined absolute left-2.5 top-2.5 text-outline pointer-events-none">link</span>
+</div>
+</div>
+</div>
+</section>
+<!-- ===================================================================== -->
+<!-- SECTION 3: Dynamic Metrics & Cost Attribution                          -->
+<!-- ===================================================================== -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+<div class="flex items-center justify-between border-b border-outline-variant pb-4 mb-6">
+<div class="flex items-center gap-2.5">
+<span class="w-7 h-7 rounded-md bg-surface-container text-on-surface flex items-center justify-center font-label-md text-label-md font-bold">3</span>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Dynamic Metrics &amp; Cost Attribution</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Primary volume, financial disbursement, and downstream institutional engagement funnels.</p>
+</div>
+</div>
+<!-- Dynamic Micro Audit Card inspired by reference layout -->
+<div class="flex items-center gap-4 bg-surface-container-low px-4 py-2 rounded-lg border border-outline-variant">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Derived CTR</span>
+<span class="font-data-mono text-data-mono font-semibold text-secondary" id="auto-ctr">3.87%</span>
+</div>
+<div class="h-6 w-px bg-outline-variant"></div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Cost per Request</span>
+<span class="font-data-mono text-data-mono font-semibold text-on-surface">$24.30</span>
+</div>
+</div>
+</div>
+<!-- Top Row: Volume & Cost (4 items) -->
+<div class="mb-6">
+<h3 class="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant font-semibold mb-3">Audience Reach &amp; Budget Spend</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+<!-- Impressions -->
+<div class="p-3.5 rounded-lg border border-outline-variant bg-surface-container-lowest hover:border-outline transition-colors">
+<div class="flex items-center justify-between mb-1.5">
+<label class="font-label-md text-label-md text-on-surface-variant" for="metric-impressions">Impressions / Reach</label>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">visibility</span>
+</div>
+<div class="relative">
+<input class="w-full h-10 px-3 rounded border border-outline-variant font-data-mono text-headline-sm text-on-surface font-semibold focus:outline-none" id="metric-impressions" type="text" value="124,500"/>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1.5 block">Vendor reported verified count</span>
+</div>
+<!-- Clicks -->
+<div class="p-3.5 rounded-lg border border-outline-variant bg-surface-container-lowest hover:border-outline transition-colors">
+<div class="flex items-center justify-between mb-1.5">
+<label class="font-label-md text-label-md text-on-surface-variant" for="metric-clicks">Clicks / Engagement</label>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">ads_click</span>
+</div>
+<div class="relative">
+<input class="w-full h-10 px-3 rounded border border-outline-variant font-data-mono text-headline-sm text-on-surface font-semibold focus:outline-none" id="metric-clicks" type="text" value="4,820"/>
+</div>
+<div class="flex items-center justify-between mt-1.5">
+<span class="font-label-sm text-label-sm text-secondary flex items-center gap-1 font-semibold">
+<span class="material-symbols-outlined" style="font-size: 14px;">trending_up</span> CTR: 3.87%
+                  </span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Valid redirects</span>
+</div>
+</div>
+<!-- Gross Platform Spend -->
+<div class="p-3.5 rounded-lg border border-outline-variant bg-surface-container-lowest hover:border-outline transition-colors">
+<div class="flex items-center justify-between mb-1.5">
+<label class="font-label-md text-label-md text-on-surface-variant" for="metric-gross-spend">Gross Spend ($ USD)</label>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">payments</span>
+</div>
+<div class="relative">
+<span class="absolute left-3 top-2.5 font-data-mono text-title-md text-on-surface-variant">$</span>
+<input class="w-full h-10 pl-7 pr-3 rounded border border-outline-variant font-data-mono text-headline-sm text-on-surface font-semibold focus:outline-none" id="metric-gross-spend" type="text" value="3,450.00"/>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1.5 block">Direct media disbursement</span>
+</div>
+<!-- Net Placement Fee -->
+<div class="p-3.5 rounded-lg border border-outline-variant bg-surface-container-lowest hover:border-outline transition-colors">
+<div class="flex items-center justify-between mb-1.5">
+<label class="font-label-md text-label-md text-on-surface-variant" for="metric-net-fee">Net Placement Fee ($)</label>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">receipt_long</span>
+</div>
+<div class="relative">
+<span class="absolute left-3 top-2.5 font-data-mono text-title-md text-on-surface-variant">$</span>
+<input class="w-full h-10 pl-7 pr-3 rounded border border-outline-variant font-data-mono text-headline-sm text-on-surface font-semibold focus:outline-none" id="metric-net-fee" type="text" value="250.00"/>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1.5 block">Agency tech fee / commission</span>
+</div>
+</div>
+</div>
+<!-- Bottom Row: Institutional Pipeline Funnel (4 items) -->
+<div>
+<h3 class="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant font-semibold mb-3">Academic Pipeline &amp; Institutional Conversion</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+<!-- Faculty Sample Requests -->
+<div class="p-3.5 rounded-lg border border-outline-variant bg-surface-container-low/40 hover:border-secondary transition-colors">
+<div class="flex items-center justify-between mb-1.5">
+<label class="font-label-md text-label-md text-on-surface font-medium truncate" for="metric-samples">Faculty Inspection Copies</label>
+<span class="material-symbols-outlined text-secondary" style="font-size: 18px;">menu_book</span>
+</div>
+<input class="w-full h-10 px-3 rounded border border-outline-variant bg-surface-container-lowest font-data-mono text-headline-sm text-on-surface font-semibold focus:outline-none" id="metric-samples" type="text" value="142"/>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1.5 block">Physical textbook dispatches</span>
+</div>
+<!-- Courseware Demo Logins -->
+<div class="p-3.5 rounded-lg border border-outline-variant bg-surface-container-low/40 hover:border-secondary transition-colors">
+<div class="flex items-center justify-between mb-1.5">
+<label class="font-label-md text-label-md text-on-surface font-medium truncate" for="metric-demos">Courseware Demo Logins</label>
+<span class="material-symbols-outlined text-secondary" style="font-size: 18px;">devices</span>
+</div>
+<input class="w-full h-10 px-3 rounded border border-outline-variant bg-surface-container-lowest font-data-mono text-headline-sm text-on-surface font-semibold focus:outline-none" id="metric-demos" type="text" value="88"/>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1.5 block">Online lab interactive trials</span>
+</div>
+<!-- Department Chair Inquiries -->
+<div class="p-3.5 rounded-lg border border-outline-variant bg-surface-container-low/40 hover:border-secondary transition-colors">
+<div class="flex items-center justify-between mb-1.5">
+<label class="font-label-md text-label-md text-on-surface font-medium truncate" for="metric-chairs">Chair / Dean Inquiries</label>
+<span class="material-symbols-outlined text-secondary" style="font-size: 18px;">school</span>
+</div>
+<input class="w-full h-10 px-3 rounded border border-outline-variant bg-surface-container-lowest font-data-mono text-headline-sm text-on-surface font-semibold focus:outline-none" id="metric-chairs" type="text" value="24"/>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1.5 block">Curriculum review requests</span>
+</div>
+<!-- Bookstore PO Referrals -->
+<div class="p-3.5 rounded-lg border border-outline-variant bg-surface-container-low/40 hover:border-secondary transition-colors">
+<div class="flex items-center justify-between mb-1.5">
+<label class="font-label-md text-label-md text-on-surface font-medium truncate" for="metric-pos">Bookstore PO Referrals</label>
+<span class="material-symbols-outlined text-secondary" style="font-size: 18px;">receipt</span>
+</div>
+<input class="w-full h-10 px-3 rounded border border-outline-variant bg-surface-container-lowest font-data-mono text-headline-sm text-on-surface font-semibold focus:outline-none" id="metric-pos" type="text" value="6"/>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1.5 block">High-intent purchase orders</span>
+</div>
+</div>
+</div>
+</section>
+<!-- ===================================================================== -->
+<!-- SECTION 4: Data Validation, Reconciliation & Notes                     -->
+<!-- ===================================================================== -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+<div class="border-b border-outline-variant pb-4 mb-6">
+<div class="flex items-center gap-2.5">
+<span class="w-7 h-7 rounded-md bg-surface-container text-on-surface flex items-center justify-center font-label-md text-label-md font-bold">4</span>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Data Validation, Reconciliation &amp; Notes</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Attach authoritative source reports and detail qualitative variance factors.</p>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-12 gap-6">
+<!-- File Attachment Dropzone -->
+<div class="col-span-12 lg:col-span-6 flex flex-col">
+<label class="block font-label-md text-label-md font-semibold text-on-surface mb-1.5">
+                Reconciliation Source Attachment <span class="text-error">*</span>
+</label>
+<div class="border-2 border-dashed border-outline-variant hover:border-secondary rounded-xl p-6 flex flex-col items-center justify-center text-center bg-surface-container-low/30 hover:bg-surface-container-low transition-colors cursor-pointer flex-1 min-h-[160px]">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center mb-3 text-secondary">
+<span class="material-symbols-outlined" style="font-size: 26px;">upload_file</span>
+</div>
+<p class="font-label-md text-label-md font-semibold text-on-surface">
+                  Click to upload or drag &amp; drop platform CSV report
+                </p>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">
+                  Supported formats: PDF, CSV, XLSX (maximum 10MB per ledger entry)
+                </p>
+<div class="mt-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container-lowest border border-outline-variant text-label-sm font-label-sm text-on-surface font-data-mono">
+<span class="material-symbols-outlined text-secondary" style="font-size: 16px;">check_circle</span>
+<span>GoogleAds_AP_Bio_Oct1_15.csv (2.4 MB) attached</span>
+</div>
+</div>
+</div>
+<!-- Field Notes & Variance Textarea -->
+<div class="col-span-12 lg:col-span-6 flex flex-col">
+<label class="block font-label-md text-label-md font-semibold text-on-surface mb-1.5" for="field-notes">
+                Field Notes &amp; Variance Explanation
+              </label>
+<textarea class="w-full flex-1 p-3.5 rounded-lg border border-outline-variant bg-surface-container-lowest font-body-sm text-body-sm text-on-surface focus:outline-none resize-none leading-relaxed" id="field-notes" placeholder="Add context for any anomalies, seasonal faculty breaks, or curriculum committee delays..." rows="6">Early CTR surge driven by Texas and Florida regional committee meetings. 142 inspection copies dispatched via expedited courier. 6 bookstore referrals flagged for accelerated follow-up by regional rep David Jenkins.</textarea>
+<div class="flex items-center justify-between mt-2 font-label-sm text-label-sm text-on-surface-variant">
+<span>Markdown formatting enabled</span>
+<span>218 / 1,000 characters</span>
+</div>
+</div>
+</div>
+<!-- In-Context Audit Validation Box (Inspired by image pattern card) -->
+<div class="mt-6 pt-5 border-t border-outline-variant">
+<div class="bg-surface-container-low rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-outline-variant">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container-lowest border border-outline-variant flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">verified_user</span>
+</div>
+<div>
+<h4 class="font-label-md text-label-md font-bold text-on-surface">Automated Ledger Pre-Verification</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Calculated totals conform with Lumina 2024-Q4 publisher accounting standards.</p>
+</div>
+</div>
+<!-- Steps checklist widget directly reflecting image reference -->
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary" style="font-size: 18px;">check_circle</span>
+<span class="font-label-md text-label-md text-on-surface">Data Ingestion</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary" style="font-size: 18px;">check_circle</span>
+<span class="font-label-md text-label-md text-on-surface">Pattern Recognition</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-4 h-4 rounded-full border-2 border-outline-variant border-t-secondary animate-spin"></div>
+<span class="font-label-md text-label-md text-on-surface font-medium">Insight Generation</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Form Submission Action Row (Bottom Duplicate for Ergonomics) -->
+<div class="flex items-center justify-between pt-2 pb-12">
+<div class="flex items-center gap-2 text-body-sm font-body-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-outline">history</span>
+<span>Created by Eleanor Vance on Oct 31, 2024 at 14:22 EST</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="px-4 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low text-on-surface font-label-md text-label-md transition-colors" type="button">
+              Reset Form Fields
+            </button>
+<button class="px-4 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low text-on-surface font-label-md text-label-md transition-colors flex items-center gap-2" type="button">
+<span class="material-symbols-outlined text-on-surface-variant">content_copy</span>
+<span>Duplicate as New Template</span>
+</button>
+<button class="px-6 py-2.5 rounded-lg bg-tertiary-container hover:bg-primary-container text-on-tertiary font-label-md text-label-md font-semibold flex items-center gap-2 shadow-sm transition-all" type="submit">
+<span class="material-symbols-outlined text-secondary-container">task_alt</span>
+<span>Submit &amp; Verify Performance Record</span>
+</button>
+</div>
+</div>
+</form>
+</main>
+</div>
+<script>
+    // Lightweight interactive recalculation for CTR demo
+    const impInput = document.getElementById('metric-impressions');
+    const clkInput = document.getElementById('metric-clicks');
+    const autoCtr = document.getElementById('auto-ctr');
+
+    function updateCTR() {
+      if (!impInput || !clkInput || !autoCtr) return;
+      const imps = parseFloat(impInput.value.replace(/,/g, '')) || 0;
+      const clks = parseFloat(clkInput.value.replace(/,/g, '')) || 0;
+      if (imps > 0) {
+        const val = ((clks / imps) * 100).toFixed(2);
+        autoCtr.innerText = val + '%';
+      }
+    }
+
+    if (impInput && clkInput) {
+      impInput.addEventListener('input', updateCTR);
+      clkInput.addEventListener('input', updateCTR);
+    }
+  </script>
+</body></html>

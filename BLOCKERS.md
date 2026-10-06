@@ -1,0 +1,10 @@
+- M12: No deployment environment or external deployment authorization is available in the local workspace.
+
+- F00: Original import scope-promotion approval was not found in active plans/ADRs; preserve imports and do not expand them.
+- F02: Tailwind is not installed locally. NVM rejects both `pnpm` and `corepack` entrypoints as untrusted (NVM4306), and network access is restricted. No global NVM trust change was made; project-local package installation must be enabled before Tailwind setup.
+- F03: PQ-005 permits own-password change, but approved security rules do not decide whether the caller must supply the current password or whether the current/all active sessions are revoked after change. Resolve both before adding that route; administrator reset behavior remains as approved.
+- F06a: Deployment configuration must supply `REPORTING_CURRENCY` before currency metrics can be labelled with the organisation's configured currency. The product rule is approved, but no deployment value is approved or present in `.env.example`; analytics returns the monetary value with an explicit unset marker until configuration is supplied. Do not infer a currency.
+- F06c: The approved status list does not say whether simultaneous missing actual data and no applicable target should be reported as `NO_DATA` or `NO_TARGET`. Target evaluation preserves this unresolved combination with `status: null` and `statusDecisionRequired: true`; do not assign either label until approved.
+- F07: The approved dashboard chart uses Recharts, but Recharts is absent from the workspace and local package cache. The local NVM package-manager guard rejects pnpm/corepack (NVM4306), and network access is restricted. The dashboard currently presents the real trend response in an accessible table; install the approved dependency before adding its Recharts line plot. No custom chart substitute was introduced.
+
+- F09: A maintained server-side PDF renderer is not in the dependency cache. Installing PDFKit via pnpm is blocked by NVM4306; pagination, the embedded trend chart, and visual PDF verification remain. Do not replace the renderer with an unapproved browser runtime.
