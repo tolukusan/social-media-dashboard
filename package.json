@@ -1,0 +1,28 @@
+{
+  "name": "social-media-dashboard",
+  "private": true,
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": "\u003e=24.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @smd/api --filter @smd/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "format:docs": "prettier --check README.md TODO.md AGENTS.md BLOCKERS.md .ai docs/README.md docs/plans/completion docs/guides docs/evidence docs/reference/benchmark",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm test:unit",
+    "db:generate": "pnpm --filter @smd/api prisma:generate",
+    "db:migrate": "pnpm --filter @smd/api prisma:migrate",
+    "db:seed": "pnpm --filter @smd/api prisma:seed",
+    "test:unit": "pnpm --filter @smd/api test:unit",
+    "test:integration": "pnpm --filter @smd/api test:integration",
+    "test:e2e": "pnpm --filter @smd/api test:e2e",
+    "test:db:prepare": "pnpm --filter @smd/api test:db:prepare"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2"
+  }
+}

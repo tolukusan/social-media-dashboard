@@ -1,0 +1,26 @@
+{
+  "name": "@smd/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "prettier --check app components features lib",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@smd/shared": "workspace:*",
+    "@tanstack/react-query": "^5.104.1",
+    "next": "^15.5.3",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-hook-form": "^7.89.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9"
+  }
+}

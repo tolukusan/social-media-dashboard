@@ -1,0 +1,16 @@
+node_modules/
+.next/
+dist/
+coverage/
+test-results/
+playwright-report/
+.reorganisation-backup/
+apps/api/src/generated/
+docs/archive/source-bundles/
+docs/reference/stitch_marketing_analytics_saas_ui/
+performance/runtime/
+*.tsbuildinfo
+# Curated historical evidence is retained byte-for-byte.
+docs/evidence/performance/k6-health-summary.json
+apps/api/.test-database
+apps/api/.e2e-credentials
