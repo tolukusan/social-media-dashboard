@@ -11,6 +11,8 @@ import { PrismaService } from '../database/prisma.service.js';
 import type { AuthenticatedUser } from '../common/auth.types.js';
 import type { LoginDto } from './dto/login.dto.js';
 import type { UpdateProfileDto } from './dto/update-profile.dto.js';
+import type { ChangeOwnPasswordDto } from './dto/change-own-password.dto.js';
+import { UserSecurityLockService } from './user-security-lock.service.js';
 
 const COOKIE = process.env.SESSION_COOKIE_NAME ?? 'smd_session';
 
@@ -20,7 +22,11 @@ export class AuthService {
     string,
     { count: number; windowStarted: number }
   >();
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(UserSecurityLockService)
+    private readonly locks: UserSecurityLockService,
+  ) {}
   private publicUser(user: AuthenticatedUser): AuthenticatedUser {
     const { passwordHash: _passwordHash, ...safe } =
       user as AuthenticatedUser & {
@@ -117,6 +123,60 @@ export class AuthService {
       omit: { passwordHash: true },
     });
   }
+
+  async changeOwnPassword(
+    userId: string,
+    dto: ChangeOwnPasswordDto,
+    response: Response,
+  ) {
+    const newPasswordHash = await argon2.hash(dto.newPassword, {
+      type: argon2.argon2id,
+    });
+    const changed = await this.prisma.$transaction(async (tx) => {
+      await this.locks.lock(tx, userId);
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, active: true, passwordHash: true },
+      });
+      if (
+        !user?.active ||
+        !(await argon2.verify(user.passwordHash, dto.currentPassword))
+      )
+        return false;
+      const now = new Date();
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash: newPasswordHash },
+      });
+      await tx.session.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      await this.locks.invalidateRecoveryTokens(tx, userId, now);
+      await tx.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'PASSWORD_CHANGED',
+          entityType: 'User',
+          entityId: userId,
+        },
+      });
+      return true;
+    });
+    if (!changed)
+      throw new UnauthorizedException({
+        code: 'CURRENT_PASSWORD_INVALID',
+        message: 'Current password is incorrect',
+      });
+    response.clearCookie(COOKIE, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
+    return { success: true };
+  }
+
   static cookieName() {
     return COOKIE;
   }
