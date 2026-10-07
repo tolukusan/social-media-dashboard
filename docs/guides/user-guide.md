@@ -1,17 +1,23 @@
 # User Guide
 
-## Sign in
+## Sign in and account access
 
-Open the web application and authenticate with an administrator, marketing officer, or management account. Sessions use secure, opaque cookies in production.
+Open the web application and authenticate with an Administrator, Marketing Officer, or Management account. Sessions use secure, opaque cookies in production. **Forgot password?** sends a time-limited recovery link when email delivery is configured.
 
-## Dashboard
+Under **My profile**, any signed-in user can update their display name or change their password. Changing the password requires the current password and signs out all active sessions so the user signs in again with the new password.
 
-The Overview screen requests KPI values from the API. Choose a start and end date, then refresh. A dash means the selected period has no calculable value; missing data is not treated as zero.
+## Dashboard and analytics
+
+Overview requests KPI values from the API as filters change; no separate refresh button is required. Choose dates, campaign, channel, platform, metric, and an applicable target period as needed. Missing data is displayed as unavailable rather than zero. Analytics provides period comparison, campaign/channel comparison, and the same backend trend values used by Overview.
 
 ## Campaigns and performance
 
 Administrators and Marketing Officers can create/update campaigns and enter raw daily performance values. Management is read-only. Only raw metrics applicable to the selected channel can be entered.
 
-## Targets and reports
+## Targets, imports, and reports
 
-Administrators manage KPI targets. Targets use approved global, channel, platform, or campaign scope and cannot overlap for the same KPI/scope/period. Authenticated users can request a filtered PDF report from `/api/v1/reports/dashboard.pdf`.
+Administrators manage KPI targets. Targets use approved global, channel, platform, or campaign scope and cannot overlap for the same KPI/scope/period. When actual data is missing, target evaluation reports `NO_DATA`; when actual data exists but no target applies, it reports `NO_TARGET`.
+
+Administrators and Marketing Officers can use **Imports** to preview CSV/JSON/XLSX data, map columns and campaign/platform context, validate rows, then explicitly confirm the import. Management remains read-only.
+
+Authenticated users can preview and download filtered reports. Currency values use the deployment's configured reporting currency when one is supplied; otherwise the UI explicitly says the currency is unset.
