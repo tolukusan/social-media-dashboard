@@ -268,6 +268,78 @@ test('authenticated user can load views and logout', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('Administrator can manage the channel and platform catalogue lifecycle', async ({
+  page,
+}) => {
+  if (!process.env.E2E_EMAIL || !process.env.E2E_PASSWORD)
+    throw new Error('Catalogue E2E requires the local Administrator fixture.');
+
+  await page.goto('/');
+  await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
+  await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Channels & Platforms' }),
+  ).toBeVisible();
+
+  const suffix = Date.now().toString().slice(-8);
+  const channelName = `E2E Channel ${suffix}`;
+  const channelCode = `E2E_${suffix}`;
+  await page.getByLabel('Channel name').first().fill(channelName);
+  await page.getByLabel('Channel code').first().fill(channelCode);
+  await page.getByRole('button', { name: 'Add channel' }).click();
+
+  const channelCard = page
+    .locator('article.catalogue-channel')
+    .filter({ hasText: channelName });
+  await expect(channelCard).toContainText('Active');
+
+  const platformName = `E2E Platform ${suffix}`;
+  await page.getByLabel('Platform name').first().fill(platformName);
+  await page.getByLabel('Platform code').first().fill(`PLAT_${suffix}`);
+  await page
+    .getByLabel('Channel', { exact: true })
+    .first()
+    .selectOption({ label: channelName });
+  await page.getByRole('button', { name: 'Add platform' }).click();
+  await expect(channelCard).toContainText(platformName);
+
+  await channelCard.getByRole('button', { name: 'Edit' }).first().click();
+  const renamedChannel = `${channelName} Updated`;
+  await channelCard.getByLabel('Channel name').fill(renamedChannel);
+  await channelCard.getByRole('button', { name: 'Save channel' }).click();
+  await expect(channelCard).toContainText(renamedChannel);
+
+  const platformRow = channelCard
+    .locator('.catalogue-platform')
+    .filter({ hasText: platformName });
+  await platformRow.getByRole('button', { name: 'Deactivate' }).click();
+  await expect(platformRow).toContainText('Inactive');
+  await platformRow.getByRole('button', { name: 'Reactivate' }).click();
+  await expect(platformRow).toContainText('Active');
+  await channelCard.getByRole('button', { name: 'Deactivate' }).first().click();
+  await expect(channelCard).toContainText('Inactive');
+});
+
+test('keyboard and mobile basics remain usable', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: 'Sign in to your workspace' }),
+  ).toBeVisible();
+
+  await page.keyboard.press('Tab');
+  const firstFocus = await page.evaluate(() => document.activeElement?.tagName);
+  expect(firstFocus).not.toBe('BODY');
+  await expect(page.getByLabel('Email address')).toBeVisible();
+  await expect(page.getByLabel('Password')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Forgot password?' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+});
+
 test('Administrator can preview, validate, and confirm a structured import', async ({
   page,
 }) => {
