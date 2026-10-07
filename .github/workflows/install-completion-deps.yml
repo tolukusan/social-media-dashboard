@@ -1,0 +1,46 @@
+name: Install completion dependencies
+
+on:
+  push:
+    branches:
+      - chatgpt/todo-completion
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/todo-completion
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Add approved completion dependencies
+        run: |
+          pnpm --filter @smd/web add tailwindcss @tailwindcss/postcss postcss recharts
+          pnpm --filter @smd/api add pdfkit
+          pnpm --filter @smd/api add -D @types/pdfkit
+
+      - name: Commit lockfile and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/install-completion-deps.yml
+          git add apps/web/package.json apps/api/package.json pnpm-lock.yaml
+          git commit -m "chore(deps): add approved completion libraries"
+          git push origin HEAD:chatgpt/todo-completion
