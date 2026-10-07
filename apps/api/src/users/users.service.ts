@@ -36,7 +36,7 @@ export class UsersService {
       omit: { passwordHash: true },
     });
   }
-  async create(dto: CreateUserDto) {
+  async create(dto: CreateUserDto, actorId: string) {
     const email = dto.email.trim().toLowerCase();
     const [existing, role] = await Promise.all([
       this.prisma.user.findUnique({ where: { email } }),
@@ -56,21 +56,33 @@ export class UsersService {
         code: 'INVALID_ROLE',
         message: 'The selected role is not available',
       });
-    const user = await this.prisma.user.create({
-      data: {
-        name: dto.name.trim(),
-        email,
-        roleId: dto.roleId,
-        passwordHash: await argon2.hash(dto.password, {
-          type: argon2.argon2id,
-        }),
-      },
-      include: { role: true },
+    const passwordHash = await argon2.hash(dto.password, {
+      type: argon2.argon2id,
     });
-    const { passwordHash: _passwordHash, ...safe } = user;
-    return safe;
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: dto.name.trim(),
+          email,
+          roleId: dto.roleId,
+          passwordHash,
+        },
+        include: { role: true },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actorId,
+          action: 'USER_CREATED',
+          entityType: 'User',
+          entityId: user.id,
+          metadata: { roleId: dto.roleId },
+        },
+      });
+      const { passwordHash: _passwordHash, ...safe } = user;
+      return safe;
+    });
   }
-  async update(id: string, dto: UpdateUserDto) {
+  async update(id: string, dto: UpdateUserDto, actorId: string) {
     if (
       dto.name === undefined &&
       dto.email === undefined &&
@@ -83,7 +95,7 @@ export class UsersService {
 
     const current = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, email: true },
+      select: { id: true, email: true, roleId: true },
     });
     if (!current)
       throw new NotFoundException({
@@ -139,6 +151,19 @@ export class UsersService {
         });
         if (data.email !== undefined && data.email !== currentEmail)
           await this.locks.invalidateRecoveryTokens(tx, id);
+        if (data.roleId !== undefined && data.roleId !== current.roleId)
+          await tx.auditLog.create({
+            data: {
+              actorUserId: actorId,
+              action: 'USER_ROLE_CHANGED',
+              entityType: 'User',
+              entityId: id,
+              metadata: {
+                previousRoleId: current.roleId,
+                newRoleId: data.roleId,
+              },
+            },
+          });
         return result;
       });
     } catch (error) {
@@ -155,7 +180,7 @@ export class UsersService {
       throw error;
     }
   }
-  async deactivate(id: string) {
+  async deactivate(id: string, actorId: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user)
       throw new NotFoundException({
@@ -174,10 +199,18 @@ export class UsersService {
         data: { revokedAt: now },
       });
       await this.locks.invalidateRecoveryTokens(tx, id, now);
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actorId,
+          action: 'USER_DEACTIVATED',
+          entityType: 'User',
+          entityId: id,
+        },
+      });
     });
     return { success: true };
   }
-  async resetPassword(id: string, dto: ResetPasswordDto) {
+  async resetPassword(id: string, dto: ResetPasswordDto, actorId: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user)
       throw new NotFoundException({
@@ -196,11 +229,19 @@ export class UsersService {
         data: { revokedAt: now },
       });
       await this.locks.invalidateRecoveryTokens(tx, id, now);
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actorId,
+          action: 'ADMIN_PASSWORD_RESET',
+          entityType: 'User',
+          entityId: id,
+        },
+      });
     });
     return { success: true };
   }
 
-  async reactivate(id: string) {
+  async reactivate(id: string, actorId: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user)
       throw new NotFoundException({
@@ -209,12 +250,21 @@ export class UsersService {
       });
     return this.prisma.$transaction(async (tx) => {
       await this.locks.lock(tx, id);
-      return tx.user.update({
+      const reactivated = await tx.user.update({
         where: { id },
         data: { active: true, deactivatedAt: null },
         include: { role: true },
         omit: { passwordHash: true },
       });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actorId,
+          action: 'USER_REACTIVATED',
+          entityType: 'User',
+          entityId: id,
+        },
+      });
+      return reactivated;
     });
   }
 }
