@@ -1,0 +1,87 @@
+name: One-time TODO formatting
+
+on:
+  push:
+    branches:
+      - chatgpt/todo-completion
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/todo-completion
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Format touched source and documentation
+        run: |
+          pnpm exec prettier --write \
+            apps/api/src/auth/password-recovery.integration.test.ts \
+            apps/api/src/auth/recovery-origin.guard.test.ts \
+            apps/api/src/auth/recovery-origin.guard.ts \
+            apps/api/src/auth/auth.controller.ts \
+            apps/api/src/auth/auth.service.ts \
+            apps/api/src/auth/dto/change-own-password.dto.ts \
+            apps/api/src/channels/channels.controller.ts \
+            apps/api/src/channels/channels.service.ts \
+            apps/api/src/channels/channels.service.test.ts \
+            apps/api/src/common/authorization-matrix.test.ts \
+            apps/api/src/health/application.integration.test.ts \
+            apps/api/src/targets/targets.controller.ts \
+            apps/api/src/targets/targets.service.ts \
+            apps/api/src/users/users.controller.ts \
+            apps/api/src/users/users.service.ts \
+            apps/api/src/analytics/analytics.service.ts \
+            apps/api/src/analytics/calculations.test.ts \
+            apps/api/prisma/cleanup-sessions.ts \
+            apps/api/prisma/demo.ts \
+            apps/api/scripts/run-load.ts \
+            apps/web/app/imports/page.tsx \
+            apps/web/features/imports/imports.tsx \
+            apps/web/features/reports/reports.tsx \
+            apps/web/features/users/profile.tsx \
+            apps/web/features/auth/reset-password.tsx \
+            e2e/smoke.spec.ts \
+            performance/k6-authenticated.js \
+            README.md TODO.md BLOCKERS.md \
+            docs/README.md \
+            docs/evidence/IMPLEMENTATION_PROGRESS.md \
+            docs/evidence/academic-evidence.md \
+            docs/evidence/backup-restore-verification.md \
+            docs/evidence/usability-test-plan.md \
+            docs/guides/deployment-runbook.md \
+            docs/guides/developer-guide.md \
+            docs/guides/local-operations.md \
+            docs/guides/user-guide.md \
+            docs/operations/security.md \
+            docs/operations/test-strategy.md \
+            docs/plans/completion/README.md \
+            docs/plans/completion/acceptance-matrix.md
+
+      - name: Commit formatting only
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "style: format TODO completion changes"
+          git push origin HEAD:chatgpt/todo-completion
