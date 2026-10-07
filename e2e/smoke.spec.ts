@@ -186,9 +186,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
   );
   await page.getByLabel('Target period').selectOption('DAILY');
   const evaluationTable = page
-    .getByRole('heading', { name: 'Target evaluation' })
-    .locator('..')
-    .locator('..')
+    .locator('section[aria-labelledby="target-evaluations-title"]')
     .getByRole('table');
   await expect(evaluationTable).toContainText(definitionLabel);
   await expect(evaluationTable).toContainText('2');
@@ -309,19 +307,25 @@ test('Administrator can manage the channel and platform catalogue lifecycle', as
 
   await channelCard.getByRole('button', { name: 'Edit' }).first().click();
   const renamedChannel = `${channelName} Updated`;
-  await channelCard.getByLabel('Channel name').fill(renamedChannel);
-  await channelCard.getByRole('button', { name: 'Save channel' }).click();
-  await expect(channelCard).toContainText(renamedChannel);
+  const channelEditForm = page
+    .getByRole('button', { name: 'Save channel' })
+    .locator('..');
+  await channelEditForm.getByLabel('Channel name').fill(renamedChannel);
+  await channelEditForm.getByRole('button', { name: 'Save channel' }).click();
+  const renamedCard = page
+    .locator('article.catalogue-channel')
+    .filter({ hasText: renamedChannel });
+  await expect(renamedCard).toContainText(renamedChannel);
 
-  const platformRow = channelCard
+  const platformRow = renamedCard
     .locator('.catalogue-platform')
     .filter({ hasText: platformName });
   await platformRow.getByRole('button', { name: 'Deactivate' }).click();
   await expect(platformRow).toContainText('Inactive');
   await platformRow.getByRole('button', { name: 'Reactivate' }).click();
   await expect(platformRow).toContainText('Active');
-  await channelCard.getByRole('button', { name: 'Deactivate' }).first().click();
-  await expect(channelCard).toContainText('Inactive');
+  await renamedCard.getByRole('button', { name: 'Deactivate' }).first().click();
+  await expect(renamedCard).toContainText('Inactive');
 });
 
 test('keyboard and mobile basics remain usable', async ({ page }) => {
