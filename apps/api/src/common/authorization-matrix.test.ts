@@ -13,8 +13,9 @@ function effectiveRoles(controller: object, method: string) {
   const type = controller as {
     prototype: Record<string, unknown>;
   };
+  const handler = type.prototype[method];
   return (
-    Reflect.getMetadata('roles', type.prototype[method]) ??
+    (handler && Reflect.getMetadata('roles', handler as object)) ??
     Reflect.getMetadata('roles', controller) ??
     []
   ) as string[];
