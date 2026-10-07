@@ -47,7 +47,7 @@ export function ResetPassword() {
       )
         setToken('');
       setError(
-        cause instanceof Error
+        cause instanceof ApiError
           ? cause.message
           : 'We could not update your password. Please try again.',
       );
