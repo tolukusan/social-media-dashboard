@@ -83,6 +83,21 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await page.getByRole('button', { name: 'Save campaign' }).click();
   await expect(page.locator('.detail-heading h3')).toHaveText(updatedName);
   await page.getByRole('button', { name: 'Back to campaigns' }).click();
+  const comparisonName = `${originalName} Comparison`;
+  await page.getByRole('button', { name: '+ New campaign' }).click();
+  await page.getByLabel('Campaign name').fill(comparisonName);
+  await page.getByLabel('Start date').fill(start.toISOString().slice(0, 10));
+  await page.getByLabel('End date').fill(end.toISOString().slice(0, 10));
+  await page
+    .locator('.channel-selection input[type="checkbox"]')
+    .first()
+    .check();
+  await page
+    .locator('.platform-options input[type="checkbox"]')
+    .first()
+    .check();
+  await page.getByRole('button', { name: 'Create campaign' }).click();
+  await page.getByRole('button', { name: 'Back to campaigns' }).click();
   await page.getByLabel('Filter by status').selectOption('ACTIVE');
   await page.getByLabel('Search campaigns').fill(updatedName);
   await expect(page.getByRole('button', { name: updatedName })).toBeVisible();
@@ -126,6 +141,62 @@ test('authenticated user can load views and logout', async ({ page }) => {
   );
   await expect(page.locator('span.filter.muted')).toHaveText('1 records');
   await expect(page.getByRole('table').first()).toContainText(recordDate);
+
+  await page.getByRole('button', { name: 'KPI targets' }).click();
+  const definitionSelect = page.getByLabel('KPI definition');
+  const definitionOption = definitionSelect.locator('option').nth(1);
+  const definitionValue = (await definitionOption.getAttribute('value')) ?? '';
+  const definitionLabel = (await definitionOption.innerText()).trim();
+  await definitionSelect.selectOption(definitionValue);
+  await page.getByLabel('Target period').selectOption('DAILY');
+  await page.getByLabel('Target value').fill('1');
+  await page.getByLabel('Target scope').selectOption('CAMPAIGN');
+  const targetCampaign = page.getByLabel('Target campaign');
+  const targetCampaignOption = targetCampaign
+    .locator('option')
+    .filter({ hasText: updatedName });
+  await targetCampaign.selectOption(
+    (await targetCampaignOption.getAttribute('value')) ?? '',
+  );
+  await page.getByLabel('Target effective from').fill(recordDate);
+  await page.getByRole('button', { name: 'Create target' }).click();
+  const targetRow = page.getByRole('row').filter({ hasText: definitionLabel });
+  await expect(targetRow).toContainText('1');
+  await targetRow.getByRole('button', { name: 'Edit/end date' }).click();
+  await page.getByLabel('Target value').fill('2');
+  await page.getByLabel('Target effective to').fill(recordDate);
+  await page.getByRole('button', { name: 'Save target' }).click();
+  await expect(targetRow).toContainText('2');
+
+  await page.getByRole('button', { name: 'Overview' }).click();
+  await page.getByLabel('From').fill(recordDate);
+  await page.getByLabel('To').fill(recordDate);
+  const refreshedCampaignFilter = page.getByLabel('Campaign', { exact: true });
+  const refreshedCampaignOption = refreshedCampaignFilter
+    .locator('option')
+    .filter({ hasText: updatedName });
+  await refreshedCampaignFilter.selectOption(
+    (await refreshedCampaignOption.getAttribute('value')) ?? '',
+  );
+  const refreshedMetric = page.getByLabel('Metric', { exact: true });
+  const targetMetricOption = refreshedMetric
+    .locator('option')
+    .filter({ hasText: definitionLabel });
+  await refreshedMetric.selectOption(
+    (await targetMetricOption.getAttribute('value')) ?? '',
+  );
+  await page.getByLabel('Target period').selectOption('DAILY');
+  const evaluationTable = page
+    .getByRole('heading', { name: 'Target evaluation' })
+    .locator('..')
+    .locator('..')
+    .getByRole('table');
+  await expect(evaluationTable).toContainText(definitionLabel);
+  await expect(evaluationTable).toContainText('2');
+  await expect(evaluationTable).not.toContainText(
+    'Status rule requires clarification',
+  );
+
   await page.getByRole('button', { name: 'Analytics', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Period comparison' }),
@@ -134,7 +205,25 @@ test('authenticated user can load views and logout', async ({ page }) => {
     page.getByRole('heading', { name: 'Campaign or channel comparison' }),
   ).toBeVisible();
   await expect(page.getByRole('table').first()).toBeVisible();
-  await expect(page.getByRole('table').nth(1)).toBeVisible();
+  await page.getByLabel('Compare').last().selectOption('CAMPAIGN');
+  const firstCampaign = page.getByLabel('First campaign');
+  const secondCampaign = page.getByLabel('Second campaign');
+  const firstOption = firstCampaign
+    .locator('option')
+    .filter({ hasText: updatedName });
+  await firstCampaign.selectOption(
+    (await firstOption.getAttribute('value')) ?? '',
+  );
+  const secondOption = secondCampaign
+    .locator('option')
+    .filter({ hasText: comparisonName });
+  await secondCampaign.selectOption(
+    (await secondOption.getAttribute('value')) ?? '',
+  );
+  const comparisonTable = page.getByRole('table').nth(1);
+  await expect(comparisonTable).toContainText(updatedName);
+  await expect(comparisonTable).toContainText(comparisonName);
+  await expect(comparisonTable.getByRole('row')).toHaveCount(3);
   await page.getByRole('button', { name: 'Reports', exact: true }).click();
   await expect(
     page.getByRole('heading', { level: 1, name: 'Reports' }),
