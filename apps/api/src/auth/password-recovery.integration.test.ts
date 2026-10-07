@@ -150,7 +150,7 @@ describe('password recovery HTTP and PostgreSQL flow', () => {
       first.headers.get('cache-control') !== 'no-store'
     )
       throw new Error(
-        'An eligible recovery request did not return the generic no-store acknowledgement.',
+        `Eligible recovery request returned ${first.status} with cache-control ${first.headers.get('cache-control')}: ${await first.text()}`,
       );
     const unknown = await recoveryRequest(
       `missing-${randomUUID()}@example.invalid`,
