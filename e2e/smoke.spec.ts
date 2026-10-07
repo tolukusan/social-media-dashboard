@@ -278,6 +278,7 @@ test('Administrator can manage the channel and platform catalogue lifecycle', as
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('h1')).toHaveText('Overview');
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(
     page.getByRole('heading', { name: 'Channels & Platforms' }),
@@ -341,7 +342,7 @@ test('keyboard and mobile basics remain usable', async ({ page }) => {
   await page.getByLabel('Email address').fill('missing@example.invalid');
   await page.getByLabel('Password').fill('invalid-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('alert')).toContainText(
+  await expect(page.locator('.notice.error[role="alert"]')).toContainText(
     'Invalid email or password',
   );
 });
@@ -358,6 +359,7 @@ test('Administrator can preview, validate, and confirm a structured import', asy
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('h1')).toHaveText('Overview');
   await page.goto('/imports');
 
   const fixture = await readFile(
@@ -429,9 +431,11 @@ test('password reset keeps the token after a retryable failure', async ({
 
   await page.goto(`/reset-password#token=${token}`);
   await expect(page).not.toHaveURL(/#token=/);
-  await page.getByLabel('New password').fill('Replacement-Passphrase-2026');
   await page
-    .getByLabel('Confirm new password')
+    .getByLabel('New password', { exact: true })
+    .fill('Replacement-Passphrase-2026');
+  await page
+    .getByLabel('Confirm new password', { exact: true })
     .fill('Replacement-Passphrase-2026');
   await page.getByRole('button', { name: 'Update password' }).click();
   await expect(page.getByRole('alert')).toContainText(
