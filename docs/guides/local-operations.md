@@ -6,7 +6,9 @@
 - pnpm 11
 - PostgreSQL 18 (or a compatible PostgreSQL server)
 
-Copy `.env.example` to `.env` and provide a local `DATABASE_URL`, `APP_ORIGIN`, and `API_PORT`. Never commit the local file.
+Copy `apps/api/.env.example` to `apps/api/.env` and `apps/web/.env.example` to `apps/web/.env.local`. Provide a local `DATABASE_URL`, `APP_ORIGIN`, and `API_PORT`; keep `NEXT_PUBLIC_API_URL` pointed at the API. Never commit the local files.
+
+Self-service password recovery can be exercised against the in-memory test capture without real credentials. For actual email delivery, configure the `SMTP_*` values in `apps/api/.env` using an authorised provider. Do not put real SMTP credentials in either example file or project documentation.
 
 ## Install, migrate, seed, and run
 
@@ -21,6 +23,8 @@ pnpm dev
 The API is available at `http://localhost:4000/api/v1`; the web app is available at `http://localhost:3000`.
 
 For a local administrator, provide `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` only in the local environment while running the seed command.
+
+Expired password-recovery records remain unusable without cleanup. The bounded maintenance command `pnpm --filter @smd/api recovery:cleanup` removes only tokens that expired more than 30 days ago; schedule it only as part of an approved deployment runbook.
 
 ## Verification
 
