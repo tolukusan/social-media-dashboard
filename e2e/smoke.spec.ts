@@ -97,7 +97,6 @@ test('authenticated user can load views and logout', async ({ page }) => {
     .first()
     .check();
   await page.getByRole('button', { name: 'Create campaign' }).click();
-  await page.getByRole('button', { name: 'Back to campaigns' }).click();
   await page.getByLabel('Filter by status').selectOption('ACTIVE');
   await page.getByLabel('Search campaigns').fill(updatedName);
   await expect(page.getByRole('button', { name: updatedName })).toBeVisible();
@@ -299,11 +298,13 @@ test('Administrator can manage the channel and platform catalogue lifecycle', as
   const platformName = `E2E Platform ${suffix}`;
   await page.getByLabel('Platform name').first().fill(platformName);
   await page.getByLabel('Platform code').first().fill(`PLAT_${suffix}`);
-  await page
-    .getByLabel('Channel', { exact: true })
-    .first()
-    .selectOption({ label: channelName });
-  await page.getByRole('button', { name: 'Add platform' }).click();
+  const platformForm = page
+    .getByRole('heading', { name: 'Add platform' })
+    .locator('xpath=following-sibling::form[1]');
+  await platformForm.locator('select[name="channelId"]').selectOption({
+    label: channelName,
+  });
+  await platformForm.getByRole('button', { name: 'Add platform' }).click();
   await expect(channelCard).toContainText(platformName);
 
   await channelCard.getByRole('button', { name: 'Edit' }).first().click();
@@ -438,7 +439,7 @@ test('password reset keeps the token after a retryable failure', async ({
     .getByLabel('Confirm new password', { exact: true })
     .fill('Replacement-Passphrase-2026');
   await page.getByRole('button', { name: 'Update password' }).click();
-  await expect(page.getByRole('alert')).toContainText(
+  await expect(page.locator('.notice.error[role="alert"]')).toContainText(
     'We could not update your password. Please try again.',
   );
   await expect(
@@ -446,7 +447,7 @@ test('password reset keeps the token after a retryable failure', async ({
   ).toBeVisible();
 
   await page.getByRole('button', { name: 'Update password' }).click();
-  await expect(page.getByRole('alert')).toContainText(
+  await expect(page.locator('.notice.error[role="alert"]')).toContainText(
     'This password reset link is invalid or has expired.',
   );
   await expect(
