@@ -1,43 +1,24 @@
 # Remaining work
 
-Follow [completion execution order and ledger](docs/plans/completion/README.md), [progress](docs/evidence/IMPLEMENTATION_PROGRESS.md), [acceptance baseline](docs/plans/completion/acceptance-matrix.md) and [blockers](BLOCKERS.md).
+Completed implementation is recorded in the [completion ledger](docs/plans/completion/README.md) and [implementation progress](docs/evidence/IMPLEMENTATION_PROGRESS.md). This file now contains only work that still needs a package, external value/environment, real participant/provider, or successful verification run.
 
-Completed work is recorded in the ledger above. This checklist contains only outstanding items.
+## Package-gated implementation
 
-## Review findings
+- [ ] **F02:** Add the approved Tailwind dependency and finish Tailwind setup when a safe package-install path can update the lockfile.
+- [ ] **F07/F08:** Add Recharts plots to Overview and Analytics, preserving null gaps and the accessible tables, after Recharts can be installed normally.
+- [ ] **F09:** Replace the handwritten single-page PDF renderer with a maintained server-side PDF library; add wrapping, pagination, non-ASCII font support, an embedded trend chart, and visual long-report verification after the dependency can be installed normally.
 
-- [ ] **High priority — F10:** Login and recovery now validate the configured application Origin. Extend the same strict allowed/disallowed/missing-Origin coverage to the remaining unsafe authenticated mutations and verify the full route matrix.
-- [ ] **F09:** Fix Reports currency formatting to use the backend-provided reporting currency when configured; retain the unset label only when no currency is configured.
-- [ ] **F09:** Replace the single-page PDF renderer with a maintained server-side library. Add wrapping, pagination, non-ASCII font support, and an embedded trend chart; inspect a sample PDF and verify long reports retain all content. Dependency installation is blocked by NVM4306.
+## Verification and external evidence
 
-## Completion plan
+- [ ] Run the new PostgreSQL-backed CI verification successfully: lint, typecheck, unit, integration, build, Playwright, isolated backup/restore, authenticated 25-user k6 baseline, and documentation formatting.
+- [ ] **Password recovery:** verify actual inbox delivery with an authorised SMTP provider/sender.
+- [ ] **F11:** conduct the prepared usability tasks with real participants and record genuine findings.
+- [ ] **F06a:** supply the deploying organisation's approved `REPORTING_CURRENCY`.
+- [ ] **F00:** locate or formally resolve the historical import scope-promotion provenance; preserve the existing feature/formats meanwhile.
+- [ ] **M12:** deploy only when an external environment is supplied and deployment is explicitly authorised.
 
-- [ ] **Password recovery:** The [email recovery flow](docs/plans/password-recovery.md) is implemented. Run the full local verification matrix and configure an authorised SMTP provider before claiming actual inbox delivery.
-- [ ] **F02:** Finish Tailwind setup after the approved project-local dependency installation path is available.
-- [ ] **F07/F08:** Add Recharts plots to Overview and Analytics, preserving null gaps and accessible tables. Verify desktop/mobile layout and filter changes.
-- [ ] **F08:** Extend browser coverage for target create/edit/end-date and dashboard status refresh, plus campaign/channel comparison values.
-- [ ] **F10:** Complete the route/action authorization matrix, required audit events, session cleanup, and security verification.
-- [ ] **F11:** Complete the cross-role journey, catalogue lifecycle and import regression coverage, keyboard/accessibility checks, and realistic authenticated load testing.
-- [ ] **F11:** Prepare usability tasks and collect actual participant feedback; record participant availability honestly.
-- [ ] **R03:** Finish imports UI extraction after meaningful import workflow coverage is in place.
-- [ ] **F12:** Finish current user/developer guides, deterministic demo data/script, isolated backup/restore evidence, and the deployment runbook.
-- [ ] **R05:** Reconcile active documentation links, acceptance evidence, progress, and the final repository handoff.
-- [ ] **M12:** Deploy only after an external environment is available and deployment is explicitly authorised.
+## Completed in the current TODO pass
 
-## Decisions and dependencies
+Source work now covers strict Origin enforcement for all unsafe methods, the authorization matrix, required administration audit events, stale-session cleanup, secure own-password change, deterministic `NO_DATA` target precedence, Reports currency formatting, target lifecycle/dashboard/comparison browser coverage, catalogue/import/keyboard-mobile browser coverage, authenticated load tooling, Imports feature extraction, deterministic demo data, current guides, backup/restore procedure, deployment runbook, and usability-test preparation.
 
-- [ ] Restore the approved pnpm dependency installation path; Tailwind, Recharts, and the PDF library are currently blocked by NVM4306.
-- [ ] **F03:** Resolve current-password verification and session revocation policy for own-password changes, then implement the approved flow.
-- [ ] **F06a:** Supply an approved deployment `REPORTING_CURRENCY` value.
-- [ ] **F06c:** Resolve status precedence when both actual data and an applicable target are missing, then update evaluation and verification.
-- [ ] **F00:** Resolve historical import scope-promotion provenance; preserve existing imports and formats while unresolved.
-
-Local execution is authorised. Follow the task dependencies, verify each coherent change, and continue independent work when a narrow dependency is blocked.
-
-Read [AGENTS.md](AGENTS.md) and the selected task's references before editing. Preserve the general-purpose product decision, existing data and imports. Retain the [local operating restrictions](.ai/LOCAL_OPERATING_RESTRICTIONS.md). Never write credentials here.
-
-## Documentation maintenance
-
-Use the [documentation index](docs/README.md) and [agent guidance index](.ai/README.md) to find current material. Update affected guides with each implementation task; archive superseded documents using the [version archive policy](docs/README.md#keeping-documentation-current). Keep this checklist limited to outstanding work and record completion evidence in the existing ledger.
-
-Keep curated historical documentation under docs/archive rather than accumulating recovery snapshots in the project root.
+Never commit credentials or invent external verification evidence.
