@@ -743,3 +743,16 @@ input:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+
+.chart-visual {
+  width: 100%;
+  height: 300px;
+  margin-top: 20px;
+}
+
+@media (max-width: 620px) {
+  .chart-visual {
+    height: 240px;
+  }
+}
