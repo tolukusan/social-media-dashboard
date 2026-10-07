@@ -77,6 +77,12 @@ Minimum MVP policy:
 
 Administrator-assisted reset is the approved recovery flow.
 
+### 3.5 Self-service email recovery
+
+The approved local completion addition provides self-service recovery for active accounts in all existing roles. A 32-byte random token is sent only to the account email and stored only as a SHA-256 hash. It expires after 30 minutes, is single-use, and is invalidated by replacement, administrator password reset, email change, or deactivation. The reset changes only the password, revokes active sessions, invalidates other recovery tokens, and does not create a session. See [ADR-007](../architecture/adr/ADR-007-password-recovery.md) and the [recovery plan](../plans/password-recovery.md).
+
+Recovery endpoints return the same acknowledgement for active, inactive, and nonexistent accounts. They require an exact configured Origin plus the existing CSRF cookie/header. Reset tokens are placed in the email URL fragment, removed from browser history on page load, and never stored in browser persistence. Never log the token, reset URL, SMTP credentials, or message payload.
+
 ## 3.4 Login Failure
 
 For invalid credentials, return a generic message such as:

@@ -10,6 +10,7 @@
 ```mermaid
 erDiagram
     ROLE ||--o{ USER : assigns
+    USER ||--o{ PASSWORD_RECOVERY_TOKEN : may_recover
 
     USER ||--o{ CAMPAIGN : responsible_for
     USER ||--o{ PERFORMANCE_RECORD : enters
@@ -50,6 +51,17 @@ erDiagram
         datetime created_at
         datetime updated_at
         datetime deactivated_at
+    }
+
+    PASSWORD_RECOVERY_TOKEN {
+        uuid id PK
+        uuid user_id FK
+        string token_hash UK
+        string email_at_issue
+        datetime created_at
+        datetime expires_at
+        datetime used_at
+        datetime revoked_at
     }
 
     MARKETING_CHANNEL {

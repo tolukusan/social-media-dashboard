@@ -75,6 +75,11 @@ export function Login({
             {isSubmitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+        <p>
+          <a className="text-link" href="/forgot-password">
+            Forgot password?
+          </a>
+        </p>
       </section>
     </main>
   );

@@ -12,6 +12,7 @@ Completed work is recorded in the ledger above. This checklist contains only out
 
 ## Completion plan
 
+- [ ] **Password recovery:** Implement the [planned email recovery flow](docs/plans/password-recovery.md) when implementation is authorised; configure SMTP for actual email delivery.
 - [ ] **F02:** Finish Tailwind setup after the approved project-local dependency installation path is available.
 - [ ] **F07/F08:** Add Recharts plots to Overview and Analytics, preserving null gaps and accessible tables. Verify desktop/mobile layout and filter changes.
 - [ ] **F08:** Extend browser coverage for target create/edit/end-date and dashboard status refresh, plus campaign/channel comparison values.
@@ -39,4 +40,4 @@ Read [AGENTS.md](AGENTS.md) and the selected task's references before editing. P
 
 Use the [documentation index](docs/README.md) and [agent guidance index](.ai/README.md) to find current material. Update affected guides with each implementation task; archive superseded documents using the [version archive policy](docs/README.md#keeping-documentation-current). Keep this checklist limited to outstanding work and record completion evidence in the existing ledger.
 
-Temporary reorganisation backups have been removed at the stakeholder's request. Keep curated historical documentation under docs/archive rather than accumulating recovery snapshots in the project root.
+Keep curated historical documentation under docs/archive rather than accumulating recovery snapshots in the project root.

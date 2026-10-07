@@ -16,7 +16,8 @@
     "test:db:prepare": "tsx scripts/prepare-test-database.ts",
     "test:integration": "tsx scripts/run-integration.ts",
     "test:e2e:prepare": "tsx scripts/prepare-e2e-users.ts",
-    "test:e2e": "tsx scripts/run-e2e.ts"
+    "test:e2e": "tsx scripts/run-e2e.ts",
+    "recovery:cleanup": "tsx prisma/cleanup-password-recovery.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
@@ -31,6 +32,7 @@
     "csv-parse": "^7.0.3",
     "dotenv": "^17.2.2",
     "exceljs": "^4.4.0",
+    "nodemailer": "^10.0.15",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
@@ -38,6 +40,7 @@
     "@nestjs/testing": "^11.1.6",
     "@types/express": "^5.0.3",
     "@types/node": "^24.5.2",
+    "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.15.5",
     "pg": "^8.16.3",
     "prisma": "^7.1.0",

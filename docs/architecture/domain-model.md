@@ -149,6 +149,10 @@ Represents an authorised system user.
 - Historical records retain their user references.
 - Password hashes must never be exposed in application responses.
 
+### PasswordRecoveryToken (security workflow extension)
+
+Represents one short-lived email credential for changing the password of its associated active User. It stores a unique token hash, the email address at issue time, creation/expiry timestamps, and optional use/revocation timestamps. One User may have multiple historical token rows; only an unused, unrevoked, unexpired token whose email snapshot still matches may be redeemed. This security workflow entity does not alter the one-role-per-user or campaign domain cardinalities.
+
 ---
 
 ## 3.3 MarketingChannel

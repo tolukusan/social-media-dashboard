@@ -27,12 +27,17 @@ export class SessionGuard implements CanActivate {
       .switchToHttp()
       .getRequest<Request & { user?: AuthenticatedUser }>();
     if (
-      request.path.endsWith('/health') ||
-      request.path.includes('/auth/login') ||
-      request.path.includes('/auth/csrf')
+      (request.method === 'GET' && request.path === '/api/v1/health') ||
+      (request.method === 'POST' && request.path === '/api/v1/auth/login') ||
+      (request.method === 'GET' && request.path === '/api/v1/auth/csrf') ||
+      (request.method === 'POST' &&
+        request.path === '/api/v1/auth/forgot-password') ||
+      (request.method === 'POST' &&
+        request.path === '/api/v1/auth/reset-password')
     )
       return true;
-    if (request.path.includes('/auth/logout')) return true;
+    if (request.method === 'POST' && request.path === '/api/v1/auth/logout')
+      return true;
     const token = readCookie(request, AuthService.cookieName());
     if (!token)
       throw new UnauthorizedException({

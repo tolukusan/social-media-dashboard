@@ -10,10 +10,15 @@ import { PrismaService } from '../database/prisma.service.js';
 import type { CreateUserDto } from './dto/create-user.dto.js';
 import type { ResetPasswordDto } from './dto/reset-password.dto.js';
 import type { UpdateUserDto } from './dto/update-user.dto.js';
+import { UserSecurityLockService } from '../auth/user-security-lock.service.js';
 
 @Injectable()
 export class UsersService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(UserSecurityLockService)
+    private readonly locks: UserSecurityLockService,
+  ) {}
   roles() {
     return this.prisma.role.findMany({
       where: {
@@ -78,7 +83,7 @@ export class UsersService {
 
     const current = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, email: true },
     });
     if (!current)
       throw new NotFoundException({
@@ -86,6 +91,7 @@ export class UsersService {
         message: 'User not found',
       });
 
+    const currentEmail = current.email;
     const data: { name?: string; email?: string; roleId?: string } = {};
     if (dto.name !== undefined) {
       const name = dto.name.trim();
@@ -123,11 +129,17 @@ export class UsersService {
     }
 
     try {
-      return await this.prisma.user.update({
-        where: { id },
-        data,
-        include: { role: true },
-        omit: { passwordHash: true },
+      return await this.prisma.$transaction(async (tx) => {
+        await this.locks.lock(tx, id);
+        const result = await tx.user.update({
+          where: { id },
+          data,
+          include: { role: true },
+          omit: { passwordHash: true },
+        });
+        if (data.email !== undefined && data.email !== currentEmail)
+          await this.locks.invalidateRecoveryTokens(tx, id);
+        return result;
       });
     } catch (error) {
       if (
@@ -151,16 +163,18 @@ export class UsersService {
         message: 'User not found',
       });
     const now = new Date();
-    await this.prisma.$transaction([
-      this.prisma.user.update({
+    await this.prisma.$transaction(async (tx) => {
+      await this.locks.lock(tx, id);
+      await tx.user.update({
         where: { id },
         data: { active: false, deactivatedAt: now },
-      }),
-      this.prisma.session.updateMany({
+      });
+      await tx.session.updateMany({
         where: { userId: id, revokedAt: null },
         data: { revokedAt: now },
-      }),
-    ]);
+      });
+      await this.locks.invalidateRecoveryTokens(tx, id, now);
+    });
     return { success: true };
   }
   async resetPassword(id: string, dto: ResetPasswordDto) {
@@ -171,20 +185,18 @@ export class UsersService {
         message: 'User not found',
       });
     const now = new Date();
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id },
-        data: {
-          passwordHash: await argon2.hash(dto.password, {
-            type: argon2.argon2id,
-          }),
-        },
-      }),
-      this.prisma.session.updateMany({
+    const passwordHash = await argon2.hash(dto.password, {
+      type: argon2.argon2id,
+    });
+    await this.prisma.$transaction(async (tx) => {
+      await this.locks.lock(tx, id);
+      await tx.user.update({ where: { id }, data: { passwordHash } });
+      await tx.session.updateMany({
         where: { userId: id, revokedAt: null },
         data: { revokedAt: now },
-      }),
-    ]);
+      });
+      await this.locks.invalidateRecoveryTokens(tx, id, now);
+    });
     return { success: true };
   }
 
@@ -195,11 +207,14 @@ export class UsersService {
         code: 'USER_NOT_FOUND',
         message: 'User not found',
       });
-    return this.prisma.user.update({
-      where: { id },
-      data: { active: true, deactivatedAt: null },
-      include: { role: true },
-      omit: { passwordHash: true },
+    return this.prisma.$transaction(async (tx) => {
+      await this.locks.lock(tx, id);
+      return tx.user.update({
+        where: { id },
+        data: { active: true, deactivatedAt: null },
+        include: { role: true },
+        omit: { passwordHash: true },
+      });
     });
   }
 }

@@ -676,6 +676,10 @@ input:focus-visible {
   font-size: 13px;
   text-decoration: none;
 }
+.field-error {
+  color: #b42318;
+  font-size: 12px;
+}
 .empty-table {
   min-height: 150px;
   display: flex;

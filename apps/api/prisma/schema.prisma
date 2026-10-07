@@ -5,7 +5,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  schemas = ["social_media_dashboard"]
+  schemas  = ["social_media_dashboard"]
 }
 
 enum CampaignStatus {
@@ -14,34 +14,44 @@ enum CampaignStatus {
   COMPLETED
   SUSPENDED
   CANCELLED
+
   @@schema("social_media_dashboard")
 }
+
 enum MetricKind {
   RAW
   DERIVED
+
   @@schema("social_media_dashboard")
 }
+
 enum MetricUnit {
   COUNT
   PERCENT
   CURRENCY
   POSITION
   DECIMAL
+
   @@schema("social_media_dashboard")
 }
+
 enum AggregationStrategy {
   SUM
   WEIGHTED_AVERAGE
   FIRST
   LAST
   DERIVED
+
   @@schema("social_media_dashboard")
 }
+
 enum PerformanceRecordStatus {
   ACTIVE
   ARCHIVED
+
   @@schema("social_media_dashboard")
 }
+
 enum TargetPeriodType {
   DAILY
   WEEKLY
@@ -49,20 +59,26 @@ enum TargetPeriodType {
   QUARTERLY
   YEARLY
   CAMPAIGN
+
   @@schema("social_media_dashboard")
 }
+
 enum TargetScopeType {
   GLOBAL
   CHANNEL
   PLATFORM
   CAMPAIGN
+
   @@schema("social_media_dashboard")
 }
+
 enum ComparisonRule {
   HIGHER_IS_BETTER
   LOWER_IS_BETTER
+
   @@schema("social_media_dashboard")
 }
+
 enum ImportBatchStatus {
   PREVIEW
   READY
@@ -70,304 +86,340 @@ enum ImportBatchStatus {
   COMPLETED
   FAILED
   REJECTED
+
   @@schema("social_media_dashboard")
 }
+
 enum ImportRowStatus {
   PENDING
   ACCEPTED
   REJECTED
   CONFLICT
+
   @@schema("social_media_dashboard")
 }
 
 model Role {
-  id String @id @default(uuid()) @db.Uuid
-  code String @unique
-  name String
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  name        String
   description String?
-  active Boolean @default(true)
-  users User[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  active      Boolean  @default(true)
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   @@schema("social_media_dashboard")
 }
 
 model User {
-  id String @id @default(uuid()) @db.Uuid
-  roleId String @db.Uuid
-  role Role @relation(fields: [roleId], references: [id])
-  name String
-  email String @unique
-  passwordHash String
-  active Boolean @default(true)
-  lastLoginAt DateTime?
-  deactivatedAt DateTime?
-  responsibleCampaigns Campaign[] @relation("ResponsibleUser")
-  createdCampaigns Campaign[] @relation("CreatedCampaigns")
-  updatedCampaigns Campaign[] @relation("UpdatedCampaigns")
-  createdPerformanceRecords PerformanceRecord[] @relation("CreatedPerformanceRecords")
-  updatedPerformanceRecords PerformanceRecord[] @relation("UpdatedPerformanceRecords")
-  importBatches ImportBatch[]
-  sessions Session[]
-  createdTargets KpiTarget[] @relation("CreatedTargets")
-  auditEvents AuditLog[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                        String                  @id @default(uuid()) @db.Uuid
+  roleId                    String                  @db.Uuid
+  role                      Role                    @relation(fields: [roleId], references: [id])
+  name                      String
+  email                     String                  @unique
+  passwordHash              String
+  active                    Boolean                 @default(true)
+  lastLoginAt               DateTime?
+  deactivatedAt             DateTime?
+  responsibleCampaigns      Campaign[]              @relation("ResponsibleUser")
+  createdCampaigns          Campaign[]              @relation("CreatedCampaigns")
+  updatedCampaigns          Campaign[]              @relation("UpdatedCampaigns")
+  createdPerformanceRecords PerformanceRecord[]     @relation("CreatedPerformanceRecords")
+  updatedPerformanceRecords PerformanceRecord[]     @relation("UpdatedPerformanceRecords")
+  importBatches             ImportBatch[]
+  sessions                  Session[]
+  passwordRecoveryTokens    PasswordRecoveryToken[]
+  createdTargets            KpiTarget[]             @relation("CreatedTargets")
+  auditEvents               AuditLog[]
+  createdAt                 DateTime                @default(now())
+  updatedAt                 DateTime                @updatedAt
+
   @@schema("social_media_dashboard")
 }
 
 model MarketingChannel {
-  id String @id @default(uuid()) @db.Uuid
-  code String @unique
-  name String
-  description String?
-  active Boolean @default(true)
-  archivedAt DateTime?
-  platforms Platform[]
+  id               String            @id @default(uuid()) @db.Uuid
+  code             String            @unique
+  name             String
+  description      String?
+  active           Boolean           @default(true)
+  archivedAt       DateTime?
+  platforms        Platform[]
   campaignChannels CampaignChannel[]
-  channelMetrics ChannelMetric[]
-  targets KpiTarget[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  channelMetrics   ChannelMetric[]
+  targets          KpiTarget[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
   @@schema("social_media_dashboard")
 }
 
 model Platform {
-  id String @id @default(uuid()) @db.Uuid
-  channelId String @db.Uuid
-  channel MarketingChannel @relation(fields: [channelId], references: [id])
-  code String
-  name String
-  description String?
-  active Boolean @default(true)
-  archivedAt DateTime?
+  id                String             @id @default(uuid()) @db.Uuid
+  channelId         String             @db.Uuid
+  channel           MarketingChannel   @relation(fields: [channelId], references: [id])
+  code              String
+  name              String
+  description       String?
+  active            Boolean            @default(true)
+  archivedAt        DateTime?
   campaignPlatforms CampaignPlatform[]
-  targets KpiTarget[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  targets           KpiTarget[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
   @@unique([channelId, code])
   @@schema("social_media_dashboard")
 }
 
 model Campaign {
-  id String @id @default(uuid()) @db.Uuid
-  name String
-  description String?
-  objective String?
-  targetAudience String?
-  startDate DateTime @db.Date
-  endDate DateTime? @db.Date
-  status CampaignStatus @default(PLANNED)
-  budget Decimal? @db.Decimal(18, 2)
-  responsibleUserId String @db.Uuid
-  responsibleUser User @relation("ResponsibleUser", fields: [responsibleUserId], references: [id])
-  createdByUserId String @db.Uuid
-  createdByUser User @relation("CreatedCampaigns", fields: [createdByUserId], references: [id])
-  updatedByUserId String @db.Uuid
-  updatedByUser User @relation("UpdatedCampaigns", fields: [updatedByUserId], references: [id])
-  notes String?
-  archivedAt DateTime?
-  campaignChannels CampaignChannel[]
-  targets KpiTarget[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String            @id @default(uuid()) @db.Uuid
+  name              String
+  description       String?
+  objective         String?
+  targetAudience    String?
+  startDate         DateTime          @db.Date
+  endDate           DateTime?         @db.Date
+  status            CampaignStatus    @default(PLANNED)
+  budget            Decimal?          @db.Decimal(18, 2)
+  responsibleUserId String            @db.Uuid
+  responsibleUser   User              @relation("ResponsibleUser", fields: [responsibleUserId], references: [id])
+  createdByUserId   String            @db.Uuid
+  createdByUser     User              @relation("CreatedCampaigns", fields: [createdByUserId], references: [id])
+  updatedByUserId   String            @db.Uuid
+  updatedByUser     User              @relation("UpdatedCampaigns", fields: [updatedByUserId], references: [id])
+  notes             String?
+  archivedAt        DateTime?
+  campaignChannels  CampaignChannel[]
+  targets           KpiTarget[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
   @@schema("social_media_dashboard")
 }
 
 model CampaignChannel {
-  id String @id @default(uuid()) @db.Uuid
-  campaignId String @db.Uuid
-  campaign Campaign @relation(fields: [campaignId], references: [id])
-  channelId String @db.Uuid
-  channel MarketingChannel @relation(fields: [channelId], references: [id])
+  id                String             @id @default(uuid()) @db.Uuid
+  campaignId        String             @db.Uuid
+  campaign          Campaign           @relation(fields: [campaignId], references: [id])
+  channelId         String             @db.Uuid
+  channel           MarketingChannel   @relation(fields: [channelId], references: [id])
   campaignPlatforms CampaignPlatform[]
-  createdAt DateTime @default(now())
+  createdAt         DateTime           @default(now())
+
   @@unique([campaignId, channelId])
   @@schema("social_media_dashboard")
 }
 
 model CampaignPlatform {
-  id String @id @default(uuid()) @db.Uuid
-  campaignChannelId String @db.Uuid
-  campaignChannel CampaignChannel @relation(fields: [campaignChannelId], references: [id])
-  platformId String @db.Uuid
-  platform Platform @relation(fields: [platformId], references: [id])
+  id                 String              @id @default(uuid()) @db.Uuid
+  campaignChannelId  String              @db.Uuid
+  campaignChannel    CampaignChannel     @relation(fields: [campaignChannelId], references: [id])
+  platformId         String              @db.Uuid
+  platform           Platform            @relation(fields: [platformId], references: [id])
   performanceRecords PerformanceRecord[]
-  createdAt DateTime @default(now())
+  createdAt          DateTime            @default(now())
+
   @@unique([campaignChannelId, platformId])
   @@schema("social_media_dashboard")
 }
 
 model MetricDefinition {
-  id String @id @default(uuid()) @db.Uuid
-  code String @unique
-  name String
-  description String?
-  kind MetricKind
-  unit MetricUnit
+  id                  String                   @id @default(uuid()) @db.Uuid
+  code                String                   @unique
+  name                String
+  description         String?
+  kind                MetricKind
+  unit                MetricUnit
   aggregationStrategy AggregationStrategy
-  active Boolean @default(true)
-  channelMetrics ChannelMetric[]
-  performanceValues PerformanceMetricValue[]
-  kpiDefinitions KpiDefinition[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  active              Boolean                  @default(true)
+  channelMetrics      ChannelMetric[]
+  performanceValues   PerformanceMetricValue[]
+  kpiDefinitions      KpiDefinition[]
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
   @@schema("social_media_dashboard")
 }
 
 model ChannelMetric {
-  id String @id @default(uuid()) @db.Uuid
-  channelId String @db.Uuid
-  channel MarketingChannel @relation(fields: [channelId], references: [id])
-  metricDefinitionId String @db.Uuid
-  metricDefinition MetricDefinition @relation(fields: [metricDefinitionId], references: [id])
-  inputEnabled Boolean @default(true)
-  displayOrder Int @default(0)
-  active Boolean @default(true)
+  id                 String           @id @default(uuid()) @db.Uuid
+  channelId          String           @db.Uuid
+  channel            MarketingChannel @relation(fields: [channelId], references: [id])
+  metricDefinitionId String           @db.Uuid
+  metricDefinition   MetricDefinition @relation(fields: [metricDefinitionId], references: [id])
+  inputEnabled       Boolean          @default(true)
+  displayOrder       Int              @default(0)
+  active             Boolean          @default(true)
+
   @@unique([channelId, metricDefinitionId])
   @@schema("social_media_dashboard")
 }
 
 model PerformanceRecord {
-  id String @id @default(uuid()) @db.Uuid
-  campaignPlatformId String @db.Uuid
-  campaignPlatform CampaignPlatform @relation(fields: [campaignPlatformId], references: [id])
-  recordDate DateTime @db.Date
-  notes String?
-  status PerformanceRecordStatus @default(ACTIVE)
-  createdByUserId String @db.Uuid
-  createdByUser User @relation("CreatedPerformanceRecords", fields: [createdByUserId], references: [id])
-  updatedByUserId String @db.Uuid
-  updatedByUser User @relation("UpdatedPerformanceRecords", fields: [updatedByUserId], references: [id])
-  metricValues PerformanceMetricValue[]
-  importBatchId String? @db.Uuid
-  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id])
-  archivedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String                   @id @default(uuid()) @db.Uuid
+  campaignPlatformId String                   @db.Uuid
+  campaignPlatform   CampaignPlatform         @relation(fields: [campaignPlatformId], references: [id])
+  recordDate         DateTime                 @db.Date
+  notes              String?
+  status             PerformanceRecordStatus  @default(ACTIVE)
+  createdByUserId    String                   @db.Uuid
+  createdByUser      User                     @relation("CreatedPerformanceRecords", fields: [createdByUserId], references: [id])
+  updatedByUserId    String                   @db.Uuid
+  updatedByUser      User                     @relation("UpdatedPerformanceRecords", fields: [updatedByUserId], references: [id])
+  metricValues       PerformanceMetricValue[]
+  importBatchId      String?                  @db.Uuid
+  importBatch        ImportBatch?             @relation(fields: [importBatchId], references: [id])
+  archivedAt         DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
   @@unique([campaignPlatformId, recordDate])
   @@index([importBatchId])
   @@schema("social_media_dashboard")
 }
 
 model PerformanceMetricValue {
-  id String @id @default(uuid()) @db.Uuid
-  performanceRecordId String @db.Uuid
-  performanceRecord PerformanceRecord @relation(fields: [performanceRecordId], references: [id])
-  metricDefinitionId String @db.Uuid
-  metricDefinition MetricDefinition @relation(fields: [metricDefinitionId], references: [id])
-  value Decimal @db.Decimal(24, 6)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String            @id @default(uuid()) @db.Uuid
+  performanceRecordId String            @db.Uuid
+  performanceRecord   PerformanceRecord @relation(fields: [performanceRecordId], references: [id])
+  metricDefinitionId  String            @db.Uuid
+  metricDefinition    MetricDefinition  @relation(fields: [metricDefinitionId], references: [id])
+  value               Decimal           @db.Decimal(24, 6)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
   @@unique([performanceRecordId, metricDefinitionId])
   @@schema("social_media_dashboard")
 }
 
 model KpiDefinition {
-  id String @id @default(uuid()) @db.Uuid
-  metricDefinitionId String @db.Uuid
-  metricDefinition MetricDefinition @relation(fields: [metricDefinitionId], references: [id])
-  name String
-  description String?
-  active Boolean @default(true)
-  targets KpiTarget[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String           @id @default(uuid()) @db.Uuid
+  metricDefinitionId String           @db.Uuid
+  metricDefinition   MetricDefinition @relation(fields: [metricDefinitionId], references: [id])
+  name               String
+  description        String?
+  active             Boolean          @default(true)
+  targets            KpiTarget[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
   @@unique([metricDefinitionId])
   @@schema("social_media_dashboard")
 }
 
 model KpiTarget {
-  id String @id @default(uuid()) @db.Uuid
-  kpiDefinitionId String @db.Uuid
-  kpiDefinition KpiDefinition @relation(fields: [kpiDefinitionId], references: [id])
-  periodType TargetPeriodType
-  targetValue Decimal @db.Decimal(18, 6)
-  scopeType TargetScopeType @default(GLOBAL)
-  channelId String? @db.Uuid
-  channel MarketingChannel? @relation(fields: [channelId], references: [id])
-  platformId String? @db.Uuid
-  platform Platform? @relation(fields: [platformId], references: [id])
-  campaignId String? @db.Uuid
-  campaign Campaign? @relation(fields: [campaignId], references: [id])
-  comparisonRule ComparisonRule
-  effectiveFrom DateTime @db.Date
-  effectiveTo DateTime? @db.Date
-  createdByUserId String @db.Uuid
-  createdByUser User @relation("CreatedTargets", fields: [createdByUserId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String            @id @default(uuid()) @db.Uuid
+  kpiDefinitionId String            @db.Uuid
+  kpiDefinition   KpiDefinition     @relation(fields: [kpiDefinitionId], references: [id])
+  periodType      TargetPeriodType
+  targetValue     Decimal           @db.Decimal(18, 6)
+  scopeType       TargetScopeType   @default(GLOBAL)
+  channelId       String?           @db.Uuid
+  channel         MarketingChannel? @relation(fields: [channelId], references: [id])
+  platformId      String?           @db.Uuid
+  platform        Platform?         @relation(fields: [platformId], references: [id])
+  campaignId      String?           @db.Uuid
+  campaign        Campaign?         @relation(fields: [campaignId], references: [id])
+  comparisonRule  ComparisonRule
+  effectiveFrom   DateTime          @db.Date
+  effectiveTo     DateTime?         @db.Date
+  createdByUserId String            @db.Uuid
+  createdByUser   User              @relation("CreatedTargets", fields: [createdByUserId], references: [id])
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
   @@schema("social_media_dashboard")
 }
 
 model Session {
-  id String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  user User @relation(fields: [userId], references: [id])
-  tokenHash String @unique
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime @default(now())
-  lastSeenAt DateTime @default(now())
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  user       User      @relation(fields: [userId], references: [id])
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+
   @@index([userId, revokedAt, expiresAt])
   @@schema("social_media_dashboard")
 }
 
+model PasswordRecoveryToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  user         User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tokenHash    String    @unique
+  emailAtIssue String
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  usedAt       DateTime?
+  revokedAt    DateTime?
+
+  @@index([userId, usedAt, revokedAt, expiresAt])
+  @@schema("social_media_dashboard")
+}
+
 model AuditLog {
-  id String @id @default(uuid()) @db.Uuid
-  actorUserId String? @db.Uuid
-  actorUser User? @relation(fields: [actorUserId], references: [id])
-  action String
-  entityType String
-  entityId String?
-  metadata Json?
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @db.Uuid
+  actorUser   User?    @relation(fields: [actorUserId], references: [id])
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
   @@index([entityType, entityId])
   @@index([actorUserId, createdAt])
   @@schema("social_media_dashboard")
 }
 
 model ImportBatch {
-  id String @id @default(uuid()) @db.Uuid
-  sourceType String?
-  sourcePlatform String?
-  displayName String?
-  originalFilename String
-  mimeType String?
-  checksum String
-  importedByUserId String @db.Uuid
-  importedByUser User @relation(fields: [importedByUserId], references: [id])
-  status ImportBatchStatus @default(PREVIEW)
-  totalRows Int @default(0)
-  acceptedRows Int @default(0)
-  rejectedRows Int @default(0)
-  warningCount Int @default(0)
-  errorSummary Json?
-  mapping Json?
-  selectedSheet String?
-  completedAt DateTime?
-  rows ImportRow[]
+  id                 String              @id @default(uuid()) @db.Uuid
+  sourceType         String?
+  sourcePlatform     String?
+  displayName        String?
+  originalFilename   String
+  mimeType           String?
+  checksum           String
+  importedByUserId   String              @db.Uuid
+  importedByUser     User                @relation(fields: [importedByUserId], references: [id])
+  status             ImportBatchStatus   @default(PREVIEW)
+  totalRows          Int                 @default(0)
+  acceptedRows       Int                 @default(0)
+  rejectedRows       Int                 @default(0)
+  warningCount       Int                 @default(0)
+  errorSummary       Json?
+  mapping            Json?
+  selectedSheet      String?
+  completedAt        DateTime?
+  rows               ImportRow[]
   performanceRecords PerformanceRecord[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
   @@index([checksum])
   @@index([importedByUserId, createdAt])
   @@schema("social_media_dashboard")
 }
 
 model ImportRow {
-  id String @id @default(uuid()) @db.Uuid
-  importBatchId String @db.Uuid
-  importBatch ImportBatch @relation(fields: [importBatchId], references: [id])
-  sourceRowNumber Int
-  sheetName String?
-  status ImportRowStatus @default(PENDING)
-  rawData Json
+  id                String          @id @default(uuid()) @db.Uuid
+  importBatchId     String          @db.Uuid
+  importBatch       ImportBatch     @relation(fields: [importBatchId], references: [id])
+  sourceRowNumber   Int
+  sheetName         String?
+  status            ImportRowStatus @default(PENDING)
+  rawData           Json
   normalizedPreview Json?
-  errors Json?
-  warnings Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  errors            Json?
+  warnings          Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
   @@unique([importBatchId, sourceRowNumber, sheetName])
   @@index([importBatchId, status])
   @@schema("social_media_dashboard")
