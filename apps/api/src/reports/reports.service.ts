@@ -1,15 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AnalyticsService } from '../analytics/analytics.service.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { renderReportPdf } from './pdf-renderer.js';
 import type { DashboardQueryDto } from '../analytics/dto/dashboard-query.dto.js';
-
-function pdfText(value: string) {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/\(/g, '\\(')
-    .replace(/\)/g, '\\)')
-    .replace(/[^\x20-\x7e]/g, ' ');
-}
 
 function reportValue(
   value: number | null,
@@ -111,7 +104,7 @@ export class ReportsService {
         },
       ),
     ];
-    return {
+    const report = {
       title: 'Digital Marketing Performance Report',
       generatedAt,
       timeZone,
@@ -167,8 +160,9 @@ export class ReportsService {
       caveats: result.metricMetadata
         .map((metric) => metric.aggregationNote)
         .filter((note): note is string => Boolean(note)),
-      pdf: buildPdf(lines),
+      
     };
+    return { ...report, pdf: await renderReportPdf(report) };
   }
 
   async dashboardPdf(query: DashboardQueryDto) {
@@ -182,39 +176,3 @@ export class ReportsService {
   }
 }
 
-function buildPdf(lines: string[]) {
-  const content = [
-    'BT',
-    '/F1 16 Tf',
-    '50 760 Td',
-    ...lines.flatMap((line, index) => [
-      index ? '0 -22 Td' : '',
-      `/F1 ${index === 0 ? 16 : 11} Tf`,
-      `(${pdfText(line)}) Tj`,
-    ]),
-    'ET',
-  ]
-    .filter(Boolean)
-    .join('\n');
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
-    `<< /Length ${Buffer.byteLength(content) + 1} >>\nstream\n${content}\nendstream`,
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-  ];
-  let pdf = '%PDF-1.4\n';
-  const offsets = [0];
-  for (let index = 0; index < objects.length; index += 1) {
-    offsets.push(Buffer.byteLength(pdf));
-    pdf += `${index + 1} 0 obj\n${objects[index]}\nendobj\n`;
-  }
-  const startXref = Buffer.byteLength(pdf);
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets
-    .slice(1)
-    .map((offset) => `${String(offset).padStart(10, '0')} 00000 n `)
-    .join(
-      '\n',
-    )}\ntrailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF`;
-  return Buffer.from(pdf, 'binary');
-}
