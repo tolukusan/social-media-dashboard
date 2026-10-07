@@ -14,6 +14,23 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: databaseUrl }),
 });
 const origin = process.env.APP_ORIGIN ?? 'http://localhost:3000';
+const nativeFetch = globalThis.fetch;
+
+function browserFetch(
+  input: Parameters<typeof fetch>[0],
+  init: Parameters<typeof fetch>[1] = {},
+) {
+  const method = (
+    init?.method ??
+    (input instanceof Request ? input.method : 'GET')
+  ).toUpperCase();
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method))
+    return nativeFetch(input, init);
+  const headers = new Headers(init?.headers);
+  if (!headers.has('origin')) headers.set('origin', origin);
+  return nativeFetch(input, { ...init, headers });
+}
+
 let app: Awaited<ReturnType<typeof NestFactory.create>>;
 let baseUrl: string;
 const fixtureUsers: Array<{ id: string; email: string; password: string }> = [];
@@ -41,13 +58,13 @@ async function createFixtureUser(roleCode: string) {
 }
 
 async function authenticate(email: string, password: string) {
-  const csrfResponse = await fetch(`${baseUrl}/api/v1/auth/csrf`);
+  const csrfResponse = await browserFetch(`${baseUrl}/api/v1/auth/csrf`);
   const csrf = (await csrfResponse.json()) as { csrfToken: string };
   const csrfCookie = csrfResponse.headers
     .get('set-cookie')
     ?.match(/csrf_token=[^;]+/)?.[0];
   if (!csrfCookie) throw new Error('CSRF cookie was not issued.');
-  const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
+  const login = await browserFetch(`${baseUrl}/api/v1/auth/login`, {
     method: 'POST',
     headers: { origin, 'content-type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -94,10 +111,10 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
   });
 
   it('serves health and denies protected reads without a session', async () => {
-    const health = await fetch(`${baseUrl}/api/v1/health`);
+    const health = await browserFetch(`${baseUrl}/api/v1/health`);
     if (health.status !== 200)
       throw new Error('Health route did not return 200.');
-    const response = await fetch(`${baseUrl}/api/v1/channels`);
+    const response = await browserFetch(`${baseUrl}/api/v1/channels`);
     if (response.status !== 401)
       throw new Error(
         `Expected an unauthenticated request to be denied; received ${response.status}.`,
@@ -105,6 +122,42 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     const body = (await response.json()) as { code?: string };
     if (body.code !== 'UNAUTHENTICATED')
       throw new Error('Session guard returned an unexpected error.');
+  });
+
+  it('rejects missing and unapproved Origins for authenticated mutations', async () => {
+    const adminAuth = await authenticate(
+      adminFixture.email,
+      adminFixture.password,
+    );
+    const body = JSON.stringify({ name: 'F10 Origin Fixture' });
+    const headers = {
+      cookie: adminAuth.cookie,
+      'content-type': 'application/json',
+      'x-csrf-token': adminAuth.csrfToken,
+    };
+    const missing = await nativeFetch(`${baseUrl}/api/v1/auth/me`, {
+      method: 'PATCH',
+      headers,
+      body,
+    });
+    if (missing.status !== 403)
+      throw new Error('Unsafe authenticated request accepted a missing Origin.');
+    const wrong = await nativeFetch(`${baseUrl}/api/v1/auth/me`, {
+      method: 'PATCH',
+      headers: { ...headers, origin: 'https://attacker.invalid' },
+      body,
+    });
+    if (wrong.status !== 403)
+      throw new Error(
+        'Unsafe authenticated request accepted an unapproved Origin.',
+      );
+    const allowed = await browserFetch(`${baseUrl}/api/v1/auth/me`, {
+      method: 'PATCH',
+      headers,
+      body,
+    });
+    if (!allowed.ok)
+      throw new Error('Configured Origin was rejected for an unsafe request.');
   });
 
   it('enforces PostgreSQL platform uniqueness and cleans up its fixture', async () => {
@@ -154,7 +207,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     let channelId: string | undefined;
     let platformId: string | undefined;
     try {
-      const denied = await fetch(`${baseUrl}/api/v1/channels`, {
+      const denied = await browserFetch(`${baseUrl}/api/v1/channels`, {
         method: 'POST',
         headers: {
           cookie: managementAuth.cookie,
@@ -169,7 +222,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       if (denied.status !== 403)
         throw new Error('Management was allowed to create a channel.');
 
-      const created = await fetch(`${baseUrl}/api/v1/channels`, {
+      const created = await browserFetch(`${baseUrl}/api/v1/channels`, {
         method: 'POST',
         headers: {
           cookie: adminAuth.cookie,
@@ -188,7 +241,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       if (channel.code !== code)
         throw new Error('Channel code was not normalized.');
 
-      const platformResponse = await fetch(`${baseUrl}/api/v1/platforms`, {
+      const platformResponse = await browserFetch(`${baseUrl}/api/v1/platforms`, {
         method: 'POST',
         headers: {
           cookie: adminAuth.cookie,
@@ -205,7 +258,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         throw new Error('Administrator could not create a platform.');
       platformId = ((await platformResponse.json()) as { id: string }).id;
 
-      const deactivated = await fetch(
+      const deactivated = await browserFetch(
         `${baseUrl}/api/v1/channels/${channelId}`,
         {
           method: 'PATCH',
@@ -276,7 +329,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     });
     let campaignId: string | undefined;
     try {
-      const created = await fetch(`${baseUrl}/api/v1/campaigns`, {
+      const created = await browserFetch(`${baseUrl}/api/v1/campaigns`, {
         method: 'POST',
         headers: {
           cookie: adminAuth.cookie,
@@ -296,7 +349,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         throw new Error('Administrator could not create the campaign fixture.');
       campaignId = ((await created.json()) as { id: string }).id;
 
-      const metadataUpdate = await fetch(
+      const metadataUpdate = await browserFetch(
         `${baseUrl}/api/v1/campaigns/${campaignId}`,
         {
           method: 'PATCH',
@@ -316,7 +369,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'Marketing Officer could not edit completed campaign metadata.',
         );
 
-      const structuralUpdate = await fetch(
+      const structuralUpdate = await browserFetch(
         `${baseUrl}/api/v1/campaigns/${campaignId}`,
         {
           method: 'PATCH',
@@ -340,7 +393,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'Marketing Officer changed completed campaign structure.',
         );
 
-      const invalidStatus = await fetch(
+      const invalidStatus = await browserFetch(
         `${baseUrl}/api/v1/campaigns/${campaignId}`,
         {
           method: 'PATCH',
@@ -355,7 +408,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       if (invalidStatus.status !== 400)
         throw new Error('Invalid campaign status was accepted.');
 
-      const invalidDates = await fetch(
+      const invalidDates = await browserFetch(
         `${baseUrl}/api/v1/campaigns/${campaignId}`,
         {
           method: 'PATCH',
@@ -373,7 +426,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       if (invalidDates.status !== 400)
         throw new Error('Invalid campaign date range was accepted.');
 
-      const invalidResponsible = await fetch(
+      const invalidResponsible = await browserFetch(
         `${baseUrl}/api/v1/campaigns/${campaignId}`,
         {
           method: 'PATCH',
@@ -391,7 +444,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       const otherChannel = await prisma.marketingChannel.findFirstOrThrow({
         where: { id: { not: channel.id }, active: true },
       });
-      const mismatchedPlatform = await fetch(
+      const mismatchedPlatform = await browserFetch(
         `${baseUrl}/api/v1/campaigns/${campaignId}`,
         {
           method: 'PATCH',
@@ -411,7 +464,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       if (mismatchedPlatform.status !== 400)
         throw new Error('Platform/channel mismatch was accepted.');
 
-      const forbiddenUpdate = await fetch(
+      const forbiddenUpdate = await browserFetch(
         `${baseUrl}/api/v1/campaigns/${campaignId}`,
         {
           method: 'PATCH',
@@ -426,7 +479,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       if (forbiddenUpdate.status !== 403)
         throw new Error('Management was allowed to edit a campaign.');
 
-      const adminStructuralUpdate = await fetch(
+      const adminStructuralUpdate = await browserFetch(
         `${baseUrl}/api/v1/campaigns/${campaignId}`,
         {
           method: 'PATCH',
@@ -536,7 +589,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     let createdRecordId: string | undefined;
     let createdTargetId: string | undefined;
     try {
-      const metricMetadata = await fetch(
+      const metricMetadata = await browserFetch(
         `${baseUrl}/api/v1/channels/${channel.id}/metrics`,
         { headers: { cookie: adminAuth.cookie } },
       );
@@ -559,7 +612,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       )
         throw new Error('Metric metadata omitted an applicable raw metric.');
 
-      const campaignResponse = await fetch(`${baseUrl}/api/v1/campaigns`, {
+      const campaignResponse = await browserFetch(`${baseUrl}/api/v1/campaigns`, {
         method: 'POST',
         headers: {
           cookie: adminAuth.cookie,
@@ -589,7 +642,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'Campaign fixture did not return its campaign-platform identity.',
         );
 
-      const secondCampaignResponse = await fetch(
+      const secondCampaignResponse = await browserFetch(
         `${baseUrl}/api/v1/campaigns`,
         {
           method: 'POST',
@@ -627,7 +680,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         effectiveFrom: '2024-01-01',
         effectiveTo: '2024-01-31',
       };
-      const deniedTarget = await fetch(`${baseUrl}/api/v1/targets`, {
+      const deniedTarget = await browserFetch(`${baseUrl}/api/v1/targets`, {
         method: 'POST',
         headers: {
           cookie: managementAuth.cookie,
@@ -638,7 +691,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       });
       if (deniedTarget.status !== 403)
         throw new Error('Management was allowed to create a KPI target.');
-      const invalidTargetScope = await fetch(`${baseUrl}/api/v1/targets`, {
+      const invalidTargetScope = await browserFetch(`${baseUrl}/api/v1/targets`, {
         method: 'POST',
         headers: {
           cookie: adminAuth.cookie,
@@ -650,7 +703,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       if (invalidTargetScope.status !== 400)
         throw new Error('Contradictory target scope was accepted.');
       const targetWrites = await Promise.all([
-        fetch(`${baseUrl}/api/v1/targets`, {
+        browserFetch(`${baseUrl}/api/v1/targets`, {
           method: 'POST',
           headers: {
             cookie: adminAuth.cookie,
@@ -659,7 +712,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           },
           body: JSON.stringify(targetBody),
         }),
-        fetch(`${baseUrl}/api/v1/targets`, {
+        browserFetch(`${baseUrl}/api/v1/targets`, {
           method: 'POST',
           headers: {
             cookie: adminAuth.cookie,
@@ -686,7 +739,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         date: string,
         values: Record<string, number>,
       ) =>
-        fetch(`${baseUrl}/api/v1/performance-records`, {
+        browserFetch(`${baseUrl}/api/v1/performance-records`, {
           method: 'POST',
           headers: {
             cookie: auth.cookie,
@@ -785,7 +838,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         platformId: platform.id,
         metricCode: countMapping.metricDefinition.code,
       });
-      const dashboardResponse = await fetch(
+      const dashboardResponse = await browserFetch(
         `${baseUrl}/api/v1/analytics/dashboard?${analyticsParams}`,
         { headers: { cookie: managementAuth.cookie } },
       );
@@ -828,7 +881,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         metricCode: 'SM_CTR',
         targetPeriod: 'MONTHLY',
       });
-      const targetDashboard = await fetch(
+      const targetDashboard = await browserFetch(
         `${baseUrl}/api/v1/analytics/dashboard?${targetParams}`,
         { headers: { cookie: managementAuth.cookie } },
       );
@@ -853,7 +906,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           `Applicable KPI target mismatch: ${JSON.stringify(targetResult.targetEvaluations.SM_CTR)}`,
         );
 
-      const shortenedTarget = await fetch(
+      const shortenedTarget = await browserFetch(
         `${baseUrl}/api/v1/targets/${createdTargetId}`,
         {
           method: 'PATCH',
@@ -867,7 +920,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       );
       if (!shortenedTarget.ok)
         throw new Error('Could not narrow target effective-date coverage.');
-      const partialCoverageResponse = await fetch(
+      const partialCoverageResponse = await browserFetch(
         `${baseUrl}/api/v1/analytics/dashboard?${targetParams}`,
         { headers: { cookie: managementAuth.cookie } },
       );
@@ -885,7 +938,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'Partially effective target was applied to a full month.',
         );
 
-      const partialPeriodResponse = await fetch(
+      const partialPeriodResponse = await browserFetch(
         `${baseUrl}/api/v1/analytics/dashboard?${new URLSearchParams({
           from: '2024-01-05',
           to: '2024-01-31',
@@ -900,7 +953,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'Partial calendar range was accepted for monthly target evaluation.',
         );
 
-      const unresolvedPeriodResponse = await fetch(
+      const unresolvedPeriodResponse = await browserFetch(
         `${baseUrl}/api/v1/analytics/dashboard?${new URLSearchParams({
           campaignId: comparisonCampaignId!,
           metricCode: 'SM_CTR',
@@ -930,7 +983,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'Unresolved no-data/no-target status was misrepresented.',
         );
 
-      const trendsResponse = await fetch(
+      const trendsResponse = await browserFetch(
         `${baseUrl}/api/v1/analytics/trends?${analyticsParams}`,
         { headers: { cookie: managementAuth.cookie } },
       );
@@ -953,7 +1006,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         platformId: platform.id,
         metricCode: countMapping.metricDefinition.code,
       });
-      const gapResponse = await fetch(
+      const gapResponse = await browserFetch(
         `${baseUrl}/api/v1/analytics/trends?${gapParams}`,
         { headers: { cookie: managementAuth.cookie } },
       );
@@ -980,7 +1033,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         metricCode: countMapping.metricDefinition.code,
         comparisonPeriod: 'MONTH',
       });
-      const comparisonResponse = await fetch(
+      const comparisonResponse = await browserFetch(
         `${baseUrl}/api/v1/analytics/comparison?${comparisonParams}`,
         { headers: { cookie: managementAuth.cookie } },
       );
@@ -1011,7 +1064,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         comparisonMode: 'LIFETIME',
         metricCode: countMapping.metricDefinition.code,
       });
-      const dimensionResponse = await fetch(
+      const dimensionResponse = await browserFetch(
         `${baseUrl}/api/v1/analytics/dimension-comparison?${dimensionParams}`,
         { headers: { cookie: managementAuth.cookie } },
       );
@@ -1045,7 +1098,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         from: '2024-01-05',
         to: '2024-01-05',
       });
-      const incompatibleResponse = await fetch(
+      const incompatibleResponse = await browserFetch(
         `${baseUrl}/api/v1/analytics/dimension-comparison?${incompatibleChannels}`,
         { headers: { cookie: managementAuth.cookie } },
       );
@@ -1054,18 +1107,18 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'A channel comparison with an inapplicable KPI was accepted.',
         );
 
-      const reportResponse = await fetch(
+      const reportResponse = await browserFetch(
         `${baseUrl}/api/v1/reports/dashboard.pdf?${analyticsParams}`,
         { headers: { cookie: managementAuth.cookie } },
       );
       if (!reportResponse.ok)
         throw new Error('Filtered analytics report request failed.');
-      const anonymousReportPreview = await fetch(
+      const anonymousReportPreview = await browserFetch(
         `${baseUrl}/api/v1/reports/preview?${analyticsParams}`,
       );
       if (anonymousReportPreview.status !== 401)
         throw new Error('Anonymous report preview access was not denied.');
-      const reportPreviewResponse = await fetch(
+      const reportPreviewResponse = await browserFetch(
         `${baseUrl}/api/v1/reports/preview?${analyticsParams}&comparisonPeriod=CUSTOM`,
         { headers: { cookie: managementAuth.cookie } },
       );
@@ -1098,7 +1151,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'Report preview diverged from the filtered dashboard, comparison, or trend data.',
         );
       const targetedReportParams = new URLSearchParams(targetParams);
-      const targetedReportResponse = await fetch(
+      const targetedReportResponse = await browserFetch(
         `${baseUrl}/api/v1/reports/dashboard.pdf?${targetedReportParams}`,
         { headers: { cookie: managementAuth.cookie } },
       );
@@ -1113,7 +1166,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'PDF report did not reuse the current dashboard target evaluation.',
         );
 
-      const managementUpdate = await fetch(
+      const managementUpdate = await browserFetch(
         `${baseUrl}/api/v1/performance-records/${createdRecordId}`,
         {
           method: 'PATCH',
@@ -1127,7 +1180,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       );
       if (managementUpdate.status !== 403)
         throw new Error('Management was allowed to edit a performance record.');
-      const managementArchive = await fetch(
+      const managementArchive = await browserFetch(
         `${baseUrl}/api/v1/performance-records/${createdRecordId}`,
         {
           method: 'DELETE',
@@ -1142,7 +1195,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'Management was allowed to archive a performance record.',
         );
 
-      const edited = await fetch(
+      const edited = await browserFetch(
         `${baseUrl}/api/v1/performance-records/${createdRecordId}`,
         {
           method: 'PATCH',
@@ -1174,7 +1227,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'Omitting metric values during PATCH changed the raw metric set.',
         );
 
-      const archived = await fetch(
+      const archived = await browserFetch(
         `${baseUrl}/api/v1/performance-records/${createdRecordId}`,
         {
           method: 'DELETE',
@@ -1193,7 +1246,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       });
       if (retained.status !== 'ARCHIVED')
         throw new Error('Archived record history was removed.');
-      const normalList = await fetch(`${baseUrl}/api/v1/performance-records`, {
+      const normalList = await browserFetch(`${baseUrl}/api/v1/performance-records`, {
         headers: { cookie: adminAuth.cookie },
       });
       const listed = (await normalList.json()) as Array<{ id: string }>;
@@ -1254,7 +1307,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       management.email,
       management.password,
     );
-    const userList = await fetch(`${baseUrl}/api/v1/users`, {
+    const userList = await browserFetch(`${baseUrl}/api/v1/users`, {
       headers: { cookie: adminAuth.cookie },
     });
     if (!userList.ok) throw new Error('Administrator user list failed.');
@@ -1262,14 +1315,14 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     if (users.some((user) => 'passwordHash' in user))
       throw new Error('User list exposed a password hash.');
 
-    const currentProfile = await fetch(`${baseUrl}/api/v1/auth/me`, {
+    const currentProfile = await browserFetch(`${baseUrl}/api/v1/auth/me`, {
       headers: { cookie: adminAuth.cookie },
     });
     const profile = (await currentProfile.json()) as Record<string, unknown>;
     if ('passwordHash' in profile)
       throw new Error('Current-user response exposed a password hash.');
 
-    const withoutCsrf = await fetch(`${baseUrl}/api/v1/auth/me`, {
+    const withoutCsrf = await browserFetch(`${baseUrl}/api/v1/auth/me`, {
       method: 'PATCH',
       headers: {
         cookie: adminAuth.cookie,
@@ -1280,7 +1333,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     if (withoutCsrf.status !== 403)
       throw new Error('Profile update without CSRF was not rejected.');
 
-    const profileUpdate = await fetch(`${baseUrl}/api/v1/auth/me`, {
+    const profileUpdate = await browserFetch(`${baseUrl}/api/v1/auth/me`, {
       method: 'PATCH',
       headers: {
         cookie: adminAuth.cookie,
@@ -1307,7 +1360,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     });
     const target = managementFixture;
     const updatedEmail = `updated-${randomUUID()}@example.invalid`;
-    const adminUpdate = await fetch(`${baseUrl}/api/v1/users/${target.id}`, {
+    const adminUpdate = await browserFetch(`${baseUrl}/api/v1/users/${target.id}`, {
       method: 'PATCH',
       headers: {
         cookie: adminAuth.cookie,
@@ -1332,7 +1385,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         'Administrator update returned invalid or sensitive data.',
       );
 
-    const duplicateEmail = await fetch(`${baseUrl}/api/v1/users/${target.id}`, {
+    const duplicateEmail = await browserFetch(`${baseUrl}/api/v1/users/${target.id}`, {
       method: 'PATCH',
       headers: {
         cookie: adminAuth.cookie,
@@ -1344,7 +1397,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     if (duplicateEmail.status !== 409)
       throw new Error('Duplicate normalized email was not rejected.');
 
-    const forbiddenUpdate = await fetch(
+    const forbiddenUpdate = await browserFetch(
       `${baseUrl}/api/v1/users/${target.id}`,
       {
         method: 'PATCH',
@@ -1364,7 +1417,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     if (unchanged.name !== 'Updated Managed User')
       throw new Error('Forbidden update changed user data.');
 
-    const invalidIdentity = await fetch(`${baseUrl}/api/v1/auth/me`, {
+    const invalidIdentity = await browserFetch(`${baseUrl}/api/v1/auth/me`, {
       method: 'PATCH',
       headers: {
         cookie: adminAuth.cookie,
