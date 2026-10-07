@@ -13,6 +13,8 @@ import { UsersService } from './users.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
+import { CurrentUser } from '../common/auth.decorator.js';
+import type { AuthenticatedUser } from '../common/auth.types.js';
 
 @Controller('users')
 @Roles('ADMIN')
@@ -24,22 +26,36 @@ export class UsersController {
   @Get() list() {
     return this.users.list();
   }
-  @Post() create(@Body() dto: CreateUserDto) {
-    return this.users.create(dto);
+  @Post() create(
+    @Body() dto: CreateUserDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.users.create(dto, actor.id);
   }
-  @Patch(':id') update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
-    return this.users.update(id, dto);
+  @Patch(':id') update(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.users.update(id, dto, actor.id);
   }
-  @Delete(':id') deactivate(@Param('id') id: string) {
-    return this.users.deactivate(id);
+  @Delete(':id') deactivate(
+    @Param('id') id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.users.deactivate(id, actor.id);
   }
   @Patch(':id/password') resetPassword(
     @Param('id') id: string,
     @Body() dto: ResetPasswordDto,
+    @CurrentUser() actor: AuthenticatedUser,
   ) {
-    return this.users.resetPassword(id, dto);
+    return this.users.resetPassword(id, dto, actor.id);
   }
-  @Patch(':id/reactivate') reactivate(@Param('id') id: string) {
-    return this.users.reactivate(id);
+  @Patch(':id/reactivate') reactivate(
+    @Param('id') id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.users.reactivate(id, actor.id);
   }
 }
