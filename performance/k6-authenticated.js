@@ -1,10 +1,16 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { SharedArray } from 'k6/data';
 
 const apiUrl = __ENV.API_URL || 'http://localhost:4000/api/v1';
 const appOrigin = __ENV.APP_ORIGIN || 'http://localhost:3000';
 const from = __ENV.LOAD_FROM || '2026-01-01';
 const to = __ENV.LOAD_TO || '2026-12-31';
+const credentials = new SharedArray('isolated load credentials', () =>
+  JSON.parse(
+    open(__ENV.LOAD_CREDENTIALS || './runtime/load-credentials.json'),
+  ),
+);
 
 export const options = {
   scenarios: {
@@ -31,14 +37,12 @@ let authenticated = false;
 
 function login() {
   if (authenticated) return true;
-  if (!__ENV.LOAD_EMAIL || !__ENV.LOAD_PASSWORD)
-    throw new Error('LOAD_EMAIL and LOAD_PASSWORD are required.');
+  if (!credentials.length)
+    throw new Error('At least one isolated load credential is required.');
+  const credential = credentials[(__VU - 1) % credentials.length];
   const response = http.post(
     `${apiUrl}/auth/login`,
-    JSON.stringify({
-      email: __ENV.LOAD_EMAIL,
-      password: __ENV.LOAD_PASSWORD,
-    }),
+    JSON.stringify(credential),
     {
       headers: {
         Origin: appOrigin,
