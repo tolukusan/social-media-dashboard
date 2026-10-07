@@ -16,7 +16,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-The web app runs at `http://localhost:3000`, with the NestJS REST API at `http://localhost:4000/api/v1`. Administrator seed credentials belong only in the local environment. Commands above match workspace scripts; this documentation task has not rerun database setup.
+The web app runs at `http://localhost:3000`, with the NestJS REST API at `http://localhost:4000/api/v1`. Administrator seed credentials belong only in the local environment. After an active Administrator or Marketing Officer exists, `pnpm --filter @smd/api demo:prepare` creates deterministic local walkthrough data. Do not run demo preparation in production.
 
 ```text
 pnpm lint
@@ -28,7 +28,7 @@ pnpm build
 pnpm format:docs
 ```
 
-Lint checks Prettier formatting. Unit tests use Vitest. Integration and browser tests require the isolated local database prepared with `pnpm test:db:prepare`; the E2E runner prepares its own test users and credentials. Follow the [developer guide](docs/guides/developer-guide.md#isolated-tests) before running database-backed checks. `pnpm test` runs unit tests only.
+Lint checks Prettier formatting. Unit tests use Vitest. Integration and browser tests require the isolated local database prepared with `pnpm test:db:prepare`; the E2E runner prepares its own test users and credentials. Follow the [developer guide](docs/guides/developer-guide.md#isolated-tests) before running database-backed checks. `pnpm test` runs unit tests only. Deployment steps are in the [deployment runbook](docs/guides/deployment-runbook.md).
 
 ## Repository map
 
