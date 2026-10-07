@@ -225,7 +225,10 @@ describe('password recovery HTTP and PostgreSQL flow', () => {
       where: {
         tokenHash: createHash('sha256').update(expiryToken).digest('hex'),
       },
-      data: { expiresAt: new Date(Date.now() - 1_000) },
+      data: {
+        createdAt: new Date(Date.now() - 60 * 60 * 1_000),
+        expiresAt: new Date(Date.now() - 1_000),
+      },
     });
     const expired = await reset(expiryToken, security);
     if (expired.status !== 400)
