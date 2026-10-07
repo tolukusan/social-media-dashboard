@@ -154,7 +154,7 @@ export class ReportsService {
             grain: trend.grain,
             metric: labels.get(comparisonMetric)?.label ?? comparisonMetric,
             unit: labels.get(comparisonMetric)?.unit ?? 'UNAVAILABLE',
-            points: trendPoints,
+            points: trendPoints ?? [],
           }
         : null,
       caveats: result.metricMetadata

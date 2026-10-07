@@ -3,10 +3,14 @@ name: TODO completion verification
 on:
   push:
     branches:
-      - chatgpt/todo-completion
+      - 'chatgpt/**'
 
 permissions:
   contents: read
+
+concurrency:
+  group: todo-completion-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
