@@ -1,16 +1,11 @@
 # Remaining work
 
-Completed implementation is recorded in the [completion ledger](docs/plans/completion/README.md) and [implementation progress](docs/evidence/IMPLEMENTATION_PROGRESS.md). This file now contains only work that still needs a package, external value/environment, real participant/provider, or successful verification run.
-
-## Package-gated implementation
-
-- [ ] **F02:** Add the approved Tailwind dependency and finish Tailwind setup when a safe package-install path can update the lockfile.
-- [ ] **F07/F08:** Add Recharts plots to Overview and Analytics, preserving null gaps and the accessible tables, after Recharts can be installed normally.
-- [ ] **F09:** Replace the handwritten single-page PDF renderer with a maintained server-side PDF library; add wrapping, pagination, non-ASCII font support, an embedded trend chart, and visual long-report verification after the dependency can be installed normally.
+Completed implementation is recorded in the [completion ledger](docs/plans/completion/README.md) and [implementation progress](docs/evidence/IMPLEMENTATION_PROGRESS.md). The remaining items below require verification or external input/evidence rather than additional core feature implementation.
 
 ## Verification and external evidence
 
-- [ ] Run the new PostgreSQL-backed CI verification successfully: lint, typecheck, unit, integration, build, Playwright, isolated backup/restore, authenticated 25-user k6 baseline, and documentation formatting.
+- [ ] Run the PostgreSQL-backed CI verification successfully: lint, typecheck, unit, integration, build, Playwright, isolated backup/restore, authenticated 25-user k6 baseline, and documentation formatting.
+- [ ] **F09:** perform a human visual review of a deliberately long generated PDF to confirm pagination, wrapping, chart placement, and extended-character rendering in the target environment.
 - [ ] **Password recovery:** verify actual inbox delivery with an authorised SMTP provider/sender.
 - [ ] **F11:** conduct the prepared usability tasks with real participants and record genuine findings.
 - [ ] **F06a:** supply the deploying organisation's approved `REPORTING_CURRENCY`.
@@ -19,6 +14,6 @@ Completed implementation is recorded in the [completion ledger](docs/plans/compl
 
 ## Completed in the current TODO pass
 
-Source work now covers strict Origin enforcement for all unsafe methods, the authorization matrix, required administration audit events, stale-session cleanup, secure own-password change, deterministic `NO_DATA` target precedence, Reports currency formatting, target lifecycle/dashboard/comparison browser coverage, catalogue/import/keyboard-mobile browser coverage, authenticated load tooling, Imports feature extraction, deterministic demo data, current guides, backup/restore procedure, deployment runbook, and usability-test preparation.
+Source work now covers Tailwind setup, Recharts visualisations with accessible tables and null gaps, PDFKit report rendering with wrapping/pagination/vector trend chart and Unicode-font support, strict Origin enforcement for all unsafe methods, the authorization matrix, required administration audit events, stale-session cleanup, secure own-password change, deterministic `NO_DATA` target precedence, Reports currency formatting, target lifecycle/dashboard/comparison browser coverage, catalogue/import/keyboard-mobile browser coverage, authenticated load tooling, Imports feature extraction, deterministic demo data, current guides, backup/restore procedure, deployment runbook, and usability-test preparation.
 
 Never commit credentials or invent external verification evidence.
