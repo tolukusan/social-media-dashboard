@@ -286,8 +286,7 @@ export class AnalyticsService {
             evaluationPeriod,
           );
           const actual = calculations.kpis[code] ?? null;
-          const status =
-            actual === null && !target ? null : targetStatus(actual, target);
+          const status = targetStatus(actual, target);
           return [
             code,
             {
@@ -304,7 +303,6 @@ export class AnalyticsService {
                   }
                 : null,
               status,
-              ...(status === null ? { statusDecisionRequired: true } : {}),
             },
           ];
         }),
