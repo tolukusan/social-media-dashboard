@@ -3,6 +3,7 @@
 import { Kpi } from './kpi';
 import { CampaignTable } from '../campaigns/campaign-table';
 import { Empty } from '../../components/empty';
+import { TrendLineChart } from '../analytics/charts';
 import { formatKpi, formatNumber } from '../../lib/format';
 import type {
   View,
@@ -408,8 +409,18 @@ export function Overview({
             }
           />
         ) : (
-          <div className="table-scroll">
-            <table>
+          <>
+            <TrendLineChart
+              points={trends.points.map((point) => ({
+                bucket: point.bucket,
+                value: point.kpis[chartMetric] ?? null,
+              }))}
+              label={chartMetadata?.label ?? chartMetric}
+              unit={chartMetadata?.unit ?? 'DECIMAL'}
+              currencyCode={result?.reportingContext.currencyCode}
+            />
+            <div className="table-scroll">
+              <table>
               <caption className="sr-only">
                 {chartMetadata?.label ?? 'Aggregated daily reach'} trend values
               </caption>
@@ -442,8 +453,9 @@ export function Overview({
                   );
                 })}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         )}
       </section>
       <section className="panel">
