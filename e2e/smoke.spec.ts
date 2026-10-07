@@ -334,7 +334,9 @@ test('keyboard and mobile basics remain usable', async ({ page }) => {
   expect(firstFocus).not.toBe('BODY');
   await expect(page.getByLabel('Email address')).toBeVisible();
   await expect(page.getByLabel('Password')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Forgot password?' })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Forgot password?' }),
+  ).toBeVisible();
 
   await page.getByLabel('Email address').fill('missing@example.invalid');
   await page.getByLabel('Password').fill('invalid-password');
@@ -348,7 +350,9 @@ test('Administrator can preview, validate, and confirm a structured import', asy
   page,
 }) => {
   if (!process.env.E2E_EMAIL || !process.env.E2E_PASSWORD)
-    throw new Error('Structured import E2E requires the local Administrator fixture.');
+    throw new Error(
+      'Structured import E2E requires the local Administrator fixture.',
+    );
 
   await page.goto('/');
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
@@ -379,17 +383,16 @@ test('Administrator can preview, validate, and confirm a structured import', asy
     .locator('.import-context select')
     .filter({ has: page.locator('option', { hasText: 'Facebook' }) })
     .first();
-  const facebookOption = platform.locator('option').filter({ hasText: 'Facebook' });
+  const facebookOption = platform
+    .locator('option')
+    .filter({ hasText: 'Facebook' });
   await platform.selectOption(
     (await facebookOption.getAttribute('value')) ?? '',
   );
 
   await page.getByRole('button', { name: '+ Create new campaign' }).click();
   const campaignName = `E2E Import Campaign ${Date.now()}`;
-  await page
-    .getByRole('dialog')
-    .getByLabel('Campaign name')
-    .fill(campaignName);
+  await page.getByRole('dialog').getByLabel('Campaign name').fill(campaignName);
   await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-01');
   await page.getByRole('dialog').getByLabel('End date').fill('2026-01-02');
   await page

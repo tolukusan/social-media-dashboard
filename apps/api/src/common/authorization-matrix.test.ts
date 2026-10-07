@@ -14,11 +14,9 @@ function effectiveRoles(controller: object, method: string) {
     prototype: Record<string, unknown>;
   };
   const handler = type.prototype[method];
-  return (
-    (handler && Reflect.getMetadata('roles', handler as object)) ??
+  return ((handler && Reflect.getMetadata('roles', handler as object)) ??
     Reflect.getMetadata('roles', controller) ??
-    []
-  ) as string[];
+    []) as string[];
 }
 
 describe('route authorization metadata matrix', () => {

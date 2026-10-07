@@ -229,7 +229,13 @@ export function Reports({ filters }: { filters: ReportFilters }) {
                     {preview.summary.kpis.map((item) => (
                       <tr key={item.code}>
                         <th scope="row">{item.label}</th>
-                        <td>{valueLabel(item.value, item.unit, preview.reportingCurrency)}</td>
+                        <td>
+                          {valueLabel(
+                            item.value,
+                            item.unit,
+                            preview.reportingCurrency,
+                          )}
+                        </td>
                         <td>
                           {item.target?.target
                             ? valueLabel(

@@ -7,9 +7,7 @@ const appOrigin = __ENV.APP_ORIGIN || 'http://localhost:3000';
 const from = __ENV.LOAD_FROM || '2026-01-01';
 const to = __ENV.LOAD_TO || '2026-12-31';
 const credentials = new SharedArray('isolated load credentials', () =>
-  JSON.parse(
-    open(__ENV.LOAD_CREDENTIALS || './runtime/load-credentials.json'),
-  ),
+  JSON.parse(open(__ENV.LOAD_CREDENTIALS || './runtime/load-credentials.json')),
 );
 
 export const options = {
@@ -79,7 +77,9 @@ export function reports() {
   if (!login()) return;
   const query = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
   const response = http.get(`${apiUrl}/reports/preview?${query}`);
-  check(response, { 'report preview returns 200': (res) => res.status === 200 });
+  check(response, {
+    'report preview returns 200': (res) => res.status === 200,
+  });
   sleep(1);
 }
 

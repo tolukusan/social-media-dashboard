@@ -21,8 +21,7 @@ function browserFetch(
   init: Parameters<typeof fetch>[1] = {},
 ) {
   const method = (
-    init?.method ??
-    (input instanceof Request ? input.method : 'GET')
+    init?.method ?? (input instanceof Request ? input.method : 'GET')
   ).toUpperCase();
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method))
     return nativeFetch(input, init);
@@ -144,7 +143,9 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       body,
     });
     if (missing.status !== 403)
-      throw new Error('Unsafe authenticated request accepted a missing Origin.');
+      throw new Error(
+        'Unsafe authenticated request accepted a missing Origin.',
+      );
     const wrong = await nativeFetch(`${baseUrl}/api/v1/auth/me`, {
       method: 'PATCH',
       headers: { ...headers, origin: 'https://attacker.invalid' },
@@ -244,19 +245,22 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       if (channel.code !== code)
         throw new Error('Channel code was not normalized.');
 
-      const platformResponse = await browserFetch(`${baseUrl}/api/v1/platforms`, {
-        method: 'POST',
-        headers: {
-          cookie: adminAuth.cookie,
-          'content-type': 'application/json',
-          'x-csrf-token': adminAuth.csrfToken,
+      const platformResponse = await browserFetch(
+        `${baseUrl}/api/v1/platforms`,
+        {
+          method: 'POST',
+          headers: {
+            cookie: adminAuth.cookie,
+            'content-type': 'application/json',
+            'x-csrf-token': adminAuth.csrfToken,
+          },
+          body: JSON.stringify({
+            channelId,
+            code: 'FIXTURE',
+            name: 'F04 Platform Fixture',
+          }),
         },
-        body: JSON.stringify({
-          channelId,
-          code: 'FIXTURE',
-          name: 'F04 Platform Fixture',
-        }),
-      });
+      );
       if (!platformResponse.ok)
         throw new Error('Administrator could not create a platform.');
       platformId = ((await platformResponse.json()) as { id: string }).id;
@@ -632,20 +636,23 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       )
         throw new Error('Metric metadata omitted an applicable raw metric.');
 
-      const campaignResponse = await browserFetch(`${baseUrl}/api/v1/campaigns`, {
-        method: 'POST',
-        headers: {
-          cookie: adminAuth.cookie,
-          'content-type': 'application/json',
-          'x-csrf-token': adminAuth.csrfToken,
+      const campaignResponse = await browserFetch(
+        `${baseUrl}/api/v1/campaigns`,
+        {
+          method: 'POST',
+          headers: {
+            cookie: adminAuth.cookie,
+            'content-type': 'application/json',
+            'x-csrf-token': adminAuth.csrfToken,
+          },
+          body: JSON.stringify({
+            name: 'F05 Performance Fixture',
+            startDate: '2020-01-01',
+            responsibleUserId: adminFixture.id,
+            channels: [{ channelId: channel.id, platformIds: [platform.id] }],
+          }),
         },
-        body: JSON.stringify({
-          name: 'F05 Performance Fixture',
-          startDate: '2020-01-01',
-          responsibleUserId: adminFixture.id,
-          channels: [{ channelId: channel.id, platformIds: [platform.id] }],
-        }),
-      });
+      );
       if (!campaignResponse.ok)
         throw new Error(
           'Administrator could not create the performance fixture campaign.',
@@ -711,15 +718,18 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       });
       if (deniedTarget.status !== 403)
         throw new Error('Management was allowed to create a KPI target.');
-      const invalidTargetScope = await browserFetch(`${baseUrl}/api/v1/targets`, {
-        method: 'POST',
-        headers: {
-          cookie: adminAuth.cookie,
-          'content-type': 'application/json',
-          'x-csrf-token': adminAuth.csrfToken,
+      const invalidTargetScope = await browserFetch(
+        `${baseUrl}/api/v1/targets`,
+        {
+          method: 'POST',
+          headers: {
+            cookie: adminAuth.cookie,
+            'content-type': 'application/json',
+            'x-csrf-token': adminAuth.csrfToken,
+          },
+          body: JSON.stringify({ ...targetBody, channelId: channel.id }),
         },
-        body: JSON.stringify({ ...targetBody, channelId: channel.id }),
-      });
+      );
       if (invalidTargetScope.status !== 400)
         throw new Error('Contradictory target scope was accepted.');
       const targetWrites = await Promise.all([
@@ -760,8 +770,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           action: 'KPI_TARGET_CREATED',
         },
       });
-      if (!targetAudit)
-        throw new Error('KPI target creation was not audited.');
+      if (!targetAudit) throw new Error('KPI target creation was not audited.');
 
       const request = (
         auth: typeof adminAuth,
@@ -1275,9 +1284,12 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       });
       if (retained.status !== 'ARCHIVED')
         throw new Error('Archived record history was removed.');
-      const normalList = await browserFetch(`${baseUrl}/api/v1/performance-records`, {
-        headers: { cookie: adminAuth.cookie },
-      });
+      const normalList = await browserFetch(
+        `${baseUrl}/api/v1/performance-records`,
+        {
+          headers: { cookie: adminAuth.cookie },
+        },
+      );
       const listed = (await normalList.json()) as Array<{ id: string }>;
       if (listed.some((item) => item.id === createdRecordId))
         throw new Error(
@@ -1344,7 +1356,9 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       }),
     });
     if (wrong.status !== 401)
-      throw new Error('Own password change accepted an incorrect current password.');
+      throw new Error(
+        'Own password change accepted an incorrect current password.',
+      );
 
     const changed = await browserFetch(`${baseUrl}/api/v1/auth/password`, {
       method: 'PATCH',
@@ -1370,7 +1384,10 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     const oldLogin = await browserFetch(`${baseUrl}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: fixture.email, password: fixture.password }),
+      body: JSON.stringify({
+        email: fixture.email,
+        password: fixture.password,
+      }),
     });
     if (oldLogin.status !== 401)
       throw new Error('Previous password remained valid after own change.');
@@ -1447,19 +1464,22 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     });
     const target = managementFixture;
     const updatedEmail = `updated-${randomUUID()}@example.invalid`;
-    const adminUpdate = await browserFetch(`${baseUrl}/api/v1/users/${target.id}`, {
-      method: 'PATCH',
-      headers: {
-        cookie: adminAuth.cookie,
-        'content-type': 'application/json',
-        'x-csrf-token': adminAuth.csrfToken,
+    const adminUpdate = await browserFetch(
+      `${baseUrl}/api/v1/users/${target.id}`,
+      {
+        method: 'PATCH',
+        headers: {
+          cookie: adminAuth.cookie,
+          'content-type': 'application/json',
+          'x-csrf-token': adminAuth.csrfToken,
+        },
+        body: JSON.stringify({
+          name: 'Updated Managed User',
+          email: updatedEmail.toUpperCase(),
+          roleId: role.id,
+        }),
       },
-      body: JSON.stringify({
-        name: 'Updated Managed User',
-        email: updatedEmail.toUpperCase(),
-        roleId: role.id,
-      }),
-    });
+    );
     if (!adminUpdate.ok)
       throw new Error('Administrator update of an existing user failed.');
     const updatedUser = (await adminUpdate.json()) as Record<string, unknown>;
@@ -1481,15 +1501,18 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     if (!roleAudit)
       throw new Error('Administrator role change was not audited.');
 
-    const duplicateEmail = await browserFetch(`${baseUrl}/api/v1/users/${target.id}`, {
-      method: 'PATCH',
-      headers: {
-        cookie: adminAuth.cookie,
-        'content-type': 'application/json',
-        'x-csrf-token': adminAuth.csrfToken,
+    const duplicateEmail = await browserFetch(
+      `${baseUrl}/api/v1/users/${target.id}`,
+      {
+        method: 'PATCH',
+        headers: {
+          cookie: adminAuth.cookie,
+          'content-type': 'application/json',
+          'x-csrf-token': adminAuth.csrfToken,
+        },
+        body: JSON.stringify({ email: admin.email.toUpperCase() }),
       },
-      body: JSON.stringify({ email: admin.email.toUpperCase() }),
-    });
+    );
     if (duplicateEmail.status !== 409)
       throw new Error('Duplicate normalized email was not rejected.');
 

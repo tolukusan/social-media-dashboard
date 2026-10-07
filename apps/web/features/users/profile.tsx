@@ -182,11 +182,7 @@ export function Profile({ currentUser }: { currentUser: CurrentUser }) {
             </span>
           )}
         </label>
-        <button
-          className="primary"
-          type="submit"
-          disabled={isChangingPassword}
-        >
+        <button className="primary" type="submit" disabled={isChangingPassword}>
           {isChangingPassword ? 'Changing…' : 'Change password'}
         </button>
       </form>

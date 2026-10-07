@@ -9,9 +9,24 @@ const prisma = new PrismaClient({
 const DEMO_NAME = '[Demo] Marketing Performance Walkthrough';
 const dates = ['2026-09-01', '2026-09-02', '2026-09-03'] as const;
 const rows = [
-  { SM_REACH: 1200, SM_IMPRESSIONS: 1800, SM_ENGAGEMENTS: 144, SM_LINK_CLICKS: 90 },
-  { SM_REACH: 1350, SM_IMPRESSIONS: 2050, SM_ENGAGEMENTS: 176, SM_LINK_CLICKS: 112 },
-  { SM_REACH: 1280, SM_IMPRESSIONS: 1940, SM_ENGAGEMENTS: 158, SM_LINK_CLICKS: 101 },
+  {
+    SM_REACH: 1200,
+    SM_IMPRESSIONS: 1800,
+    SM_ENGAGEMENTS: 144,
+    SM_LINK_CLICKS: 90,
+  },
+  {
+    SM_REACH: 1350,
+    SM_IMPRESSIONS: 2050,
+    SM_ENGAGEMENTS: 176,
+    SM_LINK_CLICKS: 112,
+  },
+  {
+    SM_REACH: 1280,
+    SM_IMPRESSIONS: 1940,
+    SM_ENGAGEMENTS: 158,
+    SM_LINK_CLICKS: 101,
+  },
 ] as const;
 
 async function main() {
@@ -36,17 +51,14 @@ async function main() {
     },
   });
   if (!channel.active || !platform.active)
-    throw new Error('Demo setup requires the active seeded Social/Facebook catalogue.');
+    throw new Error(
+      'Demo setup requires the active seeded Social/Facebook catalogue.',
+    );
 
   const metricDefinitions = await prisma.metricDefinition.findMany({
     where: {
       code: {
-        in: [
-          'SM_REACH',
-          'SM_IMPRESSIONS',
-          'SM_ENGAGEMENTS',
-          'SM_LINK_CLICKS',
-        ],
+        in: ['SM_REACH', 'SM_IMPRESSIONS', 'SM_ENGAGEMENTS', 'SM_LINK_CLICKS'],
       },
       active: true,
     },
@@ -55,7 +67,9 @@ async function main() {
     metricDefinitions.map((metric) => [metric.code, metric]),
   );
   if (metricByCode.size !== 4)
-    throw new Error('Demo setup could not find all required seeded Social metrics.');
+    throw new Error(
+      'Demo setup could not find all required seeded Social metrics.',
+    );
 
   await prisma.$transaction(async (tx) => {
     let campaign = await tx.campaign.findFirst({

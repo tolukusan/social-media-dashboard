@@ -99,9 +99,9 @@ Searched active milestone/completion plans, accepted ADRs, .ai guidance and docs
 The pre-existing progress file records successful lint/typecheck/tests/build, live smoke and k6 runs, without consistently identifying run dates or retained command output. Preserve those claims as historical reports, not current proof. Existing e2e source has two cases; the authenticated case is credential-gated. The health k6 script is 25 VUs for 10 seconds and does not exercise application reads/writes. Fresh integrated evidence belongs to F01/F11/F12.
 
 F00 changes documents only. Markdown formatting/link checks are required; runtime tests and database changes are not applicable.
+
 ## Post-baseline reconciliation — 2026-10-07
 
 This file remains the 2026-10-05 F00 baseline and its historical row statuses are not rewritten retroactively. Current implementation/evidence is recorded in the [completion ledger](README.md) and [implementation progress](../../evidence/IMPLEMENTATION_PROGRESS.md).
 
 Since this baseline, the completion pass resolved the own-password policy, unsafe-method Origin enforcement, target missing-data precedence, Reports currency rendering, target/comparison browser coverage, catalogue/import browser coverage, Imports extraction, administration audit events, stale-session cleanup, deterministic demo data, and current operations/deployment guidance. Package-gated chart/PDF work and external evidence remain listed in root [TODO](../../../TODO.md) and [BLOCKERS](../../../BLOCKERS.md).
-

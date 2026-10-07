@@ -294,17 +294,14 @@ describe('password recovery HTTP and PostgreSQL flow', () => {
     });
     if (loginWithoutOrigin.status !== 403)
       throw new Error('Login accepted a missing Origin.');
-    const loginWithWrongOrigin = await fetch(
-      `${baseUrl}/api/v1/auth/login`,
-      {
-        method: 'POST',
-        headers: {
-          origin: 'https://attacker.invalid',
-          'content-type': 'application/json',
-        },
-        body: replacementLogin,
+    const loginWithWrongOrigin = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: {
+        origin: 'https://attacker.invalid',
+        'content-type': 'application/json',
       },
-    );
+      body: replacementLogin,
+    });
     if (loginWithWrongOrigin.status !== 403)
       throw new Error('Login accepted a disallowed Origin.');
 

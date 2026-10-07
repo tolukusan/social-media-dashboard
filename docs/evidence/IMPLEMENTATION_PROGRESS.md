@@ -166,4 +166,3 @@ Commands: node .reorganisation-backup/check-docs.cjs (155 links resolve); node .
 - **F12/R05 handoff:** added deterministic demo preparation, current user/developer/local-operation guidance, deployment runbook, isolated backup/restore verification procedure, usability tasks, and reconciled documentation/evidence links.
 - **Verification automation:** added a PostgreSQL-backed GitHub Actions workflow covering install, isolated test DB creation, lint, typecheck, unit, integration, build, Playwright, isolated backup/restore, authenticated k6 load, and documentation formatting. A successful run is not claimed until GitHub reports one.
 - **Still external/package-gated:** Tailwind, Recharts, maintained PDF renderer, real SMTP inbox delivery, participant usability results, approved reporting currency, historical import provenance, and an authorised deployment environment.
-

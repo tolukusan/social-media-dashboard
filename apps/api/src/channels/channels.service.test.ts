@@ -91,11 +91,7 @@ test('platform with campaign references cannot be moved between channels', async
   } as never);
 
   await assert.rejects(
-    service.updatePlatform(
-      'platform-1',
-      { channelId: 'channel-2' },
-      'admin-1',
-    ),
+    service.updatePlatform('platform-1', { channelId: 'channel-2' }, 'admin-1'),
     (error: unknown) =>
       Boolean(
         error &&
