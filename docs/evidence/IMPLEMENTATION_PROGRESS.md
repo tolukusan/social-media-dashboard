@@ -153,6 +153,6 @@ Commands: node .reorganisation-backup/check-docs.cjs (155 links resolve); node .
 ## Password recovery implementation - 2026-10-07
 
 - Commit `4654f51` added self-service email recovery: an additive `PasswordRecoveryToken` migration, hashed single-use 30-minute tokens, replacement invalidation, Argon2id password replacement, active-session revocation, safe audit events, bounded in-process SMTP delivery, recovery pages, and isolated HTTP/PostgreSQL coverage.
-- The continuation branch requires the configured application Origin for login as well as recovery, adds allowed/disallowed/missing-Origin login coverage, preserves a valid reset token after retryable API/network failures, and adds app-local API/web environment templates including the SMTP placeholders required for real delivery.
+- The continuation branch requires the configured application Origin for login as well as recovery, adds allowed/disallowed/missing-Origin login coverage, preserves a valid reset token after retryable API/network failures, adds a browser regression for retryable-versus-terminal reset errors, and adds app-local API/web environment templates including the SMTP placeholders required for real delivery.
 - Verification status for this continuation: source and tests were reviewed and updated through GitHub, but repository lint/typecheck/unit/integration/build/E2E commands were not run here and the source commit has no GitHub Actions run. Actual inbox delivery remains unverified until an authorised SMTP provider is configured. No deployment was performed.
 
