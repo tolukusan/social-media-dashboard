@@ -280,6 +280,23 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       });
       if (!retained || retained.active || !retained.archivedAt)
         throw new Error('Deactivation did not preserve the archived channel.');
+      const catalogueAudit = await prisma.auditLog.findMany({
+        where: {
+          actorUserId: adminFixture.id,
+          entityId: { in: [channelId, platformId].filter(Boolean) as string[] },
+        },
+        select: { action: true },
+      });
+      const catalogueActions = new Set(
+        catalogueAudit.map((event) => event.action),
+      );
+      for (const action of [
+        'CHANNEL_CREATED',
+        'PLATFORM_CREATED',
+        'CHANNEL_DEACTIVATED',
+      ])
+        if (!catalogueActions.has(action))
+          throw new Error(`Missing catalogue audit event: ${action}.`);
     } finally {
       if (platformId)
         await prisma.platform.delete({ where: { id: platformId } });
@@ -736,6 +753,15 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
           'Concurrent overlapping target writes did not resolve to one create and one conflict.',
         );
       createdTargetId = ((await successfulTarget.json()) as { id: string }).id;
+      const targetAudit = await prisma.auditLog.findFirst({
+        where: {
+          actorUserId: adminFixture.id,
+          entityId: createdTargetId,
+          action: 'KPI_TARGET_CREATED',
+        },
+      });
+      if (!targetAudit)
+        throw new Error('KPI target creation was not audited.');
 
       const request = (
         auth: typeof adminAuth,
@@ -1445,6 +1471,15 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       throw new Error(
         'Administrator update returned invalid or sensitive data.',
       );
+    const roleAudit = await prisma.auditLog.findFirst({
+      where: {
+        actorUserId: admin.id,
+        entityId: target.id,
+        action: 'USER_ROLE_CHANGED',
+      },
+    });
+    if (!roleAudit)
+      throw new Error('Administrator role change was not audited.');
 
     const duplicateEmail = await browserFetch(`${baseUrl}/api/v1/users/${target.id}`, {
       method: 'PATCH',
