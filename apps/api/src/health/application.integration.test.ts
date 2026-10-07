@@ -1299,6 +1299,64 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     }
   });
 
+  it('requires the current password and revokes sessions after own password change', async () => {
+    const fixture = await createFixtureUser('MANAGEMENT');
+    const auth = await authenticate(fixture.email, fixture.password);
+    const wrong = await browserFetch(`${baseUrl}/api/v1/auth/password`, {
+      method: 'PATCH',
+      headers: {
+        cookie: auth.cookie,
+        'content-type': 'application/json',
+        'x-csrf-token': auth.csrfToken,
+      },
+      body: JSON.stringify({
+        currentPassword: 'Incorrect-current-password',
+        newPassword: 'Replacement-Passphrase-2026',
+      }),
+    });
+    if (wrong.status !== 401)
+      throw new Error('Own password change accepted an incorrect current password.');
+
+    const changed = await browserFetch(`${baseUrl}/api/v1/auth/password`, {
+      method: 'PATCH',
+      headers: {
+        cookie: auth.cookie,
+        'content-type': 'application/json',
+        'x-csrf-token': auth.csrfToken,
+      },
+      body: JSON.stringify({
+        currentPassword: fixture.password,
+        newPassword: 'Replacement-Passphrase-2026',
+      }),
+    });
+    if (!changed.ok)
+      throw new Error('Own password change rejected valid credentials.');
+
+    const sessions = await prisma.session.findMany({
+      where: { userId: fixture.id, revokedAt: null },
+    });
+    if (sessions.length)
+      throw new Error('Own password change left an active session.');
+
+    const oldLogin = await browserFetch(`${baseUrl}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: fixture.email, password: fixture.password }),
+    });
+    if (oldLogin.status !== 401)
+      throw new Error('Previous password remained valid after own change.');
+    const newLogin = await browserFetch(`${baseUrl}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: fixture.email,
+        password: 'Replacement-Passphrase-2026',
+      }),
+    });
+    if (!newLogin.ok)
+      throw new Error('New password did not authenticate after own change.');
+  });
+
   it('protects user updates, scopes own profile changes, and never returns password hashes', async () => {
     const admin = adminFixture;
     const management = managementFixture;
