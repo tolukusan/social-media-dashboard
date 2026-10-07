@@ -238,15 +238,15 @@ MVP performance test scope:
 
 Initial target environment assumptions will be modest because the project is a single-organisation academic system.
 
-Proposed test profile:
+Current reproducible profile in `performance/k6-authenticated.js`:
 
-- 25 concurrent authenticated users
-- mix of read-heavy dashboard/analytics requests
-- a smaller amount of write traffic
+- 25 concurrent authenticated users for dashboard, trends, campaign list, and performance-record list
+- 2 concurrent authenticated users for report preview
+- 30-second local baseline
+- failed-request rate below 1%
+- p95 HTTP request duration below 1 second
 
-This is a baseline, not a claim of production capacity.
-
-Stop/failure thresholds shall be defined before the load test is executed.
+The script requires an isolated load-test account through environment variables. This is a baseline, not a claim of production capacity, and a run result must be recorded separately from the existence of the script.
 
 ---
 
@@ -264,7 +264,7 @@ Manual/automated checks should include:
 - table accessibility
 - dashboard comprehension by intended user
 
-Usability testing should include realistic tasks from the approved workflows.
+Usability testing should include realistic tasks from the approved workflows. The prepared participant tasks and evidence fields are in [usability-test-plan.md](../evidence/usability-test-plan.md); real participant results must not be inferred from automated tests.
 
 ---
 
