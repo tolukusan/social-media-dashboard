@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Empty } from '../../components/empty';
 import { apiRequest } from '../../lib/api-client';
+import { ComparisonBarChart, TrendLineChart } from './charts';
 import type {
   Campaign,
   Channel,
@@ -273,8 +274,24 @@ export function Analytics({
             {periodError}
           </div>
         ) : comparison ? (
-          <div className="table-scroll">
-            <table>
+          <>
+            <ComparisonBarChart
+              points={[
+                {
+                  label: 'Current',
+                  value: comparison.current.kpis[metricCode] ?? null,
+                },
+                {
+                  label: 'Previous',
+                  value: comparison.previous.kpis[metricCode] ?? null,
+                },
+              ]}
+              label={metadata?.label ?? metricCode}
+              unit={metadata?.unit ?? 'DECIMAL'}
+              currencyCode={result?.reportingContext.currencyCode}
+            />
+            <div className="table-scroll">
+              <table>
               <caption className="sr-only">
                 {metadata?.label ?? metricCode} period comparison
               </caption>
@@ -313,8 +330,9 @@ export function Analytics({
                   <td>—</td>
                 </tr>
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         ) : null}
       </section>
       <section className="panel page-panel">
@@ -405,8 +423,18 @@ export function Analytics({
             {dimensionError}
           </div>
         ) : dimensionResult ? (
-          <div className="table-scroll">
-            <table>
+          <>
+            <ComparisonBarChart
+              points={dimensionResult.results.map((item) => ({
+                label: item.label,
+                value: item.value,
+              }))}
+              label={metadata?.label ?? metricCode}
+              unit={metadata?.unit ?? 'DECIMAL'}
+              currencyCode={result?.reportingContext.currencyCode}
+            />
+            <div className="table-scroll">
+              <table>
               <caption className="sr-only">
                 {metadata?.label ?? metricCode} by {dimension.toLowerCase()}
               </caption>
@@ -428,15 +456,26 @@ export function Analytics({
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         ) : null}
       </section>
       <section className="panel page-panel">
         <h2>Trend values</h2>
         {trends?.points.length ? (
-          <div className="table-scroll">
-            <table>
+          <>
+            <TrendLineChart
+              points={trends.points.map((point) => ({
+                bucket: point.bucket,
+                value: point.kpis[metricCode] ?? null,
+              }))}
+              label={metadata?.label ?? metricCode}
+              unit={metadata?.unit ?? 'DECIMAL'}
+              currencyCode={result?.reportingContext.currencyCode}
+            />
+            <div className="table-scroll">
+              <table>
               <thead>
                 <tr>
                   <th scope="col">Bucket</th>
@@ -451,8 +490,9 @@ export function Analytics({
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         ) : (
           <Empty
             title="No trend points"
