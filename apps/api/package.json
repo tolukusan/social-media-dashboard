@@ -18,7 +18,8 @@
     "test:e2e:prepare": "tsx scripts/prepare-e2e-users.ts",
     "test:e2e": "tsx scripts/run-e2e.ts",
     "recovery:cleanup": "tsx prisma/cleanup-password-recovery.ts",
-    "session:cleanup": "tsx prisma/cleanup-sessions.ts"
+    "session:cleanup": "tsx prisma/cleanup-sessions.ts",
+    "demo:prepare": "tsx prisma/demo.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
