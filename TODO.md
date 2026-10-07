@@ -6,13 +6,13 @@ Completed work is recorded in the ledger above. This checklist contains only out
 
 ## Review findings
 
-- [ ] **High priority — F10:** Validate unsafe request Origins against the configured application origin, including login. Verify allowed, disallowed, and missing-Origin behaviour against the approved security rules.
+- [ ] **High priority — F10:** Login and recovery now validate the configured application Origin. Extend the same strict allowed/disallowed/missing-Origin coverage to the remaining unsafe authenticated mutations and verify the full route matrix.
 - [ ] **F09:** Fix Reports currency formatting to use the backend-provided reporting currency when configured; retain the unset label only when no currency is configured.
 - [ ] **F09:** Replace the single-page PDF renderer with a maintained server-side library. Add wrapping, pagination, non-ASCII font support, and an embedded trend chart; inspect a sample PDF and verify long reports retain all content. Dependency installation is blocked by NVM4306.
 
 ## Completion plan
 
-- [ ] **Password recovery:** Implement the [planned email recovery flow](docs/plans/password-recovery.md) when implementation is authorised; configure SMTP for actual email delivery.
+- [ ] **Password recovery:** The [email recovery flow](docs/plans/password-recovery.md) is implemented. Run the full local verification matrix and configure an authorised SMTP provider before claiming actual inbox delivery.
 - [ ] **F02:** Finish Tailwind setup after the approved project-local dependency installation path is available.
 - [ ] **F07/F08:** Add Recharts plots to Overview and Analytics, preserving null gaps and accessible tables. Verify desktop/mobile layout and filter changes.
 - [ ] **F08:** Extend browser coverage for target create/edit/end-date and dashboard status refresh, plus campaign/channel comparison values.

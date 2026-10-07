@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '../../lib/api-client';
+import { ApiError, apiRequest } from '../../lib/api-client';
 
 type Form = { password: string; confirmation: string };
 
@@ -41,11 +41,15 @@ export function ResetPassword() {
       reset();
       setComplete(true);
     } catch (cause) {
-      setToken('');
+      if (
+        cause instanceof ApiError &&
+        cause.code === 'RECOVERY_LINK_INVALID'
+      )
+        setToken('');
       setError(
-        cause instanceof Error
+        cause instanceof ApiError
           ? cause.message
-          : 'This reset link is invalid or has expired.',
+          : 'We could not update your password. Please try again.',
       );
     }
   });

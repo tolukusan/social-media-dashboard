@@ -10,12 +10,14 @@ import type { Request } from 'express';
 export class RecoveryOriginGuard implements CanActivate {
   canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<Request>();
-    const isRecoveryPost =
+    const requiresTrustedOrigin =
       request.method === 'POST' &&
-      ['/api/v1/auth/forgot-password', '/api/v1/auth/reset-password'].includes(
-        request.path,
-      );
-    if (!isRecoveryPost) return true;
+      [
+        '/api/v1/auth/login',
+        '/api/v1/auth/forgot-password',
+        '/api/v1/auth/reset-password',
+      ].includes(request.path);
+    if (!requiresTrustedOrigin) return true;
     const configured = process.env.APP_ORIGIN ?? 'http://localhost:3000';
     let expected: string;
     try {

@@ -13,6 +13,7 @@ if (!databaseUrl) throw new Error('TEST_DATABASE_URL is required.');
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: databaseUrl }),
 });
+const origin = process.env.APP_ORIGIN ?? 'http://localhost:3000';
 let app: Awaited<ReturnType<typeof NestFactory.create>>;
 let baseUrl: string;
 const fixtureUsers: Array<{ id: string; email: string; password: string }> = [];
@@ -48,7 +49,7 @@ async function authenticate(email: string, password: string) {
   if (!csrfCookie) throw new Error('CSRF cookie was not issued.');
   const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { origin, 'content-type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
   if (!login.ok) throw new Error('Integration fixture login failed.');

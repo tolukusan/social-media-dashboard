@@ -1,10 +1,10 @@
 # Password recovery implementation plan
 
-Date: 2026-10-07. Status: planned; implementation has not started.
+Date: 2026-10-07. Status: implemented locally; full verification and external SMTP delivery remain.
 
 ## Request and scope
 
-The stakeholder requested a recovery flow after forgetting their password, then clarified that the current task is planning only. This document plans self-service email recovery as an addition to the existing account workflows. It does not authorise code changes, migrations, account resets, or external email sending in this task.
+The stakeholder first requested a plan for recovery after forgetting a password. A subsequent implementation task added the self-service email recovery flow to the existing account workflows. This document now serves as the implementation and verification handoff. External email sending still requires authorised SMTP configuration.
 
 The original [F03 completion task](completion/product-completion.md#f03---finish-account-and-user-management-workflows) excluded email recovery to bound MVP scope. The stakeholder has requested a plan for that scope addition. Preserve that historical requirement and reference this plan when a subsequent implementation task authorises the addition. Recovery does not require public signup, a new authentication platform, or changes to user roles.
 
@@ -92,4 +92,4 @@ Completion means the implemented journey passes local verification, migration in
 
 ## Current deliverable
 
-This planning task changes only this plan and its discovery link in `TODO.md`. No application code, dependency, database schema, migration, environment value, or account is changed. No runtime tests are needed for this documentation-only task; check formatting and local links.
+The implementation is present in the repository, including the additive recovery-token migration, Auth/Users services, SMTP adapter, recovery UI, and HTTP/PostgreSQL integration coverage. The continuation work adds trusted-Origin enforcement for login, retry-safe reset UI behaviour, and app-local environment templates. Full local verification has not been rerun in this GitHub-only continuation, and actual inbox delivery remains unverified until an authorised SMTP provider is configured.

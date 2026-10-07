@@ -6,7 +6,7 @@ Project specifications and implementation evidence are indexed in [docs](docs/RE
 
 ## Local setup
 
-Requirements: Node.js 24 LTS, pnpm 11 (packageManager pins 11.8.0), PostgreSQL 18 baseline. Provide local environment values from `.env.example`; never commit credentials. Follow [local operations](docs/guides/local-operations.md) and [developer guide](docs/guides/developer-guide.md), checking database targets before migrations. Existing development data must be preserved.
+Requirements: Node.js 24 LTS, pnpm 11 (packageManager pins 11.8.0), PostgreSQL 18 baseline. Copy `apps/api/.env.example` to `apps/api/.env` and `apps/web/.env.example` to `apps/web/.env.local`, then replace placeholders locally; never commit credentials. SMTP values are required only for real password-recovery email delivery. Follow [local operations](docs/guides/local-operations.md) and [developer guide](docs/guides/developer-guide.md), checking database targets before migrations. Existing development data must be preserved.
 
 ```text
 pnpm install
