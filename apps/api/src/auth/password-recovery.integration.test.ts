@@ -277,19 +277,42 @@ describe('password recovery HTTP and PostgreSQL flow', () => {
     const reused = await reset(secondToken, security);
     if (reused.status !== 400)
       throw new Error('A successfully used reset link was accepted again.');
-    const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
+
+    const replacementLogin = JSON.stringify({
+      email: users[1].email,
+      password: 'Replacement-Passphrase-2026',
+    });
+    const loginWithoutOrigin = await fetch(`${baseUrl}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        email: users[1].email,
-        password: 'Replacement-Passphrase-2026',
-      }),
+      body: replacementLogin,
+    });
+    if (loginWithoutOrigin.status !== 403)
+      throw new Error('Login accepted a missing Origin.');
+    const loginWithWrongOrigin = await fetch(
+      `${baseUrl}/api/v1/auth/login`,
+      {
+        method: 'POST',
+        headers: {
+          origin: 'https://attacker.invalid',
+          'content-type': 'application/json',
+        },
+        body: replacementLogin,
+      },
+    );
+    if (loginWithWrongOrigin.status !== 403)
+      throw new Error('Login accepted a disallowed Origin.');
+
+    const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { origin, 'content-type': 'application/json' },
+      body: replacementLogin,
     });
     if (login.status !== 201)
       throw new Error('The new password did not allow sign-in.');
     const rejectedOldLogin = await fetch(`${baseUrl}/api/v1/auth/login`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { origin, 'content-type': 'application/json' },
       body: JSON.stringify({
         email: users[1].email,
         password: users[1].password,
