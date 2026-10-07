@@ -1190,18 +1190,27 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         );
       const targetedReportParams = new URLSearchParams(targetParams);
       const targetedReportResponse = await browserFetch(
-        `${baseUrl}/api/v1/reports/dashboard.pdf?${targetedReportParams}`,
+        `${baseUrl}/api/v1/reports/preview?${targetedReportParams}`,
         { headers: { cookie: managementAuth.cookie } },
       );
-      const targetedReportText = Buffer.from(
-        await targetedReportResponse.arrayBuffer(),
-      ).toString('latin1');
+      const targetedReport = (await targetedReportResponse.json()) as {
+        summary: {
+          kpis: Array<{
+            code: string;
+            target: { status: string | null; target: unknown } | null;
+          }>;
+        };
+      };
+      const targetedMetric = targetedReport.summary.kpis.find(
+        (item) => item.code === 'SM_CTR',
+      );
       if (
         !targetedReportResponse.ok ||
-        !targetedReportText.includes('target: No target; status: NO_TARGET')
+        targetedMetric?.target?.status !== 'NO_TARGET' ||
+        targetedMetric.target.target !== null
       )
         throw new Error(
-          'PDF report did not reuse the current dashboard target evaluation.',
+          'Report data did not reuse the current dashboard target evaluation.',
         );
 
       const managementUpdate = await browserFetch(
