@@ -179,7 +179,6 @@ test('authenticated user can load views and logout', async ({ page }) => {
   ).toBeVisible();
 });
 
-
 test('password reset keeps the token after a retryable failure', async ({
   page,
 }) => {
