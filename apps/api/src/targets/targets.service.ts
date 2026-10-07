@@ -38,7 +38,7 @@ export class TargetsService {
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${this.lockKey(data)})::bigint)`;
       await this.ensureNoOverlap(data, undefined, tx);
-      return tx.kpiTarget.create({
+      const target = await tx.kpiTarget.create({
         data: { ...data, createdByUserId: actorId },
         include: {
           kpiDefinition: true,
@@ -47,10 +47,19 @@ export class TargetsService {
           campaign: true,
         },
       });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actorId,
+          action: 'KPI_TARGET_CREATED',
+          entityType: 'KpiTarget',
+          entityId: target.id,
+        },
+      });
+      return target;
     });
   }
 
-  async update(id: string, dto: UpdateTargetDto) {
+  async update(id: string, dto: UpdateTargetDto, actorId: string) {
     const target = await this.prisma.kpiTarget.findUnique({ where: { id } });
     if (!target)
       throw new NotFoundException({
@@ -70,7 +79,7 @@ export class TargetsService {
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${this.lockKey(next)})::bigint)`;
       await this.ensureNoOverlap(next, id, tx);
-      return tx.kpiTarget.update({
+      const updated = await tx.kpiTarget.update({
         where: { id },
         data: {
           ...(dto.targetValue === undefined
@@ -88,6 +97,18 @@ export class TargetsService {
           campaign: true,
         },
       });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actorId,
+          action:
+            dto.effectiveTo !== undefined
+              ? 'KPI_TARGET_END_DATE_UPDATED'
+              : 'KPI_TARGET_UPDATED',
+          entityType: 'KpiTarget',
+          entityId: id,
+        },
+      });
+      return updated;
     });
   }
 
