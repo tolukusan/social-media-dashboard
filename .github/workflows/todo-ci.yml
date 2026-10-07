@@ -69,15 +69,16 @@ jobs:
           set -euo pipefail
           source apps/api/.test-database
           SOURCE_DATABASE_URL="$DATABASE_URL"
+          NATIVE_DATABASE_URL="${SOURCE_DATABASE_URL%%\?*}"
           export PGPASSWORD=postgres
           RESTORE_DB="smd_restore_ci"
           dropdb -h 127.0.0.1 -U postgres --if-exists "$RESTORE_DB"
-          pg_dump --format=custom --file=/tmp/smd-backup.dump "$SOURCE_DATABASE_URL"
+          pg_dump --format=custom --file=/tmp/smd-backup.dump "$NATIVE_DATABASE_URL"
           createdb -h 127.0.0.1 -U postgres "$RESTORE_DB"
           pg_restore --exit-on-error -h 127.0.0.1 -U postgres -d "$RESTORE_DB" /tmp/smd-backup.dump
-          SOURCE_CAMPAIGNS="$(psql "$SOURCE_DATABASE_URL" -Atc 'SELECT count(*) FROM "social_media_dashboard"."Campaign";')"
+          SOURCE_CAMPAIGNS="$(psql "$NATIVE_DATABASE_URL" -Atc 'SELECT count(*) FROM "social_media_dashboard"."Campaign";')"
           RESTORE_CAMPAIGNS="$(psql -h 127.0.0.1 -U postgres -d "$RESTORE_DB" -Atc 'SELECT count(*) FROM "social_media_dashboard"."Campaign";')"
-          SOURCE_RECORDS="$(psql "$SOURCE_DATABASE_URL" -Atc 'SELECT count(*) FROM "social_media_dashboard"."PerformanceRecord";')"
+          SOURCE_RECORDS="$(psql "$NATIVE_DATABASE_URL" -Atc 'SELECT count(*) FROM "social_media_dashboard"."PerformanceRecord";')"
           RESTORE_RECORDS="$(psql -h 127.0.0.1 -U postgres -d "$RESTORE_DB" -Atc 'SELECT count(*) FROM "social_media_dashboard"."PerformanceRecord";')"
           test "$SOURCE_CAMPAIGNS" = "$RESTORE_CAMPAIGNS"
           test "$SOURCE_RECORDS" = "$RESTORE_RECORDS"
