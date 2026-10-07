@@ -268,6 +268,70 @@ test('authenticated user can load views and logout', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('Administrator can preview, validate, and confirm a structured import', async ({
+  page,
+}) => {
+  if (!process.env.E2E_EMAIL || !process.env.E2E_PASSWORD)
+    throw new Error('Structured import E2E requires the local Administrator fixture.');
+
+  await page.goto('/');
+  await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
+  await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.goto('/imports');
+
+  const fixture = await readFile(
+    'apps/api/test-fixtures/imports/facebook-views.csv',
+    'utf8',
+  );
+  const uniqueFixture = fixture.replace(
+    '2170',
+    String(100_000 + (Date.now() % 800_000)),
+  );
+  await page.locator('input[type="file"]').setInputFiles({
+    name: `e2e-facebook-${Date.now()}.csv`,
+    mimeType: 'text/csv',
+    buffer: Buffer.from(uniqueFixture),
+  });
+  await page.getByRole('button', { name: 'Upload and preview' }).click();
+  await expect(page.getByRole('heading', { name: '2. Preview' })).toBeVisible();
+
+  const platform = page
+    .locator('.import-context select')
+    .filter({ has: page.locator('option', { hasText: 'Facebook' }) })
+    .first();
+  const facebookOption = platform.locator('option').filter({ hasText: 'Facebook' });
+  await platform.selectOption(
+    (await facebookOption.getAttribute('value')) ?? '',
+  );
+
+  await page.getByRole('button', { name: '+ Create new campaign' }).click();
+  const campaignName = `E2E Import Campaign ${Date.now()}`;
+  await page
+    .getByRole('dialog')
+    .getByLabel('Campaign name')
+    .fill(campaignName);
+  await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-01');
+  await page.getByRole('dialog').getByLabel('End date').fill('2026-01-02');
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Create and return to import' })
+    .click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Validate rows' }).click();
+  await expect(
+    page.getByRole('heading', { name: '4. Validation and confirmation' }),
+  ).toBeVisible();
+  await expect(page.getByText('Accepted: 2')).toBeVisible();
+  await page.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page.getByRole('status')).toContainText('Import completed');
+
+  const historyRow = page.getByRole('row').filter({ hasText: campaignName });
+  await expect(historyRow).toContainText('COMPLETED');
+  await expect(historyRow).toContainText('2/2 accepted');
+});
+
 test('password reset keeps the token after a retryable failure', async ({
   page,
 }) => {
