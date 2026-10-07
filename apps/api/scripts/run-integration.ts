@@ -27,9 +27,9 @@ process.env.TEST_DATABASE_URL = value;
 process.env.DATABASE_URL = value;
 
 async function run(args: string[]) {
-  const child = spawn(`pnpm ${args.join(' ')}`, {
+  const child = spawn(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', args, {
     stdio: 'inherit',
-    shell: process.platform === 'win32',
+    shell: false,
   });
   const status: number | null = await new Promise((resolve, reject) => {
     child.once('error', reject);
