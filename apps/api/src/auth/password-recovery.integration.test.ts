@@ -124,6 +124,11 @@ describe('password recovery HTTP and PostgreSQL flow', () => {
       await prisma.passwordRecoveryToken.deleteMany({
         where: { userId: { in: ids } },
       });
+      await prisma.auditLog.deleteMany({
+        where: {
+          OR: [{ actorUserId: { in: ids } }, { entityId: { in: ids } }],
+        },
+      });
       await prisma.session.deleteMany({ where: { userId: { in: ids } } });
       await prisma.user.deleteMany({ where: { id: { in: ids } } });
     }
