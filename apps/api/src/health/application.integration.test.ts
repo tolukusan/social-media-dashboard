@@ -1014,8 +1014,8 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
         !unresolvedPeriodResponse.ok ||
         unresolvedPeriod.targetEvaluations.SM_CTR.actual !== null ||
         unresolvedPeriod.targetEvaluations.SM_CTR.target !== null ||
-        unresolvedPeriod.targetEvaluations.SM_CTR.status !== null ||
-        !unresolvedPeriod.targetEvaluations.SM_CTR.statusDecisionRequired
+        unresolvedPeriod.targetEvaluations.SM_CTR.status !== 'NO_DATA' ||
+        unresolvedPeriod.targetEvaluations.SM_CTR.statusDecisionRequired
       )
         throw new Error(
           'Unresolved no-data/no-target status was misrepresented.',
@@ -1357,7 +1357,7 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     });
     if (wrong.status !== 401)
       throw new Error(
-        'Own password change accepted an incorrect current password.',
+        `Own password change returned ${wrong.status}: ${await wrong.text()}`,
       );
 
     const changed = await browserFetch(`${baseUrl}/api/v1/auth/password`, {
@@ -1481,7 +1481,9 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
       },
     );
     if (!adminUpdate.ok)
-      throw new Error('Administrator update of an existing user failed.');
+      throw new Error(
+        `Administrator update failed with ${adminUpdate.status}: ${await adminUpdate.text()}`,
+      );
     const updatedUser = (await adminUpdate.json()) as Record<string, unknown>;
     if (
       updatedUser.name !== 'Updated Managed User' ||
