@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 25
     services:
       postgres:
-        image: postgres:18
+        image: postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -59,4 +59,28 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - run: pnpm test:e2e
+
+      - name: Verify isolated backup and restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          source apps/api/.test-database
+          SOURCE_DATABASE_URL="$DATABASE_URL"
+          export PGPASSWORD=postgres
+          RESTORE_DB="smd_restore_ci"
+          dropdb -h 127.0.0.1 -U postgres --if-exists "$RESTORE_DB"
+          pg_dump --format=custom --file=/tmp/smd-backup.dump "$SOURCE_DATABASE_URL"
+          createdb -h 127.0.0.1 -U postgres "$RESTORE_DB"
+          pg_restore --exit-on-error -h 127.0.0.1 -U postgres -d "$RESTORE_DB" /tmp/smd-backup.dump
+          SOURCE_CAMPAIGNS="$(psql "$SOURCE_DATABASE_URL" -Atc 'SELECT count(*) FROM "social_media_dashboard"."Campaign";')"
+          RESTORE_CAMPAIGNS="$(psql -h 127.0.0.1 -U postgres -d "$RESTORE_DB" -Atc 'SELECT count(*) FROM "social_media_dashboard"."Campaign";')"
+          SOURCE_RECORDS="$(psql "$SOURCE_DATABASE_URL" -Atc 'SELECT count(*) FROM "social_media_dashboard"."PerformanceRecord";')"
+          RESTORE_RECORDS="$(psql -h 127.0.0.1 -U postgres -d "$RESTORE_DB" -Atc 'SELECT count(*) FROM "social_media_dashboard"."PerformanceRecord";')"
+          test "$SOURCE_CAMPAIGNS" = "$RESTORE_CAMPAIGNS"
+          test "$SOURCE_RECORDS" = "$RESTORE_RECORDS"
+          dropdb -h 127.0.0.1 -U postgres "$RESTORE_DB"
+
+      - uses: grafana/setup-k6-action@v1
+      - run: pnpm --filter @smd/api test:load
+
       - run: pnpm format:docs
