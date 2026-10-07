@@ -179,6 +179,43 @@ test('authenticated user can load views and logout', async ({ page }) => {
   ).toBeVisible();
 });
 
+
+test('password reset keeps the token after a retryable failure', async ({
+  page,
+}) => {
+  const token = 'A'.repeat(43);
+  let resetAttempts = 0;
+  await page.route('**/api/v1/auth/reset-password', async (route) => {
+    if (route.request().method() === 'POST' && resetAttempts++ === 0) {
+      await route.abort('failed');
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto(`/reset-password#token=${token}`);
+  await expect(page).not.toHaveURL(/#token=/);
+  await page.getByLabel('New password').fill('Replacement-Passphrase-2026');
+  await page
+    .getByLabel('Confirm new password')
+    .fill('Replacement-Passphrase-2026');
+  await page.getByRole('button', { name: 'Update password' }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'We could not update your password. Please try again.',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Update password' }),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'Update password' }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'This password reset link is invalid or has expired.',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Update password' }),
+  ).toHaveCount(0);
+});
+
 test('all fixed roles authenticate and Management stays read-only', async ({
   page,
 }) => {
