@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 * {
   box-sizing: border-box;
@@ -743,7 +743,6 @@ input:focus-visible {
     grid-template-columns: 1fr;
   }
 }
-
 
 .chart-visual {
   width: 100%;

@@ -48,7 +48,9 @@ export function TrendLineChart({
           <XAxis dataKey="bucket" minTickGap={24} />
           <YAxis
             width="auto"
-            tickFormatter={(value: number) => axisValue(value, unit, currencyCode)}
+            tickFormatter={(value: number) =>
+              axisValue(value, unit, currencyCode)
+            }
           />
           <Tooltip />
           <Line
@@ -90,7 +92,9 @@ export function ComparisonBarChart({
           <XAxis dataKey="label" />
           <YAxis
             width="auto"
-            tickFormatter={(value: number) => axisValue(value, unit, currencyCode)}
+            tickFormatter={(value: number) =>
+              axisValue(value, unit, currencyCode)
+            }
           />
           <Tooltip />
           <Bar

@@ -7,7 +7,10 @@ export type PdfReportData = {
   timeZone: string;
   reportingCurrency: string | null;
   period: { from: string | null; to: string | null };
-  filters: Record<'campaign' | 'channel' | 'platform' | 'metric' | 'targetPeriod', string | null>;
+  filters: Record<
+    'campaign' | 'channel' | 'platform' | 'metric' | 'targetPeriod',
+    string | null
+  >;
   summary: {
     recordCount: number;
     campaignCount: number;
@@ -46,14 +49,17 @@ export type PdfReportData = {
 function fmt(value: number | null, unit: string, currency: string | null) {
   if (value === null) return 'Unavailable';
   if (unit === 'PERCENT') return `${value.toFixed(2)}%`;
-  if (unit === 'CURRENCY') return `${currency ?? 'Currency unset'} ${value.toFixed(2)}`;
+  if (unit === 'CURRENCY')
+    return `${currency ?? 'Currency unset'} ${value.toFixed(2)}`;
   if (unit === 'POSITION') return value.toFixed(2);
   if (unit === 'COUNT') return new Intl.NumberFormat('en').format(value);
   return String(value);
 }
 
 function day(value: Date | string) {
-  return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
+  return value instanceof Date
+    ? value.toISOString().slice(0, 10)
+    : value.slice(0, 10);
 }
 
 function useFont(doc: PDFKit.PDFDocument) {
@@ -73,7 +79,12 @@ function room(doc: PDFKit.PDFDocument, height: number) {
 
 function section(doc: PDFKit.PDFDocument, title: string) {
   room(doc, 38);
-  doc.moveDown(0.6).fillColor('#172033').fontSize(14).text(title).moveDown(0.25);
+  doc
+    .moveDown(0.6)
+    .fillColor('#172033')
+    .fontSize(14)
+    .text(title)
+    .moveDown(0.25);
 }
 
 function row(doc: PDFKit.PDFDocument, label: string, value: string) {
@@ -95,7 +106,8 @@ function drawTrend(doc: PDFKit.PDFDocument, report: PdfReportData) {
   doc.fontSize(10).text(`${trend.metric} trend (${trend.grain.toLowerCase()})`);
   const x = doc.page.margins.left + 38;
   const y = doc.y + 12;
-  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right - 58;
+  const width =
+    doc.page.width - doc.page.margins.left - doc.page.margins.right - 58;
   const height = 138;
   let min = Math.min(...numeric.map((point) => point.value));
   let max = Math.max(...numeric.map((point) => point.value));
@@ -104,16 +116,38 @@ function drawTrend(doc: PDFKit.PDFDocument, report: PdfReportData) {
     min -= delta * 0.1;
     max += delta * 0.1;
   }
-  const px = (index: number) => x + (index / Math.max(1, trend.points.length - 1)) * width;
-  const py = (value: number) => y + height - ((value - min) / (max - min)) * height;
+  const px = (index: number) =>
+    x + (index / Math.max(1, trend.points.length - 1)) * width;
+  const py = (value: number) =>
+    y + height - ((value - min) / (max - min)) * height;
 
-  doc.save().lineWidth(0.6).strokeColor('#98A2B3')
-    .moveTo(x, y).lineTo(x, y + height).lineTo(x + width, y + height).stroke()
-    .fontSize(7).fillColor('#667085')
-    .text(fmt(max, trend.unit, report.reportingCurrency), x - 37, y - 3, { width: 34, align: 'right' })
-    .text(fmt(min, trend.unit, report.reportingCurrency), x - 37, y + height - 3, { width: 34, align: 'right' })
-    .text(trend.points[0]?.bucket ?? '', x, y + height + 6, { width: width / 2 })
-    .text(trend.points.at(-1)?.bucket ?? '', x + width / 2, y + height + 6, { width: width / 2, align: 'right' });
+  doc
+    .save()
+    .lineWidth(0.6)
+    .strokeColor('#98A2B3')
+    .moveTo(x, y)
+    .lineTo(x, y + height)
+    .lineTo(x + width, y + height)
+    .stroke()
+    .fontSize(7)
+    .fillColor('#667085')
+    .text(fmt(max, trend.unit, report.reportingCurrency), x - 37, y - 3, {
+      width: 34,
+      align: 'right',
+    })
+    .text(
+      fmt(min, trend.unit, report.reportingCurrency),
+      x - 37,
+      y + height - 3,
+      { width: 34, align: 'right' },
+    )
+    .text(trend.points[0]?.bucket ?? '', x, y + height + 6, {
+      width: width / 2,
+    })
+    .text(trend.points.at(-1)?.bucket ?? '', x + width / 2, y + height + 6, {
+      width: width / 2,
+      align: 'right',
+    });
 
   doc.lineWidth(1.8).strokeColor('#2764E7');
   let drawing = false;
@@ -149,10 +183,17 @@ export async function renderReportPdf(report: PdfReportData) {
   const unicode = useFont(doc);
 
   doc.fillColor('#172033').fontSize(18).text(report.title);
-  doc.fillColor('#667085').fontSize(9)
+  doc
+    .fillColor('#667085')
+    .fontSize(9)
     .text(`Generated: ${report.generatedAt} (${report.timeZone})`)
-    .text(`Period: ${report.period.from ?? 'all'} to ${report.period.to ?? 'all'}`);
-  if (!unicode) doc.text('Font note: configure REPORT_FONT_PATH for extended Unicode glyph coverage.');
+    .text(
+      `Period: ${report.period.from ?? 'all'} to ${report.period.to ?? 'all'}`,
+    );
+  if (!unicode)
+    doc.text(
+      'Font note: configure REPORT_FONT_PATH for extended Unicode glyph coverage.',
+    );
 
   section(doc, 'Filters');
   row(doc, 'Campaign: ', report.filters.campaign ?? 'All campaigns');
@@ -160,7 +201,11 @@ export async function renderReportPdf(report: PdfReportData) {
   row(doc, 'Platform: ', report.filters.platform ?? 'All platforms');
   row(doc, 'Metric: ', report.filters.metric ?? 'All metrics');
   row(doc, 'Target period: ', report.filters.targetPeriod ?? 'Off');
-  row(doc, 'Reporting currency: ', report.reportingCurrency ?? 'Currency unset');
+  row(
+    doc,
+    'Reporting currency: ',
+    report.reportingCurrency ?? 'Currency unset',
+  );
 
   section(doc, 'Summary');
   row(doc, 'Records included: ', String(report.summary.recordCount));
@@ -170,11 +215,33 @@ export async function renderReportPdf(report: PdfReportData) {
   if (report.comparison) {
     const item = report.comparison;
     section(doc, 'Period comparison');
-    row(doc, 'Periods: ', `${day(item.currentPeriod.from)} to ${day(item.currentPeriod.to)} vs ${day(item.previousPeriod.from)} to ${day(item.previousPeriod.to)}${item.isPartial ? ' (partial)' : ''}`);
-    row(doc, `${item.metric} current: `, fmt(item.current, item.unit, report.reportingCurrency));
-    row(doc, 'Previous: ', fmt(item.previous, item.unit, report.reportingCurrency));
-    row(doc, 'Difference: ', fmt(item.difference, item.unit, report.reportingCurrency));
-    row(doc, 'Change: ', item.percentageChange === null ? 'Unavailable' : `${item.percentageChange.toFixed(2)}%`);
+    row(
+      doc,
+      'Periods: ',
+      `${day(item.currentPeriod.from)} to ${day(item.currentPeriod.to)} vs ${day(item.previousPeriod.from)} to ${day(item.previousPeriod.to)}${item.isPartial ? ' (partial)' : ''}`,
+    );
+    row(
+      doc,
+      `${item.metric} current: `,
+      fmt(item.current, item.unit, report.reportingCurrency),
+    );
+    row(
+      doc,
+      'Previous: ',
+      fmt(item.previous, item.unit, report.reportingCurrency),
+    );
+    row(
+      doc,
+      'Difference: ',
+      fmt(item.difference, item.unit, report.reportingCurrency),
+    );
+    row(
+      doc,
+      'Change: ',
+      item.percentageChange === null
+        ? 'Unavailable'
+        : `${item.percentageChange.toFixed(2)}%`,
+    );
   }
 
   if (report.trend?.points.length) {
@@ -184,13 +251,22 @@ export async function renderReportPdf(report: PdfReportData) {
 
   section(doc, 'KPI values');
   for (const item of report.summary.kpis) {
-    row(doc, `${item.label}: `, fmt(item.value, item.unit, report.reportingCurrency));
-    if (item.aggregationNote) row(doc, 'Aggregation note: ', item.aggregationNote);
+    row(
+      doc,
+      `${item.label}: `,
+      fmt(item.value, item.unit, report.reportingCurrency),
+    );
+    if (item.aggregationNote)
+      row(doc, 'Aggregation note: ', item.aggregationNote);
     if (item.target) {
       const target = item.target.target
         ? `${fmt(item.target.target.value, item.unit, report.reportingCurrency)} (${item.target.target.comparisonRule})`
         : 'No target';
-      row(doc, 'Target: ', `${target}; status: ${item.target.status ?? 'Not evaluated'}`);
+      row(
+        doc,
+        'Target: ',
+        `${target}; status: ${item.target.status ?? 'Not evaluated'}`,
+      );
     }
   }
 

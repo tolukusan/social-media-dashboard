@@ -160,7 +160,6 @@ export class ReportsService {
       caveats: result.metricMetadata
         .map((metric) => metric.aggregationNote)
         .filter((note): note is string => Boolean(note)),
-      
     };
     return { ...report, pdf: await renderReportPdf(report) };
   }
@@ -175,4 +174,3 @@ export class ReportsService {
     return preview;
   }
 }
-
