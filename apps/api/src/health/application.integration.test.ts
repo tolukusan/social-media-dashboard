@@ -104,6 +104,9 @@ describe('isolated PostgreSQL and HTTP session guard', () => {
     await app?.close();
     if (fixtureUsers.length) {
       const userIds = fixtureUsers.map((user) => user.id);
+      await prisma.auditLog.deleteMany({
+        where: { actorUserId: { in: userIds } },
+      });
       await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
       await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     }
