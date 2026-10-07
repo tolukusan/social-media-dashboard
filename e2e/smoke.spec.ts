@@ -336,8 +336,12 @@ test('keyboard and mobile basics remain usable', async ({ page }) => {
   await expect(page.getByLabel('Password')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Forgot password?' })).toBeVisible();
 
+  await page.getByLabel('Email address').fill('missing@example.invalid');
+  await page.getByLabel('Password').fill('invalid-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText(
+    'Invalid email or password',
+  );
 });
 
 test('Administrator can preview, validate, and confirm a structured import', async ({
@@ -367,6 +371,9 @@ test('Administrator can preview, validate, and confirm a structured import', asy
   });
   await page.getByRole('button', { name: 'Upload and preview' }).click();
   await expect(page.getByRole('heading', { name: '2. Preview' })).toBeVisible();
+
+  const importName = `E2E Import ${Date.now()}`;
+  await page.getByLabel('Dataset/import name').fill(importName);
 
   const platform = page
     .locator('.import-context select')
@@ -399,7 +406,7 @@ test('Administrator can preview, validate, and confirm a structured import', asy
   await page.getByRole('button', { name: 'Confirm import' }).click();
   await expect(page.getByRole('status')).toContainText('Import completed');
 
-  const historyRow = page.getByRole('row').filter({ hasText: campaignName });
+  const historyRow = page.getByRole('row').filter({ hasText: importName });
   await expect(historyRow).toContainText('COMPLETED');
   await expect(historyRow).toContainText('2/2 accepted');
 });
