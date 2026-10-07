@@ -292,44 +292,44 @@ export function Analytics({
             />
             <div className="table-scroll">
               <table>
-              <caption className="sr-only">
-                {metadata?.label ?? metricCode} period comparison
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Period</th>
-                  <th scope="col">Dates</th>
-                  <th scope="col">Actual</th>
-                  <th scope="col">Difference</th>
-                  <th scope="col">Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <th scope="row">
-                    Current{comparison.isPartial ? ' (partial)' : ''}
-                  </th>
-                  <td>
-                    {comparison.currentPeriod.from.slice(0, 10)} –{' '}
-                    {comparison.currentPeriod.to.slice(0, 10)}
-                  </td>
-                  <td>{formatValue(comparison.current.kpis[metricCode])}</td>
-                  <td>{formatValue(comparison.difference[metricCode])}</td>
-                  <td>
-                    {formatPercent(comparison.percentageChange[metricCode])}
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row">Previous</th>
-                  <td>
-                    {comparison.previousPeriod.from.slice(0, 10)} –{' '}
-                    {comparison.previousPeriod.to.slice(0, 10)}
-                  </td>
-                  <td>{formatValue(comparison.previous.kpis[metricCode])}</td>
-                  <td>—</td>
-                  <td>—</td>
-                </tr>
-              </tbody>
+                <caption className="sr-only">
+                  {metadata?.label ?? metricCode} period comparison
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Period</th>
+                    <th scope="col">Dates</th>
+                    <th scope="col">Actual</th>
+                    <th scope="col">Difference</th>
+                    <th scope="col">Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">
+                      Current{comparison.isPartial ? ' (partial)' : ''}
+                    </th>
+                    <td>
+                      {comparison.currentPeriod.from.slice(0, 10)} –{' '}
+                      {comparison.currentPeriod.to.slice(0, 10)}
+                    </td>
+                    <td>{formatValue(comparison.current.kpis[metricCode])}</td>
+                    <td>{formatValue(comparison.difference[metricCode])}</td>
+                    <td>
+                      {formatPercent(comparison.percentageChange[metricCode])}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Previous</th>
+                    <td>
+                      {comparison.previousPeriod.from.slice(0, 10)} –{' '}
+                      {comparison.previousPeriod.to.slice(0, 10)}
+                    </td>
+                    <td>{formatValue(comparison.previous.kpis[metricCode])}</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                </tbody>
               </table>
             </div>
           </>
@@ -435,27 +435,27 @@ export function Analytics({
             />
             <div className="table-scroll">
               <table>
-              <caption className="sr-only">
-                {metadata?.label ?? metricCode} by {dimension.toLowerCase()}
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">{dimension}</th>
-                  <th scope="col">Value</th>
-                  {mode === 'LIFETIME' && (
-                    <th scope="col">Campaign duration</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {dimensionResult.results.map((item) => (
-                  <tr key={item.id}>
-                    <th scope="row">{item.label}</th>
-                    <td>{formatValue(item.value)}</td>
-                    {mode === 'LIFETIME' && <td>{item.durationDays} days</td>}
+                <caption className="sr-only">
+                  {metadata?.label ?? metricCode} by {dimension.toLowerCase()}
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{dimension}</th>
+                    <th scope="col">Value</th>
+                    {mode === 'LIFETIME' && (
+                      <th scope="col">Campaign duration</th>
+                    )}
                   </tr>
-                ))}
-              </tbody>
+                </thead>
+                <tbody>
+                  {dimensionResult.results.map((item) => (
+                    <tr key={item.id}>
+                      <th scope="row">{item.label}</th>
+                      <td>{formatValue(item.value)}</td>
+                      {mode === 'LIFETIME' && <td>{item.durationDays} days</td>}
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           </>
@@ -476,20 +476,22 @@ export function Analytics({
             />
             <div className="table-scroll">
               <table>
-              <thead>
-                <tr>
-                  <th scope="col">Bucket</th>
-                  <th scope="col">{metadata?.label ?? 'Click-through rate'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trends.points.map((point) => (
-                  <tr key={point.bucket}>
-                    <th scope="row">{point.bucket}</th>
-                    <td>{formatValue(point.kpis[metricCode])}</td>
+                <thead>
+                  <tr>
+                    <th scope="col">Bucket</th>
+                    <th scope="col">
+                      {metadata?.label ?? 'Click-through rate'}
+                    </th>
                   </tr>
-                ))}
-              </tbody>
+                </thead>
+                <tbody>
+                  {trends.points.map((point) => (
+                    <tr key={point.bucket}>
+                      <th scope="row">{point.bucket}</th>
+                      <td>{formatValue(point.kpis[metricCode])}</td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           </>
