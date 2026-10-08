@@ -6,6 +6,4 @@
 - **F09 visual evidence:** PDFKit rendering, pagination/wrapping, vector trend chart, and extended-character font support are implemented; a human visual review of a deliberately long PDF in the target environment remains evidence work.
 - **F00 import provenance:** Original import scope-promotion approval was not found in active plans/ADRs. Preserve the existing import feature and formats; do not expand scope from this uncertainty.
 - **M12 external deployment:** No authorised external deployment environment has been supplied. The deployment runbook is prepared, but no deployment is claimed.
-- **Verification:** final local checks passed on 2026-10-08: lint, typecheck, 42 unit tests, 34 isolated PostgreSQL integration tests, build, all 7 Playwright journeys, isolated PostgreSQL 18 restore, authenticated load phases, documentation format and active links. A PostgreSQL-backed CI run on the final code remains pending; a configured workflow is not itself a successful run.
-
-Resolved during TODO completion: package installation/lockfile updates for Tailwind, Recharts, and PDFKit; own-password policy; strict Origin enforcement for unsafe methods; and deterministic `NO_DATA` precedence.
+  Resolved during TODO completion: package installation/lockfile updates for Tailwind, Recharts, and PDFKit; own-password policy; strict Origin enforcement for unsafe methods; and deterministic `NO_DATA` precedence.

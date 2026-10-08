@@ -71,6 +71,6 @@ Measured mixed/PDF phases retain p95 below one second, request errors below 1%, 
 
 ## Remote and external status
 
-[Run #53](https://github.com/tolukusan/social-media-dashboard/actions/runs/37670886914) ended cancelled. It passed through build but is not a complete acceptance run. Final PostgreSQL 18 CI evidence and the reviewable PR are pending.
+[Run #53](https://github.com/tolukusan/social-media-dashboard/actions/runs/37670886914) ended cancelled and remains historical evidence. [Run #37714435674](https://github.com/tolukusan/social-media-dashboard/actions/runs/37714435674) passed every workflow step on commit `495b5ef` in 5m7s, including the 25-VU k6 load profile; the existing draft [PR #2](https://github.com/tolukusan/social-media-dashboard/pull/2) remains open and unmerged. GitHub emitted a non-failing notice that several v4 actions target Node 20 while the runner forced them onto Node 24.
 
 Human target-environment PDF inspection, authorised SMTP inbox delivery, actual usability participants, organisation reporting currency, historical import promotion provenance and external deployment remain separate prerequisites. None are inferred from automated checks.
