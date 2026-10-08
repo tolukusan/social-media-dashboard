@@ -153,114 +153,131 @@ export function Overview({
   return (
     <>
       <div className="filters" aria-label="Analytics filters">
-        <label htmlFor="from">From</label>
-        <input
-          id="from"
-          className="filter"
-          type="date"
-          value={filters.from}
-          onChange={(event) => setFrom(event.target.value)}
-        />
-        <label htmlFor="to">To</label>
-        <input
-          id="to"
-          className="filter"
-          type="date"
-          value={filters.to}
-          onChange={(event) => setTo(event.target.value)}
-        />
-        <label htmlFor="campaign-filter">Campaign</label>
-        <select
-          id="campaign-filter"
-          className="filter"
-          value={filters.campaignId}
-          onChange={(event) => setCampaignFilter(event.target.value)}
-        >
-          <option value="">All campaigns</option>
-          {campaigns.map((campaign) => (
-            <option key={campaign.id} value={campaign.id}>
-              {campaign.name}
-            </option>
-          ))}
-        </select>
-        <label htmlFor="channel-filter">Channel</label>
-        <select
-          id="channel-filter"
-          className="filter"
-          value={filters.channelId}
-          onChange={(event) => {
-            setChannelFilter(event.target.value);
-            setPlatformFilter('');
-          }}
-        >
-          <option value="">All channels</option>
-          {channels.map((channel) => (
-            <option key={channel.id} value={channel.id}>
-              {channel.name}
-            </option>
-          ))}
-        </select>
-        <label htmlFor="platform-filter">Platform</label>
-        <select
-          id="platform-filter"
-          className="filter"
-          value={filters.platformId}
-          onChange={(event) => setPlatformFilter(event.target.value)}
-        >
-          <option value="">All platforms</option>
-          {availablePlatforms.map((platform) => (
-            <option key={platform.id} value={platform.id}>
-              {platform.name}
-            </option>
-          ))}
-        </select>
-        <label htmlFor="metric-filter">Metric</label>
-        <select
-          id="metric-filter"
-          className="filter"
-          value={filters.metricCode}
-          onChange={(event) => setMetricFilter(event.target.value)}
-        >
-          <option value="">All metrics</option>
-          {selectableMetrics.map((metric) => (
-            <option key={metric.code} value={metric.code}>
-              {metric.label}
-            </option>
-          ))}
-        </select>
-        <label htmlFor="target-period">Target period</label>
-        <select
-          id="target-period"
-          className="filter"
-          value={filters.targetPeriod}
-          onChange={(event) => setTargetPeriod(event.target.value)}
-        >
-          <option value="">Targets off</option>
-          <option value="DAILY" disabled={!validTargetPeriods.has('DAILY')}>
-            Daily
-          </option>
-          <option value="WEEKLY" disabled={!validTargetPeriods.has('WEEKLY')}>
-            Weekly
-          </option>
-          <option value="MONTHLY" disabled={!validTargetPeriods.has('MONTHLY')}>
-            Monthly
-          </option>
-          <option
-            value="QUARTERLY"
-            disabled={!validTargetPeriods.has('QUARTERLY')}
+        <div className="filter-field">
+          <label htmlFor="from">From</label>
+          <input
+            id="from"
+            className="filter"
+            type="date"
+            value={filters.from}
+            onChange={(event) => setFrom(event.target.value)}
+          />
+        </div>
+        <div className="filter-field">
+          <label htmlFor="to">To</label>
+          <input
+            id="to"
+            className="filter"
+            type="date"
+            value={filters.to}
+            onChange={(event) => setTo(event.target.value)}
+          />
+        </div>
+        <div className="filter-field">
+          <label htmlFor="campaign-filter">Campaign</label>
+          <select
+            id="campaign-filter"
+            className="filter"
+            value={filters.campaignId}
+            onChange={(event) => setCampaignFilter(event.target.value)}
           >
-            Quarterly
-          </option>
-          <option value="YEARLY" disabled={!validTargetPeriods.has('YEARLY')}>
-            Yearly
-          </option>
-          <option
-            value="CAMPAIGN"
-            disabled={!validTargetPeriods.has('CAMPAIGN')}
+            <option value="">All campaigns</option>
+            {campaigns.map((campaign) => (
+              <option key={campaign.id} value={campaign.id}>
+                {campaign.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="filter-field">
+          <label htmlFor="channel-filter">Channel</label>
+          <select
+            id="channel-filter"
+            className="filter"
+            value={filters.channelId}
+            onChange={(event) => {
+              setChannelFilter(event.target.value);
+              setPlatformFilter('');
+            }}
           >
-            Campaign lifetime
-          </option>
-        </select>
+            <option value="">All channels</option>
+            {channels.map((channel) => (
+              <option key={channel.id} value={channel.id}>
+                {channel.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="filter-field">
+          <label htmlFor="platform-filter">Platform</label>
+          <select
+            id="platform-filter"
+            className="filter"
+            value={filters.platformId}
+            onChange={(event) => setPlatformFilter(event.target.value)}
+          >
+            <option value="">All platforms</option>
+            {availablePlatforms.map((platform) => (
+              <option key={platform.id} value={platform.id}>
+                {platform.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="filter-field">
+          <label htmlFor="metric-filter">Metric</label>
+          <select
+            id="metric-filter"
+            className="filter"
+            value={filters.metricCode}
+            onChange={(event) => setMetricFilter(event.target.value)}
+          >
+            <option value="">All metrics</option>
+            {selectableMetrics.map((metric) => (
+              <option key={metric.code} value={metric.code}>
+                {metric.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="filter-field">
+          <label htmlFor="target-period">Target period</label>
+          <select
+            id="target-period"
+            className="filter"
+            value={filters.targetPeriod}
+            onChange={(event) => setTargetPeriod(event.target.value)}
+          >
+            <option value="">Targets off</option>
+            <option value="DAILY" disabled={!validTargetPeriods.has('DAILY')}>
+              Daily
+            </option>
+            <option value="WEEKLY" disabled={!validTargetPeriods.has('WEEKLY')}>
+              Weekly
+            </option>
+            <option
+              value="MONTHLY"
+              disabled={!validTargetPeriods.has('MONTHLY')}
+            >
+              Monthly
+            </option>
+            <option
+              value="QUARTERLY"
+              disabled={!validTargetPeriods.has('QUARTERLY')}
+            >
+              Quarterly
+            </option>
+            <option value="YEARLY" disabled={!validTargetPeriods.has('YEARLY')}>
+              Yearly
+            </option>
+            <option
+              value="CAMPAIGN"
+              disabled={!validTargetPeriods.has('CAMPAIGN')}
+            >
+              Campaign lifetime
+            </option>
+          </select>
+        </div>
         <span className="filter muted">{result?.recordCount ?? 0} records</span>
       </div>
       <section className="kpi-grid" aria-label="KPI summary">

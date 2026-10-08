@@ -4,6 +4,8 @@ Date: 2026-10-05. Status: local execution authorised 2026-10-05; see the executi
 
 ## Start here
 
+Dashboard layout follow-up (2026-10-08): fixed page-wide horizontal overflow using constrained flex sizing and grouped, wrapping filter controls. Browser checks passed at 1600, 1024, 768, and 390 pixels, including a long campaign label; the production web build and all nine browser journeys passed. See [implementation progress](../../evidence/IMPLEMENTATION_PROGRESS.md).
+
 Usability follow-up (2026-10-08): tested all four selected data folders in isolation, verified 26 supported imports against source totals, and improved mobile/history navigation, performance pagination, and import guidance/revalidation. Final production build and all nine browser journeys passed. Legacy XLS requires conversion to a supported format. See [selected-folder evidence](../../evidence/selected-folder-verification.md).
 
 Navigation follow-up (2026-10-08): fixed repeated session loading between Imports and the workspace using client navigation and a shared session query. Local verification passed 48 unit tests, 41 integration tests, eight browser journeys, lint/typecheck, and API/Next.js builds; the restarted app passed a live browser navigation check. See [implementation progress](../../evidence/IMPLEMENTATION_PROGRESS.md). No schema or backend authorization change was needed.

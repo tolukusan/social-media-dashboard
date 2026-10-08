@@ -36,6 +36,41 @@ test('screen navigation preserves the session while rechecking it and rejects an
     .fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.getByLabel('Campaign', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Loading workspace data' }),
+  ).toHaveCount(0);
+  await page.getByLabel('Campaign', { exact: true }).evaluate((select) => {
+    const option = select.querySelector('option');
+    if (option) option.textContent = 'A long campaign name '.repeat(25);
+  });
+  for (const width of [1600, 1024, 768, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      )
+      .toBe(true);
+    for (const label of [
+      'From',
+      'To',
+      'Campaign',
+      'Channel',
+      'Platform',
+      'Metric',
+      'Target period',
+    ]) {
+      const bounds = await page
+        .getByLabel(label, { exact: true })
+        .boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.evaluate(() => {
     Reflect.set(window, '__navigationMarker', true);
     Reflect.set(window, '__sessionLoaderSeen', false);
