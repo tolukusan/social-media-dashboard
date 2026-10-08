@@ -4,7 +4,7 @@ Completed implementation is recorded in the [completion ledger](docs/plans/compl
 
 ## Current execution handoff — 2026-10-08
 
-The stakeholder authorised the review recommendations and subsequently requested merging to `main` on 2026-10-08. [PR #2](https://github.com/tolukusan/social-media-dashboard/pull/2) is merged at `9e6937b`; local `main` was updated to match. The root `.env.example` was then explicitly authorised for commit and added locally as `b5dc0ac`; that commit has not been pushed.
+The stakeholder authorised the review recommendations and subsequently requested merging to `main` on 2026-10-08. [PR #2](https://github.com/tolukusan/social-media-dashboard/pull/2) is merged at `9e6937b`; local `main` was updated to match. The root `.env.example` was then explicitly authorised for commit as `b5dc0ac` and pushed to remote `main` with the documentation update at `f3d63ac`. These post-merge commits did not trigger CI; the verified application code is PR head `73a7aee`.
 
 **The original AI-generated prompt is superseded by the bounded review follow-up plan. Do not execute it again as a separate task.** Its useful steps—inspect CI, fix genuine failures, reconcile evidence and prepare a PR—are already completed below. Its instruction to continue until CI is green does not override acceptance requirements or repository stop conditions. The merge was separately authorised and completed; external deployment still requires authorisation.
 
@@ -30,7 +30,7 @@ The verified follow-up changes are merged into `main`. The final PR-head Postgre
 - [x] **Browser regression:** both campaign setups select the seeded `Social Media Marketing` channel and `Facebook` platform. The target edit locator is scoped to the unique campaign so prior isolated-run data cannot match another KPI target. `pnpm --filter @smd/api test:e2e` passed all 7 journeys, including the PDF download. The first rerun exposed an ambiguous import-status locator, which was narrowed to the completion notice; the next rerun exposed a target-row match against persisted fixture data, which was scoped by campaign. See [verification evidence](docs/evidence/review-follow-up-verification.md).
 - [x] **Final local checks (2026-10-08):** documentation format and 223 active relative links, lint, typecheck, 42 unit tests, 34 isolated PostgreSQL integration tests, production build, all 7 Playwright journeys, PostgreSQL 18 isolated restore, and authenticated load phases passed. No schema or migration changes. The same checks plus CI artifacts passed on commit `495b5ef` in run #37714435674.
 - [x] **Final remote verification and PR:** final PR head `73a7aee` passed [CI run #37715030705](https://github.com/tolukusan/social-media-dashboard/actions/runs/37715030705). Following explicit stakeholder authorisation, PR #2 was marked ready and merged into `main` at `9e6937b` on 2026-10-08. Local `main` was fast-forwarded successfully.
-- [x] **Environment template:** committed only the root `.env.example` as `b5dc0ac` on local `main`, following the stakeholder's explicit request. Credential fields use template values; staged whitespace checks passed. This commit is local and has not been pushed or verified by CI.
+- [x] **Environment template:** committed only the root `.env.example` as `b5dc0ac` and pushed it to remote `main` with `f3d63ac`, following the stakeholder's explicit request. Credential fields use template values; staged whitespace checks passed. These post-merge commits did not trigger CI.
 
 ### Timing and resumption
 
