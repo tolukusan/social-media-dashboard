@@ -124,6 +124,11 @@ describe('password recovery HTTP and PostgreSQL flow', () => {
       await prisma.passwordRecoveryToken.deleteMany({
         where: { userId: { in: ids } },
       });
+      await prisma.auditLog.deleteMany({
+        where: {
+          OR: [{ actorUserId: { in: ids } }, { entityId: { in: ids } }],
+        },
+      });
       await prisma.session.deleteMany({ where: { userId: { in: ids } } });
       await prisma.user.deleteMany({ where: { id: { in: ids } } });
     }
@@ -145,7 +150,7 @@ describe('password recovery HTTP and PostgreSQL flow', () => {
       first.headers.get('cache-control') !== 'no-store'
     )
       throw new Error(
-        'An eligible recovery request did not return the generic no-store acknowledgement.',
+        `Eligible recovery request returned ${first.status} with cache-control ${first.headers.get('cache-control')}: ${await first.text()}`,
       );
     const unknown = await recoveryRequest(
       `missing-${randomUUID()}@example.invalid`,
@@ -220,7 +225,10 @@ describe('password recovery HTTP and PostgreSQL flow', () => {
       where: {
         tokenHash: createHash('sha256').update(expiryToken).digest('hex'),
       },
-      data: { expiresAt: new Date(Date.now() - 1_000) },
+      data: {
+        createdAt: new Date(Date.now() - 60 * 60 * 1_000),
+        expiresAt: new Date(Date.now() - 1_000),
+      },
     });
     const expired = await reset(expiryToken, security);
     if (expired.status !== 400)
@@ -289,17 +297,14 @@ describe('password recovery HTTP and PostgreSQL flow', () => {
     });
     if (loginWithoutOrigin.status !== 403)
       throw new Error('Login accepted a missing Origin.');
-    const loginWithWrongOrigin = await fetch(
-      `${baseUrl}/api/v1/auth/login`,
-      {
-        method: 'POST',
-        headers: {
-          origin: 'https://attacker.invalid',
-          'content-type': 'application/json',
-        },
-        body: replacementLogin,
+    const loginWithWrongOrigin = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: {
+        origin: 'https://attacker.invalid',
+        'content-type': 'application/json',
       },
-    );
+      body: replacementLogin,
+    });
     if (loginWithWrongOrigin.status !== 403)
       throw new Error('Login accepted a disallowed Origin.');
 

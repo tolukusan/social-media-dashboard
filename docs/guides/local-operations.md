@@ -24,15 +24,20 @@ The API is available at `http://localhost:4000/api/v1`; the web app is available
 
 For a local administrator, provide `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` only in the local environment while running the seed command.
 
-Expired password-recovery records remain unusable without cleanup. The bounded maintenance command `pnpm --filter @smd/api recovery:cleanup` removes only tokens that expired more than 30 days ago; schedule it only as part of an approved deployment runbook.
+Expired password-recovery records remain unusable without cleanup. The bounded maintenance commands `pnpm --filter @smd/api recovery:cleanup` and `pnpm --filter @smd/api session:cleanup` remove recovery tokens and stale sessions only after their 30-day retention windows; schedule them only as part of an approved deployment runbook.
+
+For a repeatable local walkthrough, after an active Administrator or Marketing Officer account exists, run `pnpm --filter @smd/api demo:prepare`. It creates or refreshes the reserved `[Demo] Marketing Performance Walkthrough` campaign and deterministic September 2026 performance/target data. Do not run this demo command in production.
 
 ## Verification
 
 ```text
 pnpm lint
 pnpm typecheck
-pnpm test
+pnpm test:unit
+pnpm test:integration
+pnpm test:e2e
 pnpm build
+pnpm format:docs
 ```
 
 ## Backup and restore
@@ -45,4 +50,4 @@ createdb restored_dashboard
 pg_restore --dbname=restored_dashboard backup.dump
 ```
 
-Before a production/demo migration, take a backup, run the approved Prisma migration, then verify `/api/v1/health` and an authenticated read. Backups are operational artifacts and must not be committed.
+Before a production/demo migration, take a backup, run the approved Prisma migration, then verify `/api/v1/health` and an authenticated read. Backups are operational artifacts and must not be committed. Use the [isolated backup/restore verification](../evidence/backup-restore-verification.md) and the [deployment runbook](deployment-runbook.md) for release preparation.

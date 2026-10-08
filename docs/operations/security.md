@@ -75,7 +75,7 @@ Minimum MVP policy:
 - maximum accepted length should be bounded reasonably to prevent abuse
 - do not require arbitrary composition rules such as mandatory symbols if not needed
 
-Administrator-assisted reset is the approved recovery flow.
+Administrator-assisted reset remains available. Users may also change their own password while authenticated: the current password is required, and a successful change revokes all active sessions and outstanding recovery links before the user signs in again.
 
 ### 3.5 Self-service email recovery
 
@@ -140,9 +140,7 @@ These values shall be environment-configurable.
 
 Expired/revoked sessions should be periodically cleaned from the database.
 
-This may run through a simple scheduled application task or maintenance command.
-
-No external queue is required.
+The bounded `session:cleanup` maintenance command removes sessions only after they have been expired or revoked for more than 30 days. The recovery-token cleanup command uses the same retention principle. No external queue is required.
 
 ---
 
@@ -152,9 +150,9 @@ Because authentication uses cookies, state-changing requests must be protected a
 
 Approved strategy:
 
-- strict Origin validation against configured application origin
+- strict Origin validation against the configured application origin for every unsafe method
 - SameSite cookie protection
-- CSRF token protection for unsafe methods where required by the chosen implementation pattern
+- CSRF token protection for unsafe cookie-authenticated methods
 
 Unsafe methods include:
 
@@ -330,6 +328,7 @@ Audit logging is approved for the following high-value events:
 - campaign archive
 - performance-record archive
 - KPI-target create/update/end-date
+- self-service password change and self-service recovery completion
 
 Logical AuditLog fields:
 
@@ -419,3 +418,7 @@ Minimum security verification:
 **Approved v1.0.**
 
 The implementation shall follow the authentication, session, CSRF/CORS, authorization, database, logging, audit and report-security controls defined in this document.
+
+## Current completion approval provenance
+
+The own-password current-password check and revocation of all sessions/recovery links were explicitly approved by the stakeholder on 2026-10-07; see [CD-001](../governance/completion-decisions-2026-10-07.md). This is the current decision date, not evidence that the preceding AI implementation had historical approval. Other approved controls remain unchanged.

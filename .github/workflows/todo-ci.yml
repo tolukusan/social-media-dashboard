@@ -1,0 +1,95 @@
+name: TODO completion verification
+
+on:
+  push:
+    branches:
+      - chatgpt/todo-completion
+      - chatgpt/pdfkit-renderer
+
+permissions:
+  contents: read
+
+concurrency:
+  group: todo-completion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      APP_ORIGIN: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install PostgreSQL 18 backup tools and report font
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install --yes postgresql-client-18 fonts-dejavu-core
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm test:db:prepare
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test:unit
+      - run: pnpm test:integration
+      - run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - run: pnpm test:e2e
+
+      - name: Verify isolated backup and restore
+        run: pnpm --filter @smd/api test:restore
+
+      - uses: grafana/setup-k6-action@v1
+      - run: pnpm --filter @smd/api test:load
+
+      - run: pnpm format:docs
+
+      - name: Retain non-sensitive verification summaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-summaries
+          path: |
+            performance/runtime/load-warmup.json
+            performance/runtime/load-mixed.json
+            performance/runtime/load-pdf-warmup.json
+            performance/runtime/load-pdf.json
+            performance/runtime/load-evidence.json
+            performance/runtime/restore-evidence.json
+          if-no-files-found: ignore
+          retention-days: 14

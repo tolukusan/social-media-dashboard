@@ -1,29 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AnalyticsService } from '../analytics/analytics.service.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { renderReportPdf } from './pdf-renderer.js';
 import type { DashboardQueryDto } from '../analytics/dto/dashboard-query.dto.js';
-
-function pdfText(value: string) {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/\(/g, '\\(')
-    .replace(/\)/g, '\\)')
-    .replace(/[^\x20-\x7e]/g, ' ');
-}
-
-function reportValue(
-  value: number | null,
-  unit: string | undefined,
-  currencyCode: string | null,
-) {
-  if (value === null) return 'Unavailable';
-  if (unit === 'PERCENT') return `${value.toFixed(2)}%`;
-  if (unit === 'CURRENCY')
-    return `${currencyCode ?? 'Currency unset'} ${value.toFixed(2)}`;
-  if (unit === 'POSITION') return value.toFixed(2);
-  if (unit === 'COUNT') return new Intl.NumberFormat('en').format(value);
-  return String(value);
-}
 
 @Injectable()
 export class ReportsService {
@@ -70,48 +49,7 @@ export class ReportsService {
       bucket: point.bucket,
       value: point.kpis?.[comparisonMetric] ?? null,
     }));
-    const lines = [
-      'Digital Marketing Performance Report',
-      `Generated: ${generatedAt} (${timeZone})`,
-      `Period: ${query.from ?? 'all'} to ${query.to ?? 'all'}`,
-      `Campaign: ${campaign?.name ?? (query.campaignId ? 'Unavailable' : 'All campaigns')}`,
-      `Channel: ${channel?.name ?? (query.channelId ? 'Unavailable' : 'All channels')}`,
-      `Platform: ${platform?.name ?? (query.platformId ? 'Unavailable' : 'All platforms')}`,
-      `Metric filter: ${labels.get(comparisonMetric)?.label ?? 'All metrics'}`,
-      `Target period: ${query.targetPeriod ?? 'off'}`,
-      `Reporting currency: ${result.reportingContext.currencyCode ?? 'unset'}`,
-      `Records included: ${result.recordCount}`,
-      `Campaigns in scope: ${result.campaignCount}`,
-      `Active channels in scope: ${result.channelCount}`,
-      ...(comparison
-        ? [
-            `Comparison: ${comparison.currentPeriod.from.toISOString().slice(0, 10)} to ${comparison.currentPeriod.to.toISOString().slice(0, 10)} vs ${comparison.previousPeriod.from.toISOString().slice(0, 10)} to ${comparison.previousPeriod.to.toISOString().slice(0, 10)} (${comparison.isPartial ? 'partial calendar period' : comparison.type})`,
-            `${labels.get(comparisonMetric)?.label ?? comparisonMetric}: current ${reportValue(comparison.current.kpis[comparisonMetric] ?? null, labels.get(comparisonMetric)?.unit, result.reportingContext.currencyCode)}; previous ${reportValue(comparison.previous.kpis[comparisonMetric] ?? null, labels.get(comparisonMetric)?.unit, result.reportingContext.currencyCode)}; difference ${reportValue(comparison.difference[comparisonMetric] ?? null, labels.get(comparisonMetric)?.unit, result.reportingContext.currencyCode)}; change ${comparison.percentageChange[comparisonMetric] == null ? 'Unavailable' : `${comparison.percentageChange[comparisonMetric]}%`}`,
-          ]
-        : ['Trend/comparison unavailable: choose both start and end dates.']),
-      ...(trendPoints?.length
-        ? [
-            `Trend: ${trendPoints.length} ${trend?.grain?.toLowerCase() ?? 'period'} buckets; full series is listed in the report preview.`,
-          ]
-        : ['Trend: no dated series available.']),
-      '',
-      ...Object.entries(result.kpis).map(([code, value]) => {
-        const metric = labels.get(code);
-        const note = metric?.aggregationNote
-          ? ` (${metric.aggregationNote})`
-          : '';
-        return `${metric?.label ?? code}: ${reportValue(value, metric?.unit, result.reportingContext.currencyCode)}${note}`;
-      }),
-      ...Object.entries(result.targetEvaluations ?? {}).map(
-        ([code, evaluation]) => {
-          const target = evaluation.target
-            ? `${reportValue(evaluation.target.value, labels.get(code)?.unit, result.reportingContext.currencyCode)} (${evaluation.target.comparisonRule}, ${evaluation.target.scopeType} ${evaluation.target.periodType})`
-            : 'No target';
-          return `${labels.get(code)?.label ?? code} target: ${target}; status: ${evaluation.status ?? 'Status decision required'}`;
-        },
-      ),
-    ];
-    return {
+    const report = {
       title: 'Digital Marketing Performance Report',
       generatedAt,
       timeZone,
@@ -161,14 +99,14 @@ export class ReportsService {
             grain: trend.grain,
             metric: labels.get(comparisonMetric)?.label ?? comparisonMetric,
             unit: labels.get(comparisonMetric)?.unit ?? 'UNAVAILABLE',
-            points: trendPoints,
+            points: trendPoints ?? [],
           }
         : null,
       caveats: result.metricMetadata
         .map((metric) => metric.aggregationNote)
         .filter((note): note is string => Boolean(note)),
-      pdf: buildPdf(lines),
     };
+    return { ...report, pdf: await renderReportPdf(report) };
   }
 
   async dashboardPdf(query: DashboardQueryDto) {
@@ -180,41 +118,4 @@ export class ReportsService {
     const { pdf: _pdf, ...preview } = await this.assemble(query);
     return preview;
   }
-}
-
-function buildPdf(lines: string[]) {
-  const content = [
-    'BT',
-    '/F1 16 Tf',
-    '50 760 Td',
-    ...lines.flatMap((line, index) => [
-      index ? '0 -22 Td' : '',
-      `/F1 ${index === 0 ? 16 : 11} Tf`,
-      `(${pdfText(line)}) Tj`,
-    ]),
-    'ET',
-  ]
-    .filter(Boolean)
-    .join('\n');
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
-    `<< /Length ${Buffer.byteLength(content) + 1} >>\nstream\n${content}\nendstream`,
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-  ];
-  let pdf = '%PDF-1.4\n';
-  const offsets = [0];
-  for (let index = 0; index < objects.length; index += 1) {
-    offsets.push(Buffer.byteLength(pdf));
-    pdf += `${index + 1} 0 obj\n${objects[index]}\nendobj\n`;
-  }
-  const startXref = Buffer.byteLength(pdf);
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets
-    .slice(1)
-    .map((offset) => `${String(offset).padStart(10, '0')} 00000 n `)
-    .join(
-      '\n',
-    )}\ntrailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF`;
-  return Buffer.from(pdf, 'binary');
 }

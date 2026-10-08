@@ -64,13 +64,9 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await page.getByLabel('Start date').fill(start.toISOString().slice(0, 10));
   await page.getByLabel('End date').fill(end.toISOString().slice(0, 10));
   await page
-    .locator('.channel-selection input[type="checkbox"]')
-    .first()
+    .getByRole('checkbox', { name: 'Social Media Marketing', exact: true })
     .check();
-  await page
-    .locator('.platform-options input[type="checkbox"]')
-    .first()
-    .check();
+  await page.getByRole('checkbox', { name: 'Facebook', exact: true }).check();
   await page.getByRole('button', { name: 'Create campaign' }).click();
   await page
     .locator('table button')
@@ -83,6 +79,16 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await page.getByRole('button', { name: 'Save campaign' }).click();
   await expect(page.locator('.detail-heading h3')).toHaveText(updatedName);
   await page.getByRole('button', { name: 'Back to campaigns' }).click();
+  const comparisonName = `${originalName} Comparison`;
+  await page.getByRole('button', { name: '+ New campaign' }).click();
+  await page.getByLabel('Campaign name').fill(comparisonName);
+  await page.getByLabel('Start date').fill(start.toISOString().slice(0, 10));
+  await page.getByLabel('End date').fill(end.toISOString().slice(0, 10));
+  await page
+    .getByRole('checkbox', { name: 'Social Media Marketing', exact: true })
+    .check();
+  await page.getByRole('checkbox', { name: 'Facebook', exact: true }).check();
+  await page.getByRole('button', { name: 'Create campaign' }).click();
   await page.getByLabel('Filter by status').selectOption('ACTIVE');
   await page.getByLabel('Search campaigns').fill(updatedName);
   await expect(page.getByRole('button', { name: updatedName })).toBeVisible();
@@ -126,6 +132,63 @@ test('authenticated user can load views and logout', async ({ page }) => {
   );
   await expect(page.locator('span.filter.muted')).toHaveText('1 records');
   await expect(page.getByRole('table').first()).toContainText(recordDate);
+
+  await page.getByRole('button', { name: 'KPI targets' }).click();
+  const definitionSelect = page.getByLabel('KPI definition');
+  const definitionOption = definitionSelect.locator('option').nth(1);
+  const definitionValue = (await definitionOption.getAttribute('value')) ?? '';
+  const definitionLabel = (await definitionOption.innerText()).trim();
+  await definitionSelect.selectOption(definitionValue);
+  await page.getByLabel('Target period').selectOption('DAILY');
+  await page.getByLabel('Target value').fill('1');
+  await page.getByLabel('Target scope').selectOption('CAMPAIGN');
+  const targetCampaign = page.getByLabel('Target campaign');
+  const targetCampaignOption = targetCampaign
+    .locator('option')
+    .filter({ hasText: updatedName });
+  await targetCampaign.selectOption(
+    (await targetCampaignOption.getAttribute('value')) ?? '',
+  );
+  await page.getByLabel('Target effective from').fill(recordDate);
+  await page.getByRole('button', { name: 'Create target' }).click();
+  const targetRow = page
+    .getByRole('row')
+    .filter({ hasText: definitionLabel })
+    .filter({ hasText: updatedName });
+  await expect(targetRow).toContainText('1');
+  await targetRow.getByRole('button', { name: 'Edit/end date' }).click();
+  await page.getByLabel('Target value').fill('2');
+  await page.getByLabel('Target effective to').fill(recordDate);
+  await page.getByRole('button', { name: 'Save target' }).click();
+  await expect(targetRow).toContainText('2');
+
+  await page.getByRole('button', { name: 'Overview' }).click();
+  await page.getByLabel('From').fill(recordDate);
+  await page.getByLabel('To').fill(recordDate);
+  const refreshedCampaignFilter = page.getByLabel('Campaign', { exact: true });
+  const refreshedCampaignOption = refreshedCampaignFilter
+    .locator('option')
+    .filter({ hasText: updatedName });
+  await refreshedCampaignFilter.selectOption(
+    (await refreshedCampaignOption.getAttribute('value')) ?? '',
+  );
+  const refreshedMetric = page.getByLabel('Metric', { exact: true });
+  const targetMetricOption = refreshedMetric
+    .locator('option')
+    .filter({ hasText: definitionLabel });
+  await refreshedMetric.selectOption(
+    (await targetMetricOption.getAttribute('value')) ?? '',
+  );
+  await page.getByLabel('Target period').selectOption('DAILY');
+  const evaluationTable = page
+    .locator('section[aria-labelledby="target-evaluations-title"]')
+    .getByRole('table');
+  await expect(evaluationTable).toContainText(definitionLabel);
+  await expect(evaluationTable).toContainText('2');
+  await expect(evaluationTable).not.toContainText(
+    'Status rule requires clarification',
+  );
+
   await page.getByRole('button', { name: 'Analytics', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Period comparison' }),
@@ -134,7 +197,25 @@ test('authenticated user can load views and logout', async ({ page }) => {
     page.getByRole('heading', { name: 'Campaign or channel comparison' }),
   ).toBeVisible();
   await expect(page.getByRole('table').first()).toBeVisible();
-  await expect(page.getByRole('table').nth(1)).toBeVisible();
+  await page.getByLabel('Compare').last().selectOption('CAMPAIGN');
+  const firstCampaign = page.getByLabel('First campaign');
+  const secondCampaign = page.getByLabel('Second campaign');
+  const firstOption = firstCampaign
+    .locator('option')
+    .filter({ hasText: updatedName });
+  await firstCampaign.selectOption(
+    (await firstOption.getAttribute('value')) ?? '',
+  );
+  const secondOption = secondCampaign
+    .locator('option')
+    .filter({ hasText: comparisonName });
+  await secondCampaign.selectOption(
+    (await secondOption.getAttribute('value')) ?? '',
+  );
+  const comparisonTable = page.getByRole('table').nth(1);
+  await expect(comparisonTable).toContainText(updatedName);
+  await expect(comparisonTable).toContainText(comparisonName);
+  await expect(comparisonTable.getByRole('row')).toHaveCount(3);
   await page.getByRole('button', { name: 'Reports', exact: true }).click();
   await expect(
     page.getByRole('heading', { level: 1, name: 'Reports' }),
@@ -145,9 +226,16 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await expect(page.getByText('Records: 1')).toBeVisible();
   const reportDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download PDF' }).click();
-  expect((await reportDownload).suggestedFilename()).toMatch(
+  const downloadedReport = await reportDownload;
+  expect(downloadedReport.suggestedFilename()).toMatch(
     /^marketing-performance-report_.*\.pdf$/,
   );
+  expect(await downloadedReport.failure()).toBeNull();
+  const downloadedPath = await downloadedReport.path();
+  expect(downloadedPath).not.toBeNull();
+  const downloadedBytes = await readFile(downloadedPath!);
+  expect(downloadedBytes.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+  expect(downloadedBytes.length).toBeGreaterThan(512);
   await page.getByRole('button', { name: 'Overview' }).click();
   await page.getByRole('button', { name: 'Performance' }).click();
   await performanceRow.getByRole('button', { name: 'Edit' }).click();
@@ -179,6 +267,164 @@ test('authenticated user can load views and logout', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('Administrator can manage the channel and platform catalogue lifecycle', async ({
+  page,
+}) => {
+  if (!process.env.E2E_EMAIL || !process.env.E2E_PASSWORD)
+    throw new Error('Catalogue E2E requires the local Administrator fixture.');
+
+  await page.goto('/');
+  await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
+  await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('h1')).toHaveText('Overview');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Channels & Platforms' }),
+  ).toBeVisible();
+
+  const suffix = Date.now().toString().slice(-8);
+  const channelName = `E2E Channel ${suffix}`;
+  const channelCode = `E2E_${suffix}`;
+  await page.getByLabel('Channel name').first().fill(channelName);
+  await page.getByLabel('Channel code').first().fill(channelCode);
+  await page.getByRole('button', { name: 'Add channel' }).click();
+
+  const channelCard = page
+    .locator('article.catalogue-channel')
+    .filter({ hasText: channelName });
+  await expect(channelCard).toContainText('Active');
+
+  const platformName = `E2E Platform ${suffix}`;
+  await page.getByLabel('Platform name').first().fill(platformName);
+  await page.getByLabel('Platform code').first().fill(`PLAT_${suffix}`);
+  const platformForm = page
+    .getByRole('heading', { name: 'Add platform' })
+    .locator('xpath=following-sibling::form[1]');
+  await platformForm.locator('select[name="channelId"]').selectOption({
+    label: channelName,
+  });
+  await platformForm.getByRole('button', { name: 'Add platform' }).click();
+  await expect(channelCard).toContainText(platformName);
+
+  await channelCard.getByRole('button', { name: 'Edit' }).first().click();
+  const renamedChannel = `${channelName} Updated`;
+  const channelEditForm = page
+    .getByRole('button', { name: 'Save channel' })
+    .locator('..');
+  await channelEditForm.getByLabel('Channel name').fill(renamedChannel);
+  await channelEditForm.getByRole('button', { name: 'Save channel' }).click();
+  const renamedCard = page
+    .locator('article.catalogue-channel')
+    .filter({ hasText: renamedChannel });
+  await expect(renamedCard).toContainText(renamedChannel);
+
+  const platformRow = renamedCard
+    .locator('.catalogue-platform')
+    .filter({ hasText: platformName });
+  await platformRow.getByRole('button', { name: 'Deactivate' }).click();
+  await expect(platformRow).toContainText('Inactive');
+  await platformRow.getByRole('button', { name: 'Reactivate' }).click();
+  await expect(platformRow).toContainText('Active');
+  await renamedCard.getByRole('button', { name: 'Deactivate' }).first().click();
+  await expect(renamedCard).toContainText('Inactive');
+});
+
+test('keyboard and mobile basics remain usable', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: 'Sign in to your workspace' }),
+  ).toBeVisible();
+
+  await page.keyboard.press('Tab');
+  const firstFocus = await page.evaluate(() => document.activeElement?.tagName);
+  expect(firstFocus).not.toBe('BODY');
+  await expect(page.getByLabel('Email address')).toBeVisible();
+  await expect(page.getByLabel('Password')).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Forgot password?' }),
+  ).toBeVisible();
+
+  await page.getByLabel('Email address').fill('missing@example.invalid');
+  await page.getByLabel('Password').fill('invalid-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('.notice.error[role="alert"]')).toContainText(
+    'Invalid email or password',
+  );
+});
+
+test('Administrator can preview, validate, and confirm a structured import', async ({
+  page,
+}) => {
+  if (!process.env.E2E_EMAIL || !process.env.E2E_PASSWORD)
+    throw new Error(
+      'Structured import E2E requires the local Administrator fixture.',
+    );
+
+  await page.goto('/');
+  await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
+  await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('h1')).toHaveText('Overview');
+  await page.goto('/imports');
+
+  const fixture = await readFile(
+    'apps/api/test-fixtures/imports/facebook-views.csv',
+    'utf8',
+  );
+  const uniqueFixture = fixture.replace(
+    '2170',
+    String(100_000 + (Date.now() % 800_000)),
+  );
+  await page.locator('input[type="file"]').setInputFiles({
+    name: `e2e-facebook-${Date.now()}.csv`,
+    mimeType: 'text/csv',
+    buffer: Buffer.from(uniqueFixture),
+  });
+  await page.getByRole('button', { name: 'Upload and preview' }).click();
+  await expect(page.getByRole('heading', { name: '2. Preview' })).toBeVisible();
+
+  const importName = `E2E Import ${Date.now()}`;
+  await page.getByLabel('Dataset/import name').fill(importName);
+
+  const platform = page
+    .locator('.import-context select')
+    .filter({ has: page.locator('option', { hasText: 'Facebook' }) })
+    .first();
+  const facebookOption = platform
+    .locator('option')
+    .filter({ hasText: 'Facebook' });
+  await platform.selectOption(
+    (await facebookOption.getAttribute('value')) ?? '',
+  );
+
+  await page.getByRole('button', { name: '+ Create new campaign' }).click();
+  const campaignName = `E2E Import Campaign ${Date.now()}`;
+  await page.getByRole('dialog').getByLabel('Campaign name').fill(campaignName);
+  await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-01');
+  await page.getByRole('dialog').getByLabel('End date').fill('2026-01-02');
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Create and return to import' })
+    .click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Validate rows' }).click();
+  await expect(
+    page.getByRole('heading', { name: '4. Validation and confirmation' }),
+  ).toBeVisible();
+  await expect(page.getByText('Accepted: 2')).toBeVisible();
+  await page.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Import completed' }),
+  ).toBeVisible();
+
+  const historyRow = page.getByRole('row').filter({ hasText: importName });
+  await expect(historyRow).toContainText('COMPLETED');
+  await expect(historyRow).toContainText('2/2 accepted');
+});
+
 test('password reset keeps the token after a retryable failure', async ({
   page,
 }) => {
@@ -194,12 +440,14 @@ test('password reset keeps the token after a retryable failure', async ({
 
   await page.goto(`/reset-password#token=${token}`);
   await expect(page).not.toHaveURL(/#token=/);
-  await page.getByLabel('New password').fill('Replacement-Passphrase-2026');
   await page
-    .getByLabel('Confirm new password')
+    .getByLabel('New password', { exact: true })
+    .fill('Replacement-Passphrase-2026');
+  await page
+    .getByLabel('Confirm new password', { exact: true })
     .fill('Replacement-Passphrase-2026');
   await page.getByRole('button', { name: 'Update password' }).click();
-  await expect(page.getByRole('alert')).toContainText(
+  await expect(page.locator('.notice.error[role="alert"]')).toContainText(
     'We could not update your password. Please try again.',
   );
   await expect(
@@ -207,7 +455,7 @@ test('password reset keeps the token after a retryable failure', async ({
   ).toBeVisible();
 
   await page.getByRole('button', { name: 'Update password' }).click();
-  await expect(page.getByRole('alert')).toContainText(
+  await expect(page.locator('.notice.error[role="alert"]')).toContainText(
     'This password reset link is invalid or has expired.',
   );
   await expect(

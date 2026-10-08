@@ -34,7 +34,8 @@ export class TargetsController {
   @Patch(':id') @Roles('ADMIN') update(
     @Param('id') id: string,
     @Body() dto: UpdateTargetDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.targets.update(id, dto);
+    return this.targets.update(id, dto, user.id);
   }
 }

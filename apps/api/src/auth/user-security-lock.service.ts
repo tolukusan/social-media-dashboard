@@ -4,7 +4,12 @@ import type { Prisma } from '../generated/prisma/client.js';
 @Injectable()
 export class UserSecurityLockService {
   async lock(tx: Prisma.TransactionClient, userId: string) {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('password-recovery:' || ${userId}, 0))`;
+    await tx.$queryRaw<Array<{ locked: boolean }>>`
+      SELECT true AS locked
+      FROM pg_advisory_xact_lock(
+        hashtextextended('user-security:' || ${userId}, 0)
+      )
+    `;
   }
 
   invalidateRecoveryTokens(

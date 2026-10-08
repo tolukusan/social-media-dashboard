@@ -27,9 +27,10 @@ process.env.TEST_DATABASE_URL = value;
 process.env.DATABASE_URL = value;
 
 async function run(args: string[]) {
-  const child = spawn(`pnpm ${args.join(' ')}`, {
+  const child = spawn(process.execPath, args, {
     stdio: 'inherit',
-    shell: process.platform === 'win32',
+    shell: false,
+    windowsHide: true,
   });
   const status: number | null = await new Promise((resolve, reject) => {
     child.once('error', reject);
@@ -41,11 +42,10 @@ async function run(args: string[]) {
     );
 }
 
-await run(['exec', 'prisma', 'migrate', 'deploy']);
-await run(['exec', 'tsx', 'prisma/seed.ts']);
+await run(['node_modules/prisma/build/index.js', 'migrate', 'deploy']);
+await run(['node_modules/tsx/dist/cli.mjs', 'prisma/seed.ts']);
 await run([
-  'exec',
-  'vitest',
+  'node_modules/vitest/vitest.mjs',
   'run',
   '--config',
   'vitest.integration.config.ts',

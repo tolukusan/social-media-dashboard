@@ -1,5 +1,10 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "noEmit": false, "outDir": "dist", "declaration": true },
-  "exclude": ["**/*.test.ts", "prisma/seed.ts"]
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": ".",
+    "declaration": true
+  },
+  "exclude": ["**/*.test.ts", "prisma", "scripts"]
 }

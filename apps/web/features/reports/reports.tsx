@@ -66,10 +66,17 @@ type ReportPreview = {
   caveats: string[];
 };
 
-function valueLabel(value: number | null, unit: string) {
+function valueLabel(
+  value: number | null,
+  unit: string,
+  currencyCode: string | null,
+) {
   if (value === null) return 'Unavailable';
   if (unit === 'PERCENT') return `${value.toFixed(2)}%`;
-  if (unit === 'CURRENCY') return `Currency unset ${value.toFixed(2)}`;
+  if (unit === 'CURRENCY')
+    return currencyCode
+      ? `${currencyCode} ${value.toFixed(2)}`
+      : `Currency unset ${value.toFixed(2)}`;
   if (unit === 'POSITION') return value.toFixed(2);
   return new Intl.NumberFormat().format(value);
 }
@@ -222,10 +229,20 @@ export function Reports({ filters }: { filters: ReportFilters }) {
                     {preview.summary.kpis.map((item) => (
                       <tr key={item.code}>
                         <th scope="row">{item.label}</th>
-                        <td>{valueLabel(item.value, item.unit)}</td>
+                        <td>
+                          {valueLabel(
+                            item.value,
+                            item.unit,
+                            preview.reportingCurrency,
+                          )}
+                        </td>
                         <td>
                           {item.target?.target
-                            ? valueLabel(item.target.target.value, item.unit)
+                            ? valueLabel(
+                                item.target.target.value,
+                                item.unit,
+                                preview.reportingCurrency,
+                              )
                             : 'No target'}
                         </td>
                         <td>
@@ -250,16 +267,19 @@ export function Reports({ filters }: { filters: ReportFilters }) {
                 {valueLabel(
                   preview.comparison.current,
                   preview.comparison.unit,
+                  preview.reportingCurrency,
                 )}
                 {' · Previous '}
                 {valueLabel(
                   preview.comparison.previous,
                   preview.comparison.unit,
+                  preview.reportingCurrency,
                 )}
                 {' · Difference '}
                 {valueLabel(
                   preview.comparison.difference,
                   preview.comparison.unit,
+                  preview.reportingCurrency,
                 )}
                 {' · Change '}
                 {preview.comparison.percentageChange === null
@@ -287,7 +307,13 @@ export function Reports({ filters }: { filters: ReportFilters }) {
                     {preview.trend.points.map((point) => (
                       <tr key={point.bucket}>
                         <th scope="row">{point.bucket}</th>
-                        <td>{valueLabel(point.value, preview.trend!.unit)}</td>
+                        <td>
+                          {valueLabel(
+                            point.value,
+                            preview.trend!.unit,
+                            preview.reportingCurrency,
+                          )}
+                        </td>
                       </tr>
                     ))}
                     {!preview.trend.points.length && (

@@ -41,10 +41,7 @@ export function ResetPassword() {
       reset();
       setComplete(true);
     } catch (cause) {
-      if (
-        cause instanceof ApiError &&
-        cause.code === 'RECOVERY_LINK_INVALID'
-      )
+      if (cause instanceof ApiError && cause.code === 'RECOVERY_LINK_INVALID')
         setToken('');
       setError(
         cause instanceof ApiError

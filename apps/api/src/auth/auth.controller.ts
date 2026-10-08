@@ -21,6 +21,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { RecoverPasswordDto } from './dto/recover-password.dto.js';
 import { PasswordRecoveryService } from './password-recovery.service.js';
+import { ChangeOwnPasswordDto } from './dto/change-own-password.dto.js';
 
 @Controller('auth')
 export class AuthController {
@@ -60,6 +61,13 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     return this.recovery.reset(dto, request, response);
+  }
+  @Patch('password') changeOwnPassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangeOwnPasswordDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.auth.changeOwnPassword(user.id, dto, response);
   }
   @Post('logout') logout(
     @Req() request: Request,

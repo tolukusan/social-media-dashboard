@@ -1,43 +1,54 @@
 # Remaining work
 
-Follow [completion execution order and ledger](docs/plans/completion/README.md), [progress](docs/evidence/IMPLEMENTATION_PROGRESS.md), [acceptance baseline](docs/plans/completion/acceptance-matrix.md) and [blockers](BLOCKERS.md).
+Completed implementation is recorded in the [completion ledger](docs/plans/completion/README.md) and [implementation progress](docs/evidence/IMPLEMENTATION_PROGRESS.md). The current authorised action plan is the [remote review follow-up](docs/plans/completion/review-follow-up.md). Remaining work includes acceptance gaps found in that review as well as verification and external evidence.
 
-Completed work is recorded in the ledger above. This checklist contains only outstanding items.
+## Current execution handoff — 2026-10-08
 
-## Review findings
+The stakeholder first asked for a read-only review of the AI-generated continuation prompt, then authorised proceeding with the review recommendations. Work is now underway locally on `chatgpt/pdfkit-renderer`, based on remote commit `d76e0a6f31d85bf4fa4d8692a0befe14eec50e96`.
 
-- [ ] **High priority — F10:** Login and recovery now validate the configured application Origin. Extend the same strict allowed/disallowed/missing-Origin coverage to the remaining unsafe authenticated mutations and verify the full route matrix.
-- [ ] **F09:** Fix Reports currency formatting to use the backend-provided reporting currency when configured; retain the unset label only when no currency is configured.
-- [ ] **F09:** Replace the single-page PDF renderer with a maintained server-side library. Add wrapping, pagination, non-ASCII font support, and an embedded trend chart; inspect a sample PDF and verify long reports retain all content. Dependency installation is blocked by NVM4306.
+**The original AI-generated prompt is superseded by the bounded review follow-up plan. Do not execute it again as a separate task.** Its useful steps—inspect CI, fix genuine failures, reconcile evidence and prepare a PR—are already included below. Its instruction to continue until CI is green does not override acceptance requirements or repository stop conditions. No merge or external deployment is authorised.
 
-## Completion plan
+### Already performed in this follow-up
 
-- [ ] **Password recovery:** The [email recovery flow](docs/plans/password-recovery.md) is implemented. Run the full local verification matrix and configure an authorised SMTP provider before claiming actual inbox delivery.
-- [ ] **F02:** Finish Tailwind setup after the approved project-local dependency installation path is available.
-- [ ] **F07/F08:** Add Recharts plots to Overview and Analytics, preserving null gaps and accessible tables. Verify desktop/mobile layout and filter changes.
-- [ ] **F08:** Extend browser coverage for target create/edit/end-date and dashboard status refresh, plus campaign/channel comparison values.
-- [ ] **F10:** Complete the route/action authorization matrix, required audit events, session cleanup, and security verification.
-- [ ] **F11:** Complete the cross-role journey, catalogue lifecycle and import regression coverage, keyboard/accessibility checks, and realistic authenticated load testing.
-- [ ] **F11:** Prepare usability tasks and collect actual participant feedback; record participant availability honestly.
-- [ ] **R03:** Finish imports UI extraction after meaningful import workflow coverage is in place.
-- [ ] **F12:** Finish current user/developer guides, deterministic demo data/script, isolated backup/restore evidence, and the deployment runbook.
-- [ ] **R05:** Reconcile active documentation links, acceptance evidence, progress, and the final repository handoff.
-- [ ] **M12:** Deploy only after an external environment is available and deployment is explicitly authorised.
+- Reviewed the remote branch, changed implementation, workflow and approved completion criteria; preserved the local untracked root `.env.example`.
+- Fetched the continuation and switched to a local `chatgpt/pdfkit-renderer` branch without discarding user files.
+- Installed the branch dependencies project-locally; Prisma generation and isolated-test-database preparation passed.
+- Fixed PDF chart/text cursor handling and page-width calculation; added single-value/unavailable trend explanations and visible isolated chart points.
+- Added development-only PDF.js parsing and three rendered-PDF regression tests. `pnpm --filter @smd/api exec vitest run src/reports/pdf-renderer.test.ts` passed: 3 tests, covering Unicode/values/targets/post-chart bounds, long-report pagination/final content, and zero versus missing trend values.
+- Added the PDFKit renderer/font ADR and recorded the stakeholder's explicit approval of both existing own-password and `NO_DATA` precedence decisions. See [approval provenance](docs/governance/completion-decisions-2026-10-07.md).
 
-## Decisions and dependencies
+The verified follow-up changes are pushed to `chatgpt/pdfkit-renderer` and the existing draft PR #2 head branch. The exact-code PostgreSQL 18 CI run is recorded below; human and external acceptance items remain separate.
 
-- [ ] Restore the approved pnpm dependency installation path; Tailwind, Recharts, and the PDF library are currently blocked by NVM4306.
-- [ ] **F03:** Resolve current-password verification and session revocation policy for own-password changes, then implement the approved flow.
-- [ ] **F06a:** Supply an approved deployment `REPORTING_CURRENCY` value.
-- [ ] **F06c:** Resolve status precedence when both actual data and an applicable target are missing, then update evaluation and verification.
-- [ ] **F00:** Resolve historical import scope-promotion provenance; preserve existing imports and formats while unresolved.
+### Remaining action plan, in execution order
 
-Local execution is authorised. Follow the task dependencies, verify each coherent change, and continue independent work when a narrow dependency is blocked.
+- [x] **F09 — automated PDF acceptance:** three rendered-PDF tests pass, including actual vector paths, Unicode, post-chart text bounds, long-report pagination/final content and zero/missing trends. PDFKit ADR added. Human target-environment visual review remains below.
+- [x] **F01 — CI verification:** [run #37714435674](https://github.com/tolukusan/social-media-dashboard/actions/runs/37714435674) passed all workflow steps on commit `495b5ef` in 5m7s, including PostgreSQL 18 setup, lint, typecheck, unit/integration tests, build, all E2E journeys, isolated restore, authenticated load, and documentation formatting. Run #53 remains cancelled historical evidence. GitHub emitted a non-failing Node 20 action deprecation notice while forcing the listed v4 actions onto Node 24.
+- [x] **F10 — real HTTP authorization matrix:** 25 new route/read/logout cases pass through session/Origin/CSRF guards, including imports and all existing protected write-role combinations. Domain/recovery/user/audit fingerprints remain unchanged on denied writes. Full isolated integration result: 34 tests passed across 3 files. Metadata coverage is retained.
+- [x] **F11 — representative load verification:** the 2026-10-08 run passed authenticated 25-user mixed traffic for 30 seconds (532 requests, p95 396.98 ms, zero failures) and separate PDF warm-up/measured phases (30 measured requests, p95 236.68 ms, zero failures). Temporary fixtures/credentials were removed and the API stopped. The earlier four-phase result and cold-PDF p95 1,065.20 ms/burst p95 6.93 seconds remain diagnostic context; these short local runs do not establish production capacity. See [evidence](docs/evidence/review-follow-up-verification.md).
+- [x] **F12 — restore verification:** the local PostgreSQL 18 run passed all-table content fingerprints/counts, restored API health, authentication, campaign and filtered analytics reads. Its unique restore database, backup, API and source fixtures were removed. Non-sensitive runtime results are recorded in the verification evidence.
+- [x] **R05 — reconcile documentation:** removed stale package blockers from current status, updated acceptance/progress/ledger/blockers, kept the historical baseline intact, and separated local, CI, human-evidence and deployment status. Linked policy approvals and PDF ADR.
+- [x] **Browser regression:** both campaign setups select the seeded `Social Media Marketing` channel and `Facebook` platform. The target edit locator is scoped to the unique campaign so prior isolated-run data cannot match another KPI target. `pnpm --filter @smd/api test:e2e` passed all 7 journeys, including the PDF download. The first rerun exposed an ambiguous import-status locator, which was narrowed to the completion notice; the next rerun exposed a target-row match against persisted fixture data, which was scoped by campaign. See [verification evidence](docs/evidence/review-follow-up-verification.md).
+- [x] **Final local checks (2026-10-08):** documentation format and 223 active relative links, lint, typecheck, 42 unit tests, 34 isolated PostgreSQL integration tests, production build, all 7 Playwright journeys, PostgreSQL 18 isolated restore, and authenticated load phases passed. No schema or migration changes. The same checks plus CI artifacts passed on commit `495b5ef` in run #37714435674.
+- [x] **Final remote verification and PR:** reviewed, committed as `495b5ef`, pushed to the continuation branch, and fast-forwarded the existing draft PR #2 head branch to the same commit. Its CI passed as [run #37714435674](https://github.com/tolukusan/social-media-dashboard/actions/runs/37714435674). PR #2 remains draft and open; it was not merged.
 
-Read [AGENTS.md](AGENTS.md) and the selected task's references before editing. Preserve the general-purpose product decision, existing data and imports. Retain the [local operating restrictions](.ai/LOCAL_OPERATING_RESTRICTIONS.md). Never write credentials here.
+### Timing and resumption
 
-## Documentation maintenance
+Continue the numbered work above in this authorised session while capacity is available. CI runs after the relevant changes are committed/pushed; evidence reconciliation and the reviewable PR follow verification. Human/external tasks below wait for their actual prerequisites and are not scheduled or claimed complete.
 
-Use the [documentation index](docs/README.md) and [agent guidance index](.ai/README.md) to find current material. Update affected guides with each implementation task; archive superseded documents using the [version archive policy](docs/README.md#keeping-documentation-current). Keep this checklist limited to outstanding work and record completion evidence in the existing ledger.
+If session capacity expires, resume from the first unchecked item after inspecting `git status`, this handoff, the follow-up plan and the latest CI run. Preserve all uncommitted work. Do not restart completed work or replay the original prompt. No fixed completion time or automatic continuation after a usage reset is promised.
 
-Keep curated historical documentation under docs/archive rather than accumulating recovery snapshots in the project root.
+## Verification and external evidence
+
+- [x] Run the PostgreSQL-backed CI verification successfully: [run #37714435674](https://github.com/tolukusan/social-media-dashboard/actions/runs/37714435674) passed lint, typecheck, unit, integration, build, Playwright, isolated backup/restore, authenticated k6 load, and documentation formatting on commit `495b5ef`.
+- [ ] **F09:** perform a human visual review of a deliberately long generated PDF to confirm pagination, wrapping, chart placement, and extended-character rendering in the target environment.
+- [ ] **Password recovery:** verify actual inbox delivery with an authorised SMTP provider/sender.
+- [ ] **F11:** conduct the prepared usability tasks with real participants and record genuine findings.
+- [ ] **F06a:** supply the deploying organisation's approved `REPORTING_CURRENCY`.
+- [ ] **F00:** locate or formally resolve the historical import scope-promotion provenance; preserve the existing feature/formats meanwhile.
+- [ ] **M12:** deploy only when an external environment is supplied and deployment is explicitly authorised.
+
+## Completed in the current TODO pass
+
+The preceding remote AI pass introduced Tailwind setup, Recharts visualisations with accessible tables and null gaps, PDFKit rendering, strict Origin enforcement, authorization metadata coverage, administration audit events, stale-session cleanup, secure own-password change, deterministic `NO_DATA` precedence, Reports currency formatting, expanded browser coverage, authenticated load tooling, Imports feature extraction, demo data, guides, backup/restore procedure, deployment runbook and usability-test preparation. These are implementation claims; the review follow-up above closes identified acceptance gaps before release completion is claimed.
+
+Never commit credentials or invent external verification evidence.

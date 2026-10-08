@@ -64,20 +64,30 @@ export class ChannelsService {
       displayOrder: mapping.displayOrder,
     }));
   }
-  createChannel(dto: CreateChannelDto) {
-    return this.prisma.marketingChannel
-      .create({
-        data: {
-          code: required(dto.code, 'Code', 50).toUpperCase(),
-          name: required(dto.name, 'Name', 120),
-          description: dto.description?.trim(),
-        },
+  createChannel(dto: CreateChannelDto, actorId: string) {
+    const data = {
+      code: required(dto.code, 'Code', 50).toUpperCase(),
+      name: required(dto.name, 'Name', 120),
+      description: dto.description?.trim(),
+    };
+    return this.prisma
+      .$transaction(async (tx) => {
+        const channel = await tx.marketingChannel.create({ data });
+        await tx.auditLog.create({
+          data: {
+            actorUserId: actorId,
+            action: 'CHANNEL_CREATED',
+            entityType: 'MarketingChannel',
+            entityId: channel.id,
+          },
+        });
+        return channel;
       })
       .catch((error: unknown) =>
         uniqueConflict(error, 'CHANNEL_CODE_EXISTS', 'Channel code'),
       );
   }
-  async deactivateChannel(id: string) {
+  async deactivateChannel(id: string, actorId: string) {
     const found = await this.prisma.marketingChannel.findUnique({
       where: { id },
     });
@@ -86,16 +96,27 @@ export class ChannelsService {
         code: 'CHANNEL_NOT_FOUND',
         message: 'Channel not found',
       });
-    return this.prisma.marketingChannel
-      .update({
-        where: { id },
-        data: { active: false, archivedAt: new Date() },
+    return this.prisma
+      .$transaction(async (tx) => {
+        const channel = await tx.marketingChannel.update({
+          where: { id },
+          data: { active: false, archivedAt: new Date() },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorUserId: actorId,
+            action: 'CHANNEL_DEACTIVATED',
+            entityType: 'MarketingChannel',
+            entityId: id,
+          },
+        });
+        return channel;
       })
       .catch((error: unknown) =>
         uniqueConflict(error, 'CHANNEL_CODE_EXISTS', 'Channel code'),
       );
   }
-  async updateChannel(id: string, dto: UpdateCatalogueDto) {
+  async updateChannel(id: string, dto: UpdateCatalogueDto, actorId: string) {
     const found = await this.prisma.marketingChannel.findUnique({
       where: { id },
     });
@@ -105,24 +126,35 @@ export class ChannelsService {
         message: 'Channel not found',
       });
     const active = dto.active ?? found.active;
-    return this.prisma.marketingChannel.update({
-      where: { id },
-      data: {
-        ...(dto.name === undefined
-          ? {}
-          : { name: required(dto.name, 'Name', 120) }),
-        ...(dto.code === undefined
-          ? {}
-          : { code: required(dto.code, 'Code', 50).toUpperCase() }),
-        ...(dto.description === undefined
-          ? {}
-          : { description: dto.description.trim() }),
-        active,
-        archivedAt: active ? null : (found.archivedAt ?? new Date()),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const channel = await tx.marketingChannel.update({
+        where: { id },
+        data: {
+          ...(dto.name === undefined
+            ? {}
+            : { name: required(dto.name, 'Name', 120) }),
+          ...(dto.code === undefined
+            ? {}
+            : { code: required(dto.code, 'Code', 50).toUpperCase() }),
+          ...(dto.description === undefined
+            ? {}
+            : { description: dto.description.trim() }),
+          active,
+          archivedAt: active ? null : (found.archivedAt ?? new Date()),
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actorId,
+          action: active ? 'CHANNEL_UPDATED' : 'CHANNEL_DEACTIVATED',
+          entityType: 'MarketingChannel',
+          entityId: id,
+        },
+      });
+      return channel;
     });
   }
-  async createPlatform(dto: CreatePlatformDto) {
+  async createPlatform(dto: CreatePlatformDto, actorId: string) {
     const channel = await this.prisma.marketingChannel.findUnique({
       where: { id: dto.channelId },
     });
@@ -136,14 +168,24 @@ export class ChannelsService {
         code: 'CHANNEL_INACTIVE',
         message: 'Platform cannot be added to an inactive channel',
       });
-    return this.prisma.platform
-      .create({
-        data: {
-          channelId: dto.channelId,
-          code: required(dto.code, 'Code', 50).toUpperCase(),
-          name: required(dto.name, 'Name', 120),
-          description: dto.description?.trim(),
-        },
+    const data = {
+      channelId: dto.channelId,
+      code: required(dto.code, 'Code', 50).toUpperCase(),
+      name: required(dto.name, 'Name', 120),
+      description: dto.description?.trim(),
+    };
+    return this.prisma
+      .$transaction(async (tx) => {
+        const platform = await tx.platform.create({ data });
+        await tx.auditLog.create({
+          data: {
+            actorUserId: actorId,
+            action: 'PLATFORM_CREATED',
+            entityType: 'Platform',
+            entityId: platform.id,
+          },
+        });
+        return platform;
       })
       .catch((error: unknown) =>
         uniqueConflict(error, 'PLATFORM_CODE_EXISTS', 'Platform code'),
@@ -156,19 +198,30 @@ export class ChannelsService {
       orderBy: { name: 'asc' },
     });
   }
-  async deactivatePlatform(id: string) {
+  async deactivatePlatform(id: string, actorId: string) {
     const found = await this.prisma.platform.findUnique({ where: { id } });
     if (!found)
       throw new NotFoundException({
         code: 'PLATFORM_NOT_FOUND',
         message: 'Platform not found',
       });
-    return this.prisma.platform.update({
-      where: { id },
-      data: { active: false, archivedAt: new Date() },
+    return this.prisma.$transaction(async (tx) => {
+      const platform = await tx.platform.update({
+        where: { id },
+        data: { active: false, archivedAt: new Date() },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actorId,
+          action: 'PLATFORM_DEACTIVATED',
+          entityType: 'Platform',
+          entityId: id,
+        },
+      });
+      return platform;
     });
   }
-  async updatePlatform(id: string, dto: UpdateCatalogueDto) {
+  async updatePlatform(id: string, dto: UpdateCatalogueDto, actorId: string) {
     const found = await this.prisma.platform.findUnique({ where: { id } });
     if (!found)
       throw new NotFoundException({
@@ -196,24 +249,35 @@ export class ChannelsService {
         });
     }
     const active = dto.active ?? found.active;
-    return this.prisma.platform
-      .update({
-        where: { id },
-        data: {
-          channelId,
-          ...(dto.name === undefined
-            ? {}
-            : { name: required(dto.name, 'Name', 120) }),
-          ...(dto.code === undefined
-            ? {}
-            : { code: required(dto.code, 'Code', 50).toUpperCase() }),
-          ...(dto.description === undefined
-            ? {}
-            : { description: dto.description.trim() }),
-          active,
-          archivedAt: active ? null : (found.archivedAt ?? new Date()),
-        },
-        include: { channel: true },
+    return this.prisma
+      .$transaction(async (tx) => {
+        const platform = await tx.platform.update({
+          where: { id },
+          data: {
+            channelId,
+            ...(dto.name === undefined
+              ? {}
+              : { name: required(dto.name, 'Name', 120) }),
+            ...(dto.code === undefined
+              ? {}
+              : { code: required(dto.code, 'Code', 50).toUpperCase() }),
+            ...(dto.description === undefined
+              ? {}
+              : { description: dto.description.trim() }),
+            active,
+            archivedAt: active ? null : (found.archivedAt ?? new Date()),
+          },
+          include: { channel: true },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorUserId: actorId,
+            action: active ? 'PLATFORM_UPDATED' : 'PLATFORM_DEACTIVATED',
+            entityType: 'Platform',
+            entityId: id,
+          },
+        });
+        return platform;
       })
       .catch((error: unknown) =>
         uniqueConflict(error, 'PLATFORM_CODE_EXISTS', 'Platform code'),

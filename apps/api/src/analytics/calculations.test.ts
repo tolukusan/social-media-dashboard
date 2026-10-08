@@ -186,6 +186,7 @@ describe('target resolution', () => {
   });
 
   it('returns neutral status values for missing data and targets', () => {
+    assert.equal(targetStatus(null, null), 'NO_DATA');
     assert.equal(targetStatus(4, null), 'NO_TARGET');
     assert.equal(
       targetStatus(8, {

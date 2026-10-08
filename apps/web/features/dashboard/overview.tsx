@@ -3,6 +3,7 @@
 import { Kpi } from './kpi';
 import { CampaignTable } from '../campaigns/campaign-table';
 import { Empty } from '../../components/empty';
+import { TrendLineChart } from '../analytics/charts';
 import { formatKpi, formatNumber } from '../../lib/format';
 import type {
   View,
@@ -408,42 +409,54 @@ export function Overview({
             }
           />
         ) : (
-          <div className="table-scroll">
-            <table>
-              <caption className="sr-only">
-                {chartMetadata?.label ?? 'Aggregated daily reach'} trend values
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Period starting</th>
-                  <th scope="col">
-                    {chartMetadata?.label ?? 'Aggregated reach'}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {trends.points.map((point) => {
-                  const value = point.kpis[chartMetric];
-                  const formatted =
-                    value == null
-                      ? 'Unavailable'
-                      : chartMetadata?.unit === 'COUNT'
-                        ? new Intl.NumberFormat().format(value)
-                        : chartMetadata?.unit === 'PERCENT'
-                          ? `${value.toFixed(2)}%`
-                          : chartMetadata?.unit === 'CURRENCY'
-                            ? `${result?.reportingContext.currencyCode ?? 'Currency unset'} ${value.toFixed(2)}`
-                            : String(value);
-                  return (
-                    <tr key={point.bucket}>
-                      <td>{point.bucket}</td>
-                      <td>{formatted}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <TrendLineChart
+              points={trends.points.map((point) => ({
+                bucket: point.bucket,
+                value: point.kpis[chartMetric] ?? null,
+              }))}
+              label={chartMetadata?.label ?? chartMetric}
+              unit={chartMetadata?.unit ?? 'DECIMAL'}
+              currencyCode={result?.reportingContext.currencyCode}
+            />
+            <div className="table-scroll">
+              <table>
+                <caption className="sr-only">
+                  {chartMetadata?.label ?? 'Aggregated daily reach'} trend
+                  values
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Period starting</th>
+                    <th scope="col">
+                      {chartMetadata?.label ?? 'Aggregated reach'}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trends.points.map((point) => {
+                    const value = point.kpis[chartMetric];
+                    const formatted =
+                      value == null
+                        ? 'Unavailable'
+                        : chartMetadata?.unit === 'COUNT'
+                          ? new Intl.NumberFormat().format(value)
+                          : chartMetadata?.unit === 'PERCENT'
+                            ? `${value.toFixed(2)}%`
+                            : chartMetadata?.unit === 'CURRENCY'
+                              ? `${result?.reportingContext.currencyCode ?? 'Currency unset'} ${value.toFixed(2)}`
+                              : String(value);
+                    return (
+                      <tr key={point.bucket}>
+                        <td>{point.bucket}</td>
+                        <td>{formatted}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
       <section className="panel">

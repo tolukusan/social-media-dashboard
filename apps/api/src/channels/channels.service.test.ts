@@ -4,7 +4,7 @@ import { ChannelsService } from './channels.service.js';
 
 test('platform catalogue creates a platform under an active channel', async () => {
   let created: Record<string, unknown> | undefined;
-  const service = new ChannelsService({
+  const db = {
     marketingChannel: {
       findUnique: async () => ({ id: 'channel-1', active: true }),
     },
@@ -14,13 +14,21 @@ test('platform catalogue creates a platform under an active channel', async () =
         return { id: 'platform-1', ...data };
       },
     },
+    auditLog: { create: async () => ({}) },
+  };
+  const service = new ChannelsService({
+    ...db,
+    $transaction: async (work: (tx: typeof db) => unknown) => work(db),
   } as never);
 
-  const result = await service.createPlatform({
-    channelId: 'channel-1',
-    code: ' linkedIn ',
-    name: ' LinkedIn ',
-  });
+  const result = await service.createPlatform(
+    {
+      channelId: 'channel-1',
+      code: ' linkedIn ',
+      name: ' LinkedIn ',
+    },
+    'admin-1',
+  );
 
   assert.equal(result.id, 'platform-1');
   assert.deepEqual(created, {
@@ -33,7 +41,7 @@ test('platform catalogue creates a platform under an active channel', async () =
 
 test('platform catalogue deactivation is reversible without deleting the row', async () => {
   let updated: Record<string, unknown> | undefined;
-  const service = new ChannelsService({
+  const db = {
     platform: {
       findUnique: async () => ({
         id: 'platform-1',
@@ -49,9 +57,14 @@ test('platform catalogue deactivation is reversible without deleting the row', a
     marketingChannel: {
       findUnique: async () => ({ id: 'channel-1', active: true }),
     },
+    auditLog: { create: async () => ({}) },
+  };
+  const service = new ChannelsService({
+    ...db,
+    $transaction: async (work: (tx: typeof db) => unknown) => work(db),
   } as never);
 
-  await service.updatePlatform('platform-1', { active: false });
+  await service.updatePlatform('platform-1', { active: false }, 'admin-1');
   assert.equal(updated?.active, false);
   assert.ok(updated?.archivedAt);
 });
@@ -78,7 +91,7 @@ test('platform with campaign references cannot be moved between channels', async
   } as never);
 
   await assert.rejects(
-    service.updatePlatform('platform-1', { channelId: 'channel-2' }),
+    service.updatePlatform('platform-1', { channelId: 'channel-2' }, 'admin-1'),
     (error: unknown) =>
       Boolean(
         error &&

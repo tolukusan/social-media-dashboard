@@ -75,11 +75,22 @@ try {
 
 const testUrl = new URL(base);
 testUrl.pathname = `/${name}`;
+testUrl.searchParams.delete('schema');
+
+const schemaClient = new Client({ connectionString: testUrl.toString() });
+try {
+  await schemaClient.connect();
+  await schemaClient.query('CREATE SCHEMA "social_media_dashboard"');
+} finally {
+  await schemaClient.end().catch(() => undefined);
+}
+
+testUrl.searchParams.set('schema', 'social_media_dashboard');
 await writeFile(
   '.test-database',
   `DATABASE_URL=${JSON.stringify(testUrl.toString())}\n`,
   { encoding: 'utf8', mode: 0o600, flag: 'wx' },
 );
 console.log(
-  'Created an isolated PostgreSQL test database. Its URL is stored in ignored apps/api/.test-database; no existing database was reset or modified.',
+  'Created an isolated PostgreSQL test database and application schema. Its URL is stored in ignored apps/api/.test-database; no existing database was reset or modified.',
 );
