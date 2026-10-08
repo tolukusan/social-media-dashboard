@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthLoading, Login } from '../features/auth/login';
+import { useSession } from '../features/auth/use-session';
+import Link from 'next/link';
 import { Campaigns } from '../features/campaigns/campaigns';
 import { Performance } from '../features/performance/performance';
 import { Overview } from '../features/dashboard/overview';
@@ -20,25 +22,13 @@ import type {
   Campaign,
   Channel,
   PerformanceRecord,
-  CurrentUser,
   TrendResult,
 } from '../lib/workspace-types';
 import { ApiError, apiRequest, queryKeys } from '../lib/api-client';
 
 export function WorkspaceShell() {
   const queryClient = useQueryClient();
-  const sessionQuery = useQuery({
-    queryKey: queryKeys.session,
-    refetchOnWindowFocus: true,
-    queryFn: async () => {
-      try {
-        return await apiRequest<CurrentUser>('/auth/me');
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) return null;
-        throw error;
-      }
-    },
-  });
+  const sessionQuery = useSession();
   const currentUser = sessionQuery.data ?? null;
   const authStatus: AuthStatus = sessionQuery.isPending
     ? 'checking'
@@ -48,6 +38,28 @@ export function WorkspaceShell() {
   const [authError, setAuthError] = useState('');
   const identityRef = useRef<string | null>(null);
   const [view, setView] = useState<View>('overview');
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const roleCode = currentUser?.role.code;
+  useEffect(() => {
+    const restoreView = () => {
+      const next = window.location.hash.slice(1);
+      const allowed = [
+        'overview',
+        'campaigns',
+        'performance',
+        'analytics',
+        'targets',
+        'reports',
+        'profile',
+        ...(roleCode === 'ADMIN' ? ['settings', 'users'] : []),
+      ];
+      setView(allowed.includes(next) ? (next as View) : 'overview');
+      setNavigationOpen(false);
+    };
+    restoreView();
+    window.addEventListener('hashchange', restoreView);
+    return () => window.removeEventListener('hashchange', restoreView);
+  }, [roleCode]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [campaignFilter, setCampaignFilter] = useState('');
@@ -155,16 +167,32 @@ export function WorkspaceShell() {
       />
     );
 
-  const navigate = (next: View) => setView(next);
+  const navigate = (next: View) => {
+    setView(next);
+    setNavigationOpen(false);
+    window.location.hash = next;
+  };
   return (
     <main className="shell">
-      <aside className="sidebar">
+      <a
+        className="skip-link"
+        href="#workspace-content"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById('workspace-content')?.focus();
+        }}
+      >
+        Skip to content
+      </a>
+      <aside
+        id="workspace-navigation"
+        className={`sidebar${navigationOpen ? ' navigation-open' : ''}`}
+      >
         <div className="brand">
           <span className="brand-mark">M</span>
           <span>Marketwise</span>
         </div>
         <nav aria-label="Primary navigation">
-          <a href="/imports">Imports</a>
           {(
             [
               ['overview', 'Overview'],
@@ -185,11 +213,13 @@ export function WorkspaceShell() {
             <button
               key={id}
               className={view === id ? 'active' : ''}
+              aria-current={view === id ? 'page' : undefined}
               onClick={() => navigate(id)}
             >
               {label}
             </button>
           ))}
+          <Link href="/imports">Imports</Link>
         </nav>
         <div className="sidebar-footer">
           <span className="avatar">
@@ -218,8 +248,17 @@ export function WorkspaceShell() {
           </button>
         </div>
       </aside>
-      <section className="content">
+      <section id="workspace-content" className="content" tabIndex={-1}>
         <header className="topbar">
+          <button
+            type="button"
+            className="secondary navigation-toggle"
+            aria-controls="workspace-navigation"
+            aria-expanded={navigationOpen}
+            onClick={() => setNavigationOpen((open) => !open)}
+          >
+            {navigationOpen ? 'Close menu' : 'Menu'}
+          </button>
           <div>
             <p className="eyebrow">Digital marketing performance</p>
             <h1>
@@ -229,9 +268,13 @@ export function WorkspaceShell() {
                   ? 'Performance data'
                   : view === 'users'
                     ? 'Users'
-                    : view === 'settings'
-                      ? 'Settings'
-                      : view[0].toUpperCase() + view.slice(1)}
+                    : view === 'targets'
+                      ? 'KPI targets'
+                      : view === 'profile'
+                        ? 'My profile'
+                        : view === 'settings'
+                          ? 'Settings'
+                          : view[0].toUpperCase() + view.slice(1)}
             </h1>
           </div>
         </header>

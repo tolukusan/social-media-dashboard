@@ -131,7 +131,11 @@ export function Campaigns({
       ) : (
         <Empty
           title="No campaigns found"
-          detail="Campaigns created through the API will appear here."
+          detail={
+            canCreate
+              ? 'Choose New campaign to create your first campaign.'
+              : 'Campaigns will appear here when your marketing team creates them.'
+          }
         />
       )}
     </section>

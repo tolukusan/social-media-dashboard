@@ -8,8 +8,15 @@ import {
   type FormEvent,
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ApiError, apiRequest } from '../../lib/api-client';
-import { invalidateWorkspace } from '../../lib/api-client';
+import {
+  ApiError,
+  apiRequest,
+  invalidateWorkspace,
+  queryKeys,
+} from '../../lib/api-client';
+import { useSession } from '../auth/use-session';
+import type { CurrentUser } from '../../lib/workspace-types';
+import Link from 'next/link';
 
 const destinations = [
   ['recordDate', 'Record date'],
@@ -66,7 +73,6 @@ type Channel = {
   active?: boolean;
   platforms: Array<{ id: string; name: string; active?: boolean }>;
 };
-type CurrentUser = { id: string };
 type HistoryItem = {
   id: string;
   displayName?: string | null;
@@ -247,8 +253,10 @@ function previewValue(value: unknown, destination?: string) {
 
 export function Imports() {
   const queryClient = useQueryClient();
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const sessionQuery = useSession();
+  const currentUser = sessionQuery.data ?? null;
+  const userId = currentUser?.id;
+  const authenticated = sessionQuery.isPending ? null : Boolean(currentUser);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
@@ -269,6 +277,9 @@ export function Imports() {
   const [campaignToCreate, setCampaignToCreate] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [result, setResult] = useState<Result | null>(null);
+  const [validatedConfiguration, setValidatedConfiguration] = useState<
+    string | null
+  >(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -277,13 +288,10 @@ export function Imports() {
     useState<Preview['matchingTemplate']>();
 
   useEffect(() => {
+    if (!userId) return;
     let active = true;
     const load = async () => {
       try {
-        const user = await apiRequest<CurrentUser>('/auth/me');
-        if (!active) return;
-        setCurrentUser(user);
-        setAuthenticated(true);
         const [nextCampaigns, nextPlatforms, nextChannels, nextHistory] =
           await Promise.all([
             apiRequest<Campaign[]>('/campaigns'),
@@ -298,10 +306,13 @@ export function Imports() {
         setHistory(nextHistory);
       } catch (cause) {
         if (!active) return;
-        if (cause instanceof ApiError && cause.status === 401)
-          setAuthenticated(false);
-        else {
-          setAuthenticated(false);
+        if (cause instanceof ApiError && cause.status === 401) {
+          await queryClient.cancelQueries({ queryKey: queryKeys.session });
+          queryClient.removeQueries({
+            predicate: (query) => query.queryKey[0] !== queryKeys.session[0],
+          });
+          queryClient.setQueryData(queryKeys.session, null);
+        } else {
           setError(
             cause instanceof Error
               ? cause.message
@@ -314,9 +325,21 @@ export function Imports() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [userId, queryClient]);
 
   const previewRows = useMemo(() => preview?.sampleRows ?? [], [preview]);
+  const configuration = JSON.stringify({
+    batchId: preview?.id,
+    mapping,
+    displayNames,
+    displayName,
+    campaignId,
+    campaignMappings,
+    datasetAction,
+    platformId,
+    selectedSheet,
+  });
+  const validationCurrent = validatedConfiguration === configuration;
   const hasCampaignContext =
     Boolean(campaignId) ||
     (preview?.campaignValues.length
@@ -333,6 +356,20 @@ export function Imports() {
   );
   const upload = async () => {
     if (!file) return;
+    if (!/\.(csv|json|xlsx)$/i.test(file.name)) {
+      setError(
+        file.name.toLowerCase().endsWith('.xls')
+          ? 'This is an older Excel (.xls) file. Open it in Excel or LibreOffice and save a copy as .xlsx, then upload that copy. Renaming the extension does not convert the file.'
+          : 'Choose a CSV, JSON, or XLSX file.',
+      );
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError(
+        'This file exceeds 10 MB. Export a smaller date range and try again.',
+      );
+      return;
+    }
     setBusy(true);
     setError('');
     setMessage('');
@@ -373,6 +410,7 @@ export function Imports() {
 
   const validate = async () => {
     if (!preview) return;
+    setValidatedConfiguration(null);
     setBusy(true);
     setError('');
     setMessage('');
@@ -398,6 +436,7 @@ export function Imports() {
         },
       });
       setResult(data);
+      setValidatedConfiguration(configuration);
       setMessage(
         data.status === 'READY'
           ? 'Validation completed. Review conflicts before confirming.'
@@ -415,6 +454,7 @@ export function Imports() {
       !preview ||
       !result ||
       result.status !== 'READY' ||
+      !validationCurrent ||
       preview.duplicateCompleted
     )
       return;
@@ -460,9 +500,9 @@ export function Imports() {
           <p className="auth-copy">
             Return to the workspace and sign in before importing data.
           </p>
-          <a className="primary download" href="/">
+          <Link className="primary download" href="/">
             Return to workspace
-          </a>
+          </Link>
         </section>
       </main>
     );
@@ -473,18 +513,41 @@ export function Imports() {
           <p className="eyebrow">Structured data</p>
           <h1>Import performance data</h1>
         </div>
-        <a className="secondary" href="/">
+        <Link className="secondary" href="/">
           Back to workspace
-        </a>
+        </Link>
       </header>
-      <section className="panel page-panel">
+      <nav className="import-steps" aria-label="Import steps">
+        <a href="#import-upload">1. Upload</a>
+        {preview ? (
+          <a href="#import-preview">2. Preview</a>
+        ) : (
+          <span>2. Preview</span>
+        )}
+        {preview ? (
+          <a href="#import-mapping">3. Map and select context</a>
+        ) : (
+          <span>3. Map and select context</span>
+        )}
+        {result ? (
+          <a href="#import-validation">4. Review and confirm</a>
+        ) : (
+          <span>4. Review and confirm</span>
+        )}
+      </nav>
+      <section id="import-upload" className="panel page-panel">
         <h2>1. Upload</h2>
         <p>
-          Supported formats: CSV, JSON, and XLSX. Files are staged before any
-          analytical records are written.
+          Supported formats: CSV, JSON, and XLSX, up to 10 MB. Files are staged
+          before any analytical records are written.
+        </p>
+        <p>
+          For older Excel (.xls) exports, save a copy as XLSX first. Keep your
+          original file for reference.
         </p>
         <div className="import-upload">
           <input
+            aria-label="Select import file"
             type="file"
             accept=".csv,.json,.xlsx"
             onChange={(event: ChangeEvent<HTMLInputElement>) =>
@@ -502,7 +565,7 @@ export function Imports() {
       </section>
       {preview && (
         <>
-          <section className="panel page-panel">
+          <section id="import-preview" className="panel page-panel">
             <div className="panel-heading">
               <div>
                 <h2>2. Preview</h2>
@@ -549,11 +612,16 @@ export function Imports() {
               </table>
             </div>
           </section>
-          <section className="panel page-panel">
+          <section id="import-mapping" className="panel page-panel">
             <h2>3. Mapping and context</h2>
             <p>
               Review deterministic suggestions. Blank values remain missing and
               are not imported as zero.
+            </p>
+            <p>
+              Choose the campaign and platform this data belongs to. Views,
+              unique viewers, reach, and impressions are separate metrics; check
+              each mapping before continuing.
             </p>
             {matchingTemplate && (
               <div className="notice" role="status">
@@ -812,8 +880,14 @@ export function Imports() {
             />
           )}
           {result && (
-            <section className="panel page-panel">
+            <section id="import-validation" className="panel page-panel">
               <h2>4. Validation and confirmation</h2>
+              {result.status === 'READY' && !validationCurrent && (
+                <p className="notice" role="status">
+                  Your import settings changed. Validate rows again before
+                  confirming.
+                </p>
+              )}
               <div className="import-summary">
                 <span>Total: {result.totalRows}</span>
                 <span>Accepted: {result.acceptedRows}</span>
@@ -849,6 +923,7 @@ export function Imports() {
                 className="primary"
                 disabled={
                   busy ||
+                  !validationCurrent ||
                   result.status !== 'READY' ||
                   preview.duplicateCompleted
                 }

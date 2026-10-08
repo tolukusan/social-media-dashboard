@@ -2,6 +2,9 @@
 
 The importer is a deterministic, two-phase workflow for CSV, JSON, and XLSX files.
 Legacy `.xls` files are intentionally deferred because the selected workbook parser is XLSX-focused.
+Open older Excel exports in Excel or LibreOffice and save a copy as XLSX or CSV before uploading. Renaming the extension does not convert a file. Files must be 10 MB or smaller; export a smaller date range when necessary.
+
+The import step links jump to upload, preview, mapping, and validation as each section becomes available. If you change the configuration after validation, validate again before confirming so the reviewed result matches the settings that will be imported.
 
 ## Flow
 

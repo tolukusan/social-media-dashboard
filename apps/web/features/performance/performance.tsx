@@ -73,6 +73,7 @@ export function Performance({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const selectedContext = contexts.find((context) => context.id === contextId);
@@ -191,12 +192,6 @@ export function Performance({
     }
   };
   const archive = async (record: PerformanceRecord) => {
-    if (
-      !window.confirm(
-        `Archive the ${record.recordDate.slice(0, 10)} performance record? Its history will be retained.`,
-      )
-    )
-      return;
     setBusy(true);
     setError('');
     try {
@@ -236,6 +231,10 @@ export function Performance({
       }),
     [records, search, from, to],
   );
+  const pageCount = Math.max(1, Math.ceil(filteredRecords.length / 50));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * 50;
+  const visibleRecords = filteredRecords.slice(pageStart, pageStart + 50);
 
   return (
     <section className="panel page-panel">
@@ -379,7 +378,10 @@ export function Performance({
           <input
             aria-label="Search performance records"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
             placeholder="Campaign, channel, platform, import"
           />
         </label>
@@ -388,7 +390,10 @@ export function Performance({
           <input
             type="date"
             value={from}
-            onChange={(event) => setFrom(event.target.value)}
+            onChange={(event) => {
+              setFrom(event.target.value);
+              setPage(1);
+            }}
           />
         </label>
         <label>
@@ -396,12 +401,42 @@ export function Performance({
           <input
             type="date"
             value={to}
-            onChange={(event) => setTo(event.target.value)}
+            onChange={(event) => {
+              setTo(event.target.value);
+              setPage(1);
+            }}
           />
         </label>
       </div>
       {filteredRecords.length ? (
         <div className="table-wrap">
+          <div
+            className="record-pagination"
+            aria-label="Performance record pages"
+          >
+            <span role="status">
+              Showing {pageStart + 1}–
+              {Math.min(pageStart + 50, filteredRecords.length)} of{' '}
+              {filteredRecords.length} records
+            </span>
+            <button
+              className="secondary"
+              disabled={currentPage === 1}
+              onClick={() => setPage(currentPage - 1)}
+            >
+              Previous records
+            </button>
+            <span>
+              Page {currentPage} of {pageCount}
+            </span>
+            <button
+              className="secondary"
+              disabled={currentPage === pageCount}
+              onClick={() => setPage(currentPage + 1)}
+            >
+              Next records
+            </button>
+          </div>
           <table>
             <caption className="sr-only">Performance record list</caption>
             <thead>
@@ -416,7 +451,7 @@ export function Performance({
               </tr>
             </thead>
             <tbody>
-              {filteredRecords.map((record) => (
+              {visibleRecords.map((record) => (
                 <tr key={record.id}>
                   <th scope="row">{record.recordDate.slice(0, 10)}</th>
                   <td>

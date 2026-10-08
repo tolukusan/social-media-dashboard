@@ -22,6 +22,197 @@ test('unauthenticated users see login before protected data requests', async ({
   ).toBe(false);
 });
 
+test('screen navigation preserves the session while rechecking it and rejects an expired session', async ({
+  page,
+}) => {
+  if (!process.env.E2E_EMAIL || !process.env.E2E_PASSWORD)
+    throw new Error(
+      'Navigation E2E requires the isolated Administrator fixture.',
+    );
+  await page.goto('/');
+  await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
+  await page
+    .getByLabel('Password', { exact: true })
+    .fill(process.env.E2E_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.locator('h1')).toHaveText('Overview');
+  await page.evaluate(() => {
+    Reflect.set(window, '__navigationMarker', true);
+    Reflect.set(window, '__sessionLoaderSeen', false);
+    new MutationObserver(() => {
+      if (document.querySelector('h1')?.textContent === 'Checking your session')
+        Reflect.set(window, '__sessionLoaderSeen', true);
+    }).observe(document, { childList: true, subtree: true });
+  });
+  for (const name of [
+    'Campaigns',
+    'Performance data',
+    'Analytics',
+    'Reports',
+    'Settings',
+  ]) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await expect(page.locator('h1')).toHaveText(name);
+  }
+  await page.goBack();
+  await expect(page.locator('h1')).toHaveText('Reports');
+  await page.goForward();
+  await expect(page.locator('h1')).toHaveText('Settings');
+  await page.reload();
+  await expect(page.locator('h1')).toHaveText('Settings');
+  // Reset the document marker after the deliberate reload above.
+  await page.evaluate(() => {
+    Reflect.set(window, '__navigationMarker', true);
+    Reflect.set(window, '__sessionLoaderSeen', false);
+    new MutationObserver(() => {
+      if (document.querySelector('h1')?.textContent === 'Checking your session')
+        Reflect.set(window, '__sessionLoaderSeen', true);
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Close menu' }),
+  ).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('button', { name: 'Campaigns', exact: true }).click();
+  await expect(page.locator('h1')).toHaveText('Campaigns');
+  await expect(
+    page.getByRole('button', { name: 'Menu', exact: true }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  let release!: () => void;
+  let started!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const requested = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  await page.route('**/api/v1/auth/me', async (route) => {
+    started();
+    await pending;
+    await route.continue();
+  });
+  const checked = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/auth/me') && response.status() === 200,
+  );
+  try {
+    await page.getByRole('link', { name: 'Imports', exact: true }).click();
+    await requested;
+    await expect(
+      page.getByRole('heading', {
+        name: 'Import performance data',
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(() => Reflect.get(window, '__navigationMarker')),
+    ).toBe(true);
+    expect(
+      await page.evaluate(() => Reflect.get(window, '__sessionLoaderSeen')),
+    ).toBe(false);
+  } finally {
+    release();
+  }
+  await checked;
+  const returnedCheck = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/auth/me') && response.status() === 200,
+  );
+  await page.getByRole('link', { name: 'Back to workspace' }).click();
+  await expect(page.locator('h1')).toHaveText('Overview');
+  await returnedCheck;
+  expect(
+    await page.evaluate(() => Reflect.get(window, '__navigationMarker')),
+  ).toBe(true);
+  expect(
+    await page.evaluate(() => Reflect.get(window, '__sessionLoaderSeen')),
+  ).toBe(false);
+  await page.unroute('**/api/v1/auth/me');
+  // A cached session must still yield to a server rejection on the next screen.
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'Session expired' }),
+    }),
+  );
+  await page.getByRole('link', { name: 'Imports', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Sign in required', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Import performance data', exact: true }),
+  ).toHaveCount(0);
+  await page.unroute('**/api/v1/auth/me');
+  await page.getByRole('link', { name: 'Return to workspace' }).click();
+  await expect(page.locator('h1')).toHaveText('Overview');
+  await page.getByRole('button', { name: 'Log out', exact: true }).click();
+  await expect(
+    page.getByRole('heading', {
+      name: 'Sign in to your workspace',
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+
+test('performance record pages keep filtering across the full list', async ({
+  page,
+}) => {
+  if (!process.env.E2E_EMAIL || !process.env.E2E_PASSWORD)
+    throw new Error(
+      'Pagination E2E requires the isolated Administrator fixture.',
+    );
+  await page.route('**/api/v1/performance-records', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(
+        Array.from({ length: 105 }, (_, index) => ({
+          id: `pagination-${index}`,
+          recordDate: '2026-01-01T00:00:00.000Z',
+          campaignPlatform: {
+            campaignChannel: {
+              campaign: { name: `Pagination campaign ${index + 1}` },
+              channel: { name: 'Social Media Marketing' },
+            },
+            platform: { name: 'Facebook' },
+          },
+          metricValues: [],
+        })),
+      ),
+    }),
+  );
+  await page.goto('/');
+  await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
+  await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.locator('h1')).toHaveText('Overview');
+  await page
+    .getByRole('button', { name: 'Performance data', exact: true })
+    .click();
+  const table = page.getByRole('table', { name: 'Performance record list' });
+  await expect(table.getByRole('row')).toHaveCount(51);
+  await expect(page.getByText('Showing 1–50 of 105 records')).toBeVisible();
+  await page.getByRole('button', { name: 'Next records' }).click();
+  await expect(page.getByText('Showing 51–100 of 105 records')).toBeVisible();
+  await page.getByRole('button', { name: 'Next records' }).click();
+  await expect(table.getByRole('row')).toHaveCount(6);
+  await page
+    .getByLabel('Search performance records')
+    .fill('Pagination campaign 105');
+  await expect(table.getByRole('row')).toHaveCount(2);
+  await expect(page.getByText('Showing 1–1 of 1 records')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Previous records' }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Next records' }),
+  ).toBeDisabled();
+  await page.getByRole('button', { name: 'Log out', exact: true }).click();
+});
+
 test('authenticated user can load views and logout', async ({ page }) => {
   if (!process.env.E2E_EMAIL || !process.env.E2E_PASSWORD) {
     throw new Error(
@@ -41,7 +232,9 @@ test('authenticated user can load views and logout', async ({ page }) => {
     10,
   );
   await page.getByRole('button', { name: 'My profile' }).click();
-  await expect(page.getByRole('heading', { name: 'My profile' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'My profile', level: 1 }),
+  ).toBeVisible();
   await page.getByLabel('Display name').fill('E2E Profile Updated');
   await page.getByRole('button', { name: 'Save profile' }).click();
   await expect(page.locator('.sidebar-footer')).toContainText(
@@ -242,7 +435,6 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await countMetric.fill('2');
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(performanceRow).toContainText('2');
-  page.once('dialog', (dialog) => dialog.accept());
   await performanceRow.getByRole('button', { name: 'Archive' }).click();
   await expect(performanceRow).toHaveCount(0);
   await page.getByRole('button', { name: 'Campaigns' }).click();
@@ -253,6 +445,16 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await page.getByRole('button', { name: 'Archive campaign' }).click();
   await expect(page.getByRole('button', { name: updatedName })).toHaveCount(0);
   await page.goto('/imports');
+
+  await page.getByLabel('Select import file').setInputFiles({
+    name: 'legacy-export.xls',
+    mimeType: 'application/vnd.ms-excel',
+    buffer: Buffer.from('legacy'),
+  });
+  await page.getByRole('button', { name: 'Upload and preview' }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'older Excel' }),
+  ).toContainText('save a copy as .xlsx');
   await expect(
     page.getByRole('heading', { name: 'Import performance data' }),
   ).toBeVisible();
@@ -285,7 +487,7 @@ test('Administrator can manage the channel and platform catalogue lifecycle', as
     page.getByRole('status').filter({ hasText: 'Reporting currency saved.' }),
   ).toBeVisible();
   await page.reload();
-  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.locator('h1')).toHaveText('Settings');
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByLabel('Reporting currency')).toHaveValue('NGN');
   await expect(
@@ -424,6 +626,20 @@ test('Administrator can preview, validate, and confirm a structured import', asy
     page.getByRole('heading', { name: '4. Validation and confirmation' }),
   ).toBeVisible();
   await expect(page.getByText('Accepted: 2')).toBeVisible();
+  await page.getByLabel('Dataset/import name').fill(`${importName} revised`);
+  await expect(
+    page.getByRole('button', { name: 'Confirm import' }),
+  ).toBeDisabled();
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Your import settings changed' }),
+  ).toBeVisible();
+  await page.getByLabel('Dataset/import name').fill(importName);
+  await page.getByRole('button', { name: 'Validate rows' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Confirm import' }),
+  ).toBeEnabled();
   await page.getByRole('button', { name: 'Confirm import' }).click();
   await expect(
     page.getByRole('status').filter({ hasText: 'Import completed' }),

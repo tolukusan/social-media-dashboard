@@ -8,11 +8,15 @@ Under **My profile**, any signed-in user can update their display name or change
 
 ## Dashboard and analytics
 
+Use the sidebar to switch screens; on a phone, open **Menu**. Workspace screens retain their selection when refreshed, and browser Back/Forward returns to previously visited screens. Keyboard users can use **Skip to content** to bypass navigation.
+
 Overview requests KPI values from the API as filters change; no separate refresh button is required. Choose dates, campaign, channel, platform, metric, and an applicable target period as needed. Missing data is displayed as unavailable rather than zero. Analytics provides period comparison, campaign/channel comparison, and the same backend trend values used by Overview.
 
 ## Campaigns and performance
 
 Administrators and Marketing Officers can create/update campaigns and enter raw daily performance values. Management is read-only. Only raw metrics applicable to the selected channel can be entered.
+
+Performance data shows 50 records per page. Use **Previous records** and **Next records**, or search by campaign, channel, platform, or import name. Search and date filters apply to the full loaded list and return to the first matching page.
 
 ## Targets, imports, and reports
 
