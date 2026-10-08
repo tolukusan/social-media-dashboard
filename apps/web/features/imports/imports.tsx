@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ChangeEvent,
   type FormEvent,
@@ -283,7 +284,15 @@ export function Imports() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [importToDelete, setImportToDelete] = useState<HistoryItem | null>(
+    null,
+  );
   const [showIgnoredColumns, setShowIgnoredColumns] = useState(false);
+  const deleteTrigger = useRef<HTMLButtonElement | null>(null);
+  const cancelDelete = () => {
+    setImportToDelete(null);
+    deleteTrigger.current?.focus();
+  };
   const [matchingTemplate, setMatchingTemplate] =
     useState<Preview['matchingTemplate']>();
 
@@ -397,6 +406,7 @@ export function Imports() {
       );
       setSelectedSheet(data.sheets[0] ?? '');
       setMessage('File staged. Review mappings before validation.');
+      setHistory(await apiRequest<HistoryItem[]>('/imports'));
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -444,6 +454,32 @@ export function Imports() {
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Validation failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteImport = async () => {
+    if (!importToDelete || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await apiRequest(`/imports/${importToDelete.id}`, { method: 'DELETE' });
+      setHistory((items) =>
+        items.filter((item) => item.id !== importToDelete.id),
+      );
+      if (preview?.id === importToDelete.id) {
+        setPreview(null);
+        setResult(null);
+        setValidatedConfiguration(null);
+      }
+      setImportToDelete(null);
+      setMessage('Import and its staged rows deleted.');
+      document.getElementById('import-history-title')?.focus();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Could not delete import.',
+      );
     } finally {
       setBusy(false);
     }
@@ -940,7 +976,7 @@ export function Imports() {
           {message}
         </div>
       )}
-      {error && (
+      {error && !importToDelete && (
         <div className="notice error" role="alert">
           {error}
         </div>
@@ -948,10 +984,18 @@ export function Imports() {
       <section className="panel page-panel">
         <div className="panel-heading">
           <div>
-            <h2>Import history</h2>
+            <h2 id="import-history-title" tabIndex={-1}>
+              Import history
+            </h2>
             <p>
               Staged and completed files remain traceable by checksum and user.
             </p>
+            {currentUser?.role.code === 'ADMIN' && (
+              <p>
+                You can delete staged, rejected, or failed imports. Completed
+                imports are retained for provenance.
+              </p>
+            )}
           </div>
         </div>
         {history.length ? (
@@ -966,6 +1010,7 @@ export function Imports() {
                   <th>Rows</th>
                   <th>Status</th>
                   <th>Date</th>
+                  {currentUser?.role.code === 'ADMIN' && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -990,6 +1035,29 @@ export function Imports() {
                       </span>
                     </td>
                     <td>{item.createdAt.slice(0, 10)}</td>
+                    {currentUser?.role.code === 'ADMIN' && (
+                      <td>
+                        {['COMPLETED', 'IMPORTING'].includes(item.status) ? (
+                          <span>
+                            {item.status === 'COMPLETED'
+                              ? 'Retained for provenance'
+                              : 'Processing'}
+                          </span>
+                        ) : (
+                          <button
+                            className="secondary danger"
+                            disabled={busy}
+                            onClick={(event) => {
+                              deleteTrigger.current = event.currentTarget;
+                              setError('');
+                              setImportToDelete(item);
+                            }}
+                          >
+                            Delete import
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -999,6 +1067,62 @@ export function Imports() {
           <div className="empty-table">No imports yet.</div>
         )}
       </section>
+      {importToDelete && (
+        <div
+          className="modal-backdrop"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && !busy) {
+              event.preventDefault();
+              cancelDelete();
+            }
+            if (event.key === 'Tab') {
+              const buttons =
+                event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                  'button:not(:disabled)',
+                );
+              const first = buttons[0];
+              const last = buttons[buttons.length - 1];
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first?.focus();
+              }
+            }
+          }}
+        >
+          <section
+            className="modal panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-import-title"
+          >
+            <h2 id="delete-import-title">Delete import?</h2>
+            <p>
+              Permanently delete{' '}
+              {importToDelete.displayName || importToDelete.originalFilename}{' '}
+              and its staged rows? This cannot be undone.
+            </p>
+            <button
+              className="secondary"
+              autoFocus
+              disabled={busy}
+              onClick={cancelDelete}
+            >
+              Cancel
+            </button>{' '}
+            <button
+              className="primary danger"
+              disabled={busy}
+              onClick={() => void deleteImport()}
+            >
+              {busy ? 'Deleting…' : 'Delete import permanently'}
+            </button>
+            {error && <p role="alert">{error}</p>}
+          </section>
+        </div>
+      )}
     </main>
   );
 }

@@ -49,6 +49,8 @@ The 2026-10-08 application configuration follow-up applies this rule to reportin
 
 ## PERM-006 — No Normal Hard Delete
 
+The stakeholder's 2026-10-08 import deletion follow-up permits Administrators to delete uncommitted import staging only. Marketing Officers and Management cannot delete imports. Completed/processing imports and imports referenced by active or archived performance records are protected; performance data is never deleted by this workflow. See [ADR-010](../decisions/ADR-010-import-deletion.md).
+
 Normal application workflows shall use archive/deactivation semantics for important analytical records.
 
 ---

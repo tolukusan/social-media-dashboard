@@ -29,6 +29,9 @@ upload
 - `GET /api/v1/imports` — import history
 - `GET /api/v1/imports/:id` — batch details
 - `GET /api/v1/imports/:id/rows` — row-level validation details
+- `DELETE /api/v1/imports/:id` — Administrator-only removal of uncommitted staging
+
+Administrators can select **Delete import** in import history, then confirm permanent deletion or cancel. This removes the selected batch and its staging rows. Completed imports retain provenance; processing imports and any batch referenced by active or archived performance records cannot be deleted. No analytical records are deleted. See [ADR-010](../decisions/ADR-010-import-deletion.md).
 
 The preview includes an explicit source row number separate from imported source
 columns. Email previews also return distinct values from a mapped `Campaign name`

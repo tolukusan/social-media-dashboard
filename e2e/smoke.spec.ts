@@ -683,6 +683,53 @@ test('Administrator can preview, validate, and confirm a structured import', asy
   const historyRow = page.getByRole('row').filter({ hasText: importName });
   await expect(historyRow).toContainText('COMPLETED');
   await expect(historyRow).toContainText('2/2 accepted');
+  await expect(historyRow).toContainText('Retained for provenance');
+  await expect(
+    historyRow.getByRole('button', { name: 'Delete import', exact: true }),
+  ).toHaveCount(0);
+  const stagedFilename = `delete-staged-${Date.now()}.csv`;
+  await page.getByLabel('Select import file').setInputFiles({
+    name: stagedFilename,
+    mimeType: 'text/csv',
+    buffer: Buffer.from(uniqueFixture),
+  });
+  await page.getByRole('button', { name: 'Upload and preview' }).click();
+  const stagedRow = page.getByRole('row').filter({ hasText: stagedFilename });
+  await stagedRow
+    .getByRole('button', { name: 'Delete import', exact: true })
+    .click();
+  await expect(
+    page.getByRole('dialog', { name: 'Delete import?' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Cancel', exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(
+    page.getByRole('button', { name: 'Delete import permanently' }),
+  ).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(
+    page.getByRole('button', { name: 'Cancel', exact: true }),
+  ).toBeFocused();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(
+    stagedRow.getByRole('button', { name: 'Delete import', exact: true }),
+  ).toBeFocused();
+  await expect(stagedRow).toBeVisible();
+  await stagedRow
+    .getByRole('button', { name: 'Delete import', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Delete import permanently' }).click();
+  await expect(stagedRow).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '2. Preview' })).toHaveCount(
+    0,
+  );
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Import and its staged rows deleted.' }),
+  ).toBeVisible();
 });
 
 test('password reset keeps the token after a retryable failure', async ({

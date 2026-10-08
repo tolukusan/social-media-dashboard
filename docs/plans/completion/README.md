@@ -4,6 +4,8 @@ Date: 2026-10-05. Status: local execution authorised 2026-10-05; see the executi
 
 ## Start here
 
+Import deletion follow-up (2026-10-08): Administrators can delete uncommitted import staging through a protected, audited endpoint and confirmation dialog. Completed/processing imports and imports referenced by active or archived records remain protected. Verification passed 48 unit tests, 48 integration tests, all nine browser journeys, lint/typecheck, and API/web builds. See [ADR-010](../../decisions/ADR-010-import-deletion.md) and [implementation progress](../../evidence/IMPLEMENTATION_PROGRESS.md).
+
 Dashboard layout follow-up (2026-10-08): fixed page-wide horizontal overflow using constrained flex sizing and grouped, wrapping filter controls. Browser checks passed at 1600, 1024, 768, and 390 pixels, including a long campaign label; the production web build and all nine browser journeys passed. See [implementation progress](../../evidence/IMPLEMENTATION_PROGRESS.md).
 
 Usability follow-up (2026-10-08): tested all four selected data folders in isolation, verified 26 supported imports against source totals, and improved mobile/history navigation, performance pagination, and import guidance/revalidation. Final production build and all nine browser journeys passed. Legacy XLS requires conversion to a supported format. See [selected-folder evidence](../../evidence/selected-folder-verification.md).

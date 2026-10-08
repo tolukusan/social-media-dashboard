@@ -2,6 +2,8 @@ import {
   BadRequestException,
   Controller,
   Get,
+  Delete,
+  ParseUUIDPipe,
   Inject,
   Param,
   Post,
@@ -60,6 +62,15 @@ export class ImportsController {
   @Get()
   list() {
     return this.imports.list();
+  }
+
+  @Delete(':id')
+  @Roles('ADMIN')
+  remove(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.imports.remove(id, user.id);
   }
 
   @Get(':id')

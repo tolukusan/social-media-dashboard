@@ -769,6 +769,47 @@ export class ImportsService {
     return this.getBatch(id);
   }
 
+  async remove(id: string, actorId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      // Serialize deletion with confirmation/status transitions for this batch.
+      await tx.$queryRaw`SELECT id FROM social_media_dashboard."ImportBatch" WHERE id = ${id}::uuid FOR UPDATE`;
+      const batch = await tx.importBatch.findUnique({ where: { id } });
+      if (!batch)
+        throw new NotFoundException({
+          code: 'IMPORT_NOT_FOUND',
+          message: 'Import batch not found.',
+        });
+      if (
+        batch.status === 'COMPLETED' ||
+        batch.status === 'IMPORTING' ||
+        (await tx.performanceRecord.count({ where: { importBatchId: id } }))
+      )
+        throw new ConflictException({
+          code: 'IMPORT_DELETE_PROTECTED',
+          message:
+            'Completed imports and imports linked to performance records must be retained for provenance. An import currently being processed cannot be deleted.',
+        });
+      const rows = await tx.importRow.deleteMany({
+        where: { importBatchId: id },
+      });
+      await tx.importBatch.delete({ where: { id } });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actorId,
+          action: 'IMPORT_DELETED',
+          entityType: 'ImportBatch',
+          entityId: id,
+          metadata: json({
+            originalFilename: batch.originalFilename,
+            status: batch.status,
+            deletedRows: rows.count,
+          }),
+        },
+      });
+      return { id, deletedRows: rows.count };
+    });
+  }
+
   list() {
     return this.prisma.importBatch.findMany({
       orderBy: { createdAt: 'desc' },
