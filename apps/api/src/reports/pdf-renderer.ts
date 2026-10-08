@@ -79,6 +79,7 @@ function room(doc: PDFKit.PDFDocument, height: number) {
 
 function section(doc: PDFKit.PDFDocument, title: string) {
   room(doc, 38);
+  doc.x = doc.page.margins.left;
   doc
     .moveDown(0.6)
     .fillColor('#172033')
@@ -88,9 +89,15 @@ function section(doc: PDFKit.PDFDocument, title: string) {
 }
 
 function row(doc: PDFKit.PDFDocument, label: string, value: string) {
-  room(doc, 30);
-  doc.fillColor('#344054').fontSize(9).text(label, { continued: true });
-  doc.fillColor('#172033').text(value, { width: 500 });
+  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  doc.fontSize(9);
+  room(doc, Math.max(30, doc.heightOfString(label + value, { width })));
+  doc.x = doc.page.margins.left;
+  doc
+    .fillColor('#344054')
+    .text(label, { continued: true, width, align: 'left' });
+  doc.fillColor('#172033').text(value, { width, align: 'left' });
+  doc.x = doc.page.margins.left;
 }
 
 function drawTrend(doc: PDFKit.PDFDocument, report: PdfReportData) {
@@ -100,7 +107,19 @@ function drawTrend(doc: PDFKit.PDFDocument, report: PdfReportData) {
     (point): point is { bucket: string; value: number } =>
       point.value !== null && Number.isFinite(point.value),
   );
-  if (numeric.length < 2) return;
+  if (numeric.length === 0) {
+    row(doc, 'Trend: ', 'No values available for the selected period.');
+    return;
+  }
+  if (numeric.length === 1) {
+    const point = numeric[0];
+    row(
+      doc,
+      `${point.bucket}: `,
+      `${fmt(point.value, trend.unit, report.reportingCurrency)}; only one trend value is available.`,
+    );
+    return;
+  }
 
   room(doc, 205);
   doc.fontSize(10).text(`${trend.metric} trend (${trend.grain.toLowerCase()})`);
@@ -164,7 +183,14 @@ function drawTrend(doc: PDFKit.PDFDocument, report: PdfReportData) {
     }
   });
   if (drawing) doc.stroke();
+  // Show isolated values on either side of a missing-data gap as points.
+  trend.points.forEach((point, index) => {
+    if (point.value !== null && Number.isFinite(point.value))
+      doc.circle(px(index), py(point.value), 2).fill('#2764E7');
+  });
   doc.restore().fillColor('#172033');
+  // PDF graphics restore does not restore PDFKit's text cursor.
+  doc.x = doc.page.margins.left;
   doc.y = y + height + 28;
 }
 

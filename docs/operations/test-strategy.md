@@ -240,13 +240,16 @@ Initial target environment assumptions will be modest because the project is a s
 
 Current reproducible profile in `performance/k6-authenticated.js`:
 
-- 25 concurrent authenticated users for dashboard, trends, campaign list, and performance-record list
-- 2 concurrent authenticated users for report preview
-- 30-second local baseline
+- 10 campaigns, 300 daily records and 600 raw metric values created only in the isolated local test database
+- 5-user/5-second warm-up, followed by 25 independently authenticated users for 30 seconds
+- dashboard and trends filtered to a fixture campaign, campaign list and performance-record list
+- one view per action with 1.5 seconds think time; assumed mix is 40% dashboard and 20% each trends/campaign/performance reads
+- 5 Marketing Officers make one permitted raw-metric correction every tenth iteration; the other users are read-only Management
+- a separate 2-user/5-second PDF warm-up retaining cold export latency, then a 2-user/15-second measured PDF-export phase
 - failed-request rate below 1%
 - p95 HTTP request duration below 1 second
 
-The script requires an isolated load-test account through environment variables. This is a baseline, not a claim of production capacity, and a run result must be recorded separately from the existence of the script.
+The runner `pnpm --filter @smd/api test:load` creates temporary credentials in ignored `performance/runtime/load-credentials.json` and removes them with its fixtures afterward. Cookie sessions persist between each virtual user's iterations. It aborts on failed-request/check thresholds after five seconds; successful checks must exceed 99%. The one-second p95 target applies to measured mixed/PDF phases, not startup warm-up. Summary JSON retains request counts, throughput, median/p95 latency and errors without credentials. These are local evaluation targets, not stakeholder SLAs or claims of production capacity. The assumed view mix/think time is a baseline model, not observed participant behaviour; burst traffic must be reported separately. Run results must be recorded separately from the existence of the script.
 
 ---
 

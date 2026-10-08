@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.build.json",
-    "lint": "prettier --check src --ignore-path .prettierignore prisma prisma.config.ts",
+    "lint": "prettier --check src --ignore-path .prettierignore prisma scripts prisma.config.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "pnpm test:unit",
     "prisma:generate": "prisma generate",
@@ -20,7 +20,8 @@
     "recovery:cleanup": "tsx prisma/cleanup-password-recovery.ts",
     "session:cleanup": "tsx prisma/cleanup-sessions.ts",
     "demo:prepare": "tsx prisma/demo.ts",
-    "test:load": "tsx scripts/run-load.ts"
+    "test:load": "tsx scripts/run-load.ts",
+    "test:restore": "tsx scripts/verify-restore.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
@@ -47,6 +48,7 @@
     "@types/nodemailer": "^8.0.2",
     "@types/pdfkit": "^0.17.6",
     "@types/pg": "^8.15.5",
+    "pdfjs-dist": "6.4.299",
     "pg": "^8.16.3",
     "prisma": "^7.1.0",
     "tsx": "^4.20.5",

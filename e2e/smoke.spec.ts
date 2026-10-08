@@ -64,13 +64,9 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await page.getByLabel('Start date').fill(start.toISOString().slice(0, 10));
   await page.getByLabel('End date').fill(end.toISOString().slice(0, 10));
   await page
-    .locator('.channel-selection input[type="checkbox"]')
-    .first()
+    .getByRole('checkbox', { name: 'Social Media Marketing', exact: true })
     .check();
-  await page
-    .locator('.platform-options input[type="checkbox"]')
-    .first()
-    .check();
+  await page.getByRole('checkbox', { name: 'Facebook', exact: true }).check();
   await page.getByRole('button', { name: 'Create campaign' }).click();
   await page
     .locator('table button')
@@ -89,13 +85,9 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await page.getByLabel('Start date').fill(start.toISOString().slice(0, 10));
   await page.getByLabel('End date').fill(end.toISOString().slice(0, 10));
   await page
-    .locator('.channel-selection input[type="checkbox"]')
-    .first()
+    .getByRole('checkbox', { name: 'Social Media Marketing', exact: true })
     .check();
-  await page
-    .locator('.platform-options input[type="checkbox"]')
-    .first()
-    .check();
+  await page.getByRole('checkbox', { name: 'Facebook', exact: true }).check();
   await page.getByRole('button', { name: 'Create campaign' }).click();
   await page.getByLabel('Filter by status').selectOption('ACTIVE');
   await page.getByLabel('Search campaigns').fill(updatedName);
@@ -159,7 +151,10 @@ test('authenticated user can load views and logout', async ({ page }) => {
   );
   await page.getByLabel('Target effective from').fill(recordDate);
   await page.getByRole('button', { name: 'Create target' }).click();
-  const targetRow = page.getByRole('row').filter({ hasText: definitionLabel });
+  const targetRow = page
+    .getByRole('row')
+    .filter({ hasText: definitionLabel })
+    .filter({ hasText: updatedName });
   await expect(targetRow).toContainText('1');
   await targetRow.getByRole('button', { name: 'Edit/end date' }).click();
   await page.getByLabel('Target value').fill('2');
@@ -231,9 +226,16 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await expect(page.getByText('Records: 1')).toBeVisible();
   const reportDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download PDF' }).click();
-  expect((await reportDownload).suggestedFilename()).toMatch(
+  const downloadedReport = await reportDownload;
+  expect(downloadedReport.suggestedFilename()).toMatch(
     /^marketing-performance-report_.*\.pdf$/,
   );
+  expect(await downloadedReport.failure()).toBeNull();
+  const downloadedPath = await downloadedReport.path();
+  expect(downloadedPath).not.toBeNull();
+  const downloadedBytes = await readFile(downloadedPath!);
+  expect(downloadedBytes.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+  expect(downloadedBytes.length).toBeGreaterThan(512);
   await page.getByRole('button', { name: 'Overview' }).click();
   await page.getByRole('button', { name: 'Performance' }).click();
   await performanceRow.getByRole('button', { name: 'Edit' }).click();
@@ -414,7 +416,9 @@ test('Administrator can preview, validate, and confirm a structured import', asy
   ).toBeVisible();
   await expect(page.getByText('Accepted: 2')).toBeVisible();
   await page.getByRole('button', { name: 'Confirm import' }).click();
-  await expect(page.getByRole('status')).toContainText('Import completed');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Import completed' }),
+  ).toBeVisible();
 
   const historyRow = page.getByRole('row').filter({ hasText: importName });
   await expect(historyRow).toContainText('COMPLETED');

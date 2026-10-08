@@ -155,3 +155,9 @@ Only Administrator may:
 Marketing Officer and Management may view targets.
 
 Hard deletion should not be necessary in ordinary workflow.
+
+---
+
+# 10. Current Completion Decision: Missing Data Precedence
+
+On 2026-10-07 the stakeholder approved [CD-002](../governance/completion-decisions-2026-10-07.md). When both the actual value and an applicable target are missing, return `NO_DATA`. When actual data exists without an applicable target, return `NO_TARGET`. Missing data remains unavailable, never zero. This records current approval without changing the historical v1.0 approval date.

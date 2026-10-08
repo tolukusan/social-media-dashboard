@@ -418,3 +418,7 @@ Minimum security verification:
 **Approved v1.0.**
 
 The implementation shall follow the authentication, session, CSRF/CORS, authorization, database, logging, audit and report-security controls defined in this document.
+
+## Current completion approval provenance
+
+The own-password current-password check and revocation of all sessions/recovery links were explicitly approved by the stakeholder on 2026-10-07; see [CD-001](../governance/completion-decisions-2026-10-07.md). This is the current decision date, not evidence that the preceding AI implementation had historical approval. Other approved controls remain unchanged.

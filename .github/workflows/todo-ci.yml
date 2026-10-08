@@ -15,11 +15,11 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -49,6 +49,14 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Install PostgreSQL 18 backup tools and report font
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install --yes postgresql-client-18 fonts-dejavu-core
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
       - run: pnpm test:db:prepare
@@ -64,27 +72,24 @@ jobs:
       - run: pnpm test:e2e
 
       - name: Verify isolated backup and restore
-        shell: bash
-        run: |
-          set -euo pipefail
-          source apps/api/.test-database
-          SOURCE_DATABASE_URL="$DATABASE_URL"
-          NATIVE_DATABASE_URL="${SOURCE_DATABASE_URL%%\?*}"
-          export PGPASSWORD=postgres
-          RESTORE_DB="smd_restore_ci"
-          dropdb -h 127.0.0.1 -U postgres --if-exists "$RESTORE_DB"
-          pg_dump --format=custom --file=/tmp/smd-backup.dump "$NATIVE_DATABASE_URL"
-          createdb -h 127.0.0.1 -U postgres "$RESTORE_DB"
-          pg_restore --exit-on-error -h 127.0.0.1 -U postgres -d "$RESTORE_DB" /tmp/smd-backup.dump
-          SOURCE_CAMPAIGNS="$(psql "$NATIVE_DATABASE_URL" -Atc 'SELECT count(*) FROM "social_media_dashboard"."Campaign";')"
-          RESTORE_CAMPAIGNS="$(psql -h 127.0.0.1 -U postgres -d "$RESTORE_DB" -Atc 'SELECT count(*) FROM "social_media_dashboard"."Campaign";')"
-          SOURCE_RECORDS="$(psql "$NATIVE_DATABASE_URL" -Atc 'SELECT count(*) FROM "social_media_dashboard"."PerformanceRecord";')"
-          RESTORE_RECORDS="$(psql -h 127.0.0.1 -U postgres -d "$RESTORE_DB" -Atc 'SELECT count(*) FROM "social_media_dashboard"."PerformanceRecord";')"
-          test "$SOURCE_CAMPAIGNS" = "$RESTORE_CAMPAIGNS"
-          test "$SOURCE_RECORDS" = "$RESTORE_RECORDS"
-          dropdb -h 127.0.0.1 -U postgres "$RESTORE_DB"
+        run: pnpm --filter @smd/api test:restore
 
       - uses: grafana/setup-k6-action@v1
       - run: pnpm --filter @smd/api test:load
 
       - run: pnpm format:docs
+
+      - name: Retain non-sensitive verification summaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-summaries
+          path: |
+            performance/runtime/load-warmup.json
+            performance/runtime/load-mixed.json
+            performance/runtime/load-pdf-warmup.json
+            performance/runtime/load-pdf.json
+            performance/runtime/load-evidence.json
+            performance/runtime/restore-evidence.json
+          if-no-files-found: ignore
+          retention-days: 14
