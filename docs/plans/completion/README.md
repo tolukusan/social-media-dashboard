@@ -4,6 +4,8 @@ Date: 2026-10-05. Status: local execution authorised 2026-10-05; see the executi
 
 ## Start here
 
+Guided UX follow-up (2026-10-08): stakeholder authorised [UX-01?UX-04](simple-ux-proposal.md). The four-step import, automatic suggestions, accepted-scope results/PDF, grouped navigation, date/metric defaults, and mobile fixes are implemented locally. Verification passed: 50 unit tests, 53 integration tests, all 13 browser journeys, typecheck, builds, and changed-code formatting. Full lint remains blocked only by an existing untracked user script; see [execution evidence](../../evidence/simple-ux-verification.md). No migrations or expanded import formats.
+
 Import deletion follow-up (2026-10-08): Administrators can delete uncommitted import staging through a protected, audited endpoint and confirmation dialog. Completed/processing imports and imports referenced by active or archived records remain protected. Verification passed 48 unit tests, 48 integration tests, all nine browser journeys, lint/typecheck, and API/web builds. See [ADR-010](../../decisions/ADR-010-import-deletion.md) and [implementation progress](../../evidence/IMPLEMENTATION_PROGRESS.md).
 
 Dashboard layout follow-up (2026-10-08): fixed page-wide horizontal overflow using constrained flex sizing and grouped, wrapping filter controls. Browser checks passed at 1600, 1024, 768, and 390 pixels, including a long campaign label; the production web build and all nine browser journeys passed. See [implementation progress](../../evidence/IMPLEMENTATION_PROGRESS.md).

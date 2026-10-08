@@ -17,6 +17,7 @@ import {
   type WeightedMetricState,
 } from './daily-metric-aggregation.js';
 import type { NormalizedImportRow, RowIssue } from './import.types.js';
+import { summarizeImport } from './import-summary.js';
 import type { MapImportDto } from './dto/map-import.dto.js';
 
 type UploadFile = {
@@ -92,43 +93,103 @@ export class ImportsService {
     const completed = await this.prisma.importBatch.findFirst({
       where: { checksum, status: 'COMPLETED' },
     });
-    const adapter = detectSourceAdapter(parsed.columns);
-    const source = { type: adapter.code, platform: adapter.platform };
     const completedImports = await this.prisma.importBatch.findMany({
       where: { status: 'COMPLETED' },
       orderBy: { completedAt: 'desc' },
       take: 50,
       select: { displayName: true, originalFilename: true, mapping: true },
     });
-    const headerSignature = parsed.columns
-      .map((column) => column.trim().toLowerCase())
-      .join('|');
-    const matchingTemplate = completedImports.find((item) => {
-      const stored = item.mapping as {
-        columns?: unknown;
-        mapping?: unknown;
-      } | null;
-      return (
-        Array.isArray(stored?.columns) &&
-        stored.columns
-          .map((column) => String(column).trim().toLowerCase())
-          .join('|') === headerSignature &&
-        stored.mapping &&
-        typeof stored.mapping === 'object'
+    const sheetPreviews = parsed.sheets.flatMap((sheet) => {
+      const rows = parsed.rows.filter(
+        (row) => (row.sheetName ?? parsed.sheets[0]) === sheet,
       );
+      if (!rows.length) return [];
+      const columns = [
+        ...new Set(rows.flatMap((row) => Object.keys(row.data))),
+      ];
+      const adapter = detectSourceAdapter(columns);
+      const mapping = adapter.suggestMapping(columns);
+      const signature = columns
+        .map((column) => column.trim().toLowerCase())
+        .join('|');
+      const previous = completedImports.find((item) => {
+        const stored = item.mapping as {
+          columns?: string[];
+          mapping?: Record<string, string>;
+        } | null;
+        return (
+          Array.isArray(stored?.columns) &&
+          stored.columns
+            .map((column) => column.trim().toLowerCase())
+            .join('|') === signature &&
+          stored.mapping &&
+          typeof stored.mapping === 'object'
+        );
+      });
+      const campaignColumn = Object.entries(mapping).find(
+        ([, destination]) => destination === 'campaignName',
+      )?.[0];
+      const previousMapping = previous
+        ? Object.fromEntries(
+            columns.flatMap((column) => {
+              const stored = (
+                previous.mapping as { mapping: Record<string, string> }
+              ).mapping;
+              const key = Object.keys(stored).find(
+                (name) =>
+                  name.trim().toLowerCase() === column.trim().toLowerCase(),
+              );
+              return key ? [[column, stored[key]]] : [];
+            }),
+          )
+        : undefined;
+      const dateColumn = Object.entries(mapping).find(
+        ([, destination]) => destination === 'recordDate',
+      )?.[0];
+      const dates = dateColumn
+        ? rows
+            .flatMap((row) => {
+              const date = parseDate(row.data[dateColumn]);
+              return date ? [date.toISOString().slice(0, 10)] : [];
+            })
+            .sort()
+        : [];
+      return [
+        {
+          sheet,
+          columns,
+          rowCount: rows.length,
+          sampleRows: rows.slice(0, 100),
+          source: { type: adapter.code, platform: adapter.platform },
+          suggestedMapping: mapping,
+          campaignValues: campaignColumn
+            ? [
+                ...new Set(
+                  rows
+                    .map((row) => asText(row.data[campaignColumn]))
+                    .filter(Boolean),
+                ),
+              ]
+            : [],
+          dateRange: dates.length
+            ? { from: dates[0], to: dates[dates.length - 1] }
+            : null,
+          matchingTemplate: previous
+            ? {
+                displayName: previous.displayName || previous.originalFilename,
+                mapping: previousMapping!,
+              }
+            : undefined,
+        },
+      ];
     });
-    const campaignColumn = Object.entries(
-      adapter.suggestMapping(parsed.columns),
-    ).find(([, destination]) => destination === 'campaignName')?.[0];
-    const campaignValues = campaignColumn
-      ? Array.from(
-          new Set(
-            parsed.rows
-              .map((row) => String(row.data[campaignColumn] ?? '').trim())
-              .filter(Boolean),
-          ),
-        )
-      : [];
+    const firstSheet = sheetPreviews[0];
+    if (!firstSheet)
+      throw new BadRequestException({
+        code: 'IMPORT_EMPTY',
+        message: 'This file has no rows to import.',
+      });
+    const source = firstSheet?.source ?? { type: 'GENERIC', platform: null };
     const batch = await this.prisma.importBatch.create({
       data: {
         sourceType: source.type,
@@ -140,11 +201,11 @@ export class ImportsService {
         importedByUserId: actorId,
         totalRows: parsed.rows.length,
         mapping: json({
-          mapping: adapter.suggestMapping(parsed.columns),
-          columns: parsed.columns,
+          mapping: firstSheet?.suggestedMapping ?? {},
+          columns: firstSheet?.columns ?? parsed.columns,
           sheets: parsed.sheets,
         }),
-        selectedSheet: parsed.sheets[0],
+        selectedSheet: firstSheet?.sheet,
         rows: {
           create: parsed.rows.map((row) => ({
             sourceRowNumber: row.sourceRowNumber,
@@ -161,22 +222,9 @@ export class ImportsService {
       format: parsed.format,
       checksum,
       duplicateCompleted: Boolean(completed),
-      source,
-      sheets: parsed.sheets,
-      columns: parsed.columns,
-      rowCount: parsed.rows.length,
-      sampleRows: parsed.rows.slice(0, 100),
-      campaignValues,
-      matchingTemplate: matchingTemplate
-        ? {
-            displayName:
-              matchingTemplate.displayName || matchingTemplate.originalFilename,
-            mapping: (
-              matchingTemplate.mapping as { mapping: Record<string, string> }
-            ).mapping,
-          }
-        : undefined,
-      suggestedMapping: adapter.suggestMapping(parsed.columns),
+      ...firstSheet,
+      sheets: sheetPreviews.map((preview) => preview.sheet),
+      sheetPreviews,
       warnings: completed
         ? [
             'This exact file was already completed and cannot be imported again.',
@@ -634,7 +682,13 @@ export class ImportsService {
           warningCount,
           mapping: json({
             ...dto,
-            columns: (batch.mapping as { columns?: string[] } | null)?.columns,
+            columns: [
+              ...new Set(
+                rows.flatMap((row) =>
+                  Object.keys(row.rawData as Record<string, unknown>),
+                ),
+              ),
+            ],
           }),
           selectedSheet,
         },
@@ -647,6 +701,11 @@ export class ImportsService {
       acceptedRows,
       rejectedRows,
       warningCount,
+      summary: summarizeImport(
+        updates
+          .filter((item) => item.status === 'ACCEPTED' && item.normalized)
+          .map((item) => item.normalized!),
+      ),
       rows: updates.map((item) => ({
         sourceRowNumber: item.sourceRowNumber,
         status: item.status,
@@ -766,7 +825,18 @@ export class ImportsService {
       });
       throw error;
     }
-    return this.getBatch(id);
+    const accepted = await this.prisma.importRow.findMany({
+      where: { importBatchId: id, status: 'ACCEPTED' },
+      orderBy: { sourceRowNumber: 'asc' },
+    });
+    return {
+      ...(await this.getBatch(id)),
+      summary: summarizeImport(
+        accepted.map(
+          (row) => row.normalizedPreview as unknown as NormalizedImportRow,
+        ),
+      ),
+    };
   }
 
   async remove(id: string, actorId: string) {

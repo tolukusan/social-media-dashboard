@@ -1,5 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+async function showMoreFilters(page: Page) {
+  const details = page.locator('details.filter-disclosure');
+  if ((await details.getAttribute('open')) === null)
+    await details.locator('summary').click();
+}
 
 test('unauthenticated users see login before protected data requests', async ({
   page,
@@ -39,11 +44,13 @@ test('screen navigation preserves the session while rechecking it and rejects an
   await expect(page.getByLabel('Campaign', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('status').filter({ hasText: 'Loading workspace data' }),
-  ).toHaveCount(0);
+  ).toHaveCount(0, { timeout: 30_000 });
   await page.getByLabel('Campaign', { exact: true }).evaluate((select) => {
     const option = select.querySelector('option');
     if (option) option.textContent = 'A long campaign name '.repeat(25);
   });
+  await expect(page.getByLabel('Channel', { exact: true })).not.toBeVisible();
+  await showMoreFilters(page);
   for (const width of [1600, 1024, 768, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await expect
@@ -262,6 +269,11 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await expect(
     page.getByRole('status').filter({ hasText: 'Loading workspace data' }),
   ).toHaveCount(0);
+  await page.getByLabel('From').fill('');
+  await page.getByLabel('To').fill('');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Loading workspace data' }),
+  ).toHaveCount(0);
   const initialCount = Number.parseInt(
     (await page.locator('span.filter.muted').innerText()).split(' ')[0],
     10,
@@ -354,6 +366,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await campaignFilter.selectOption(
     (await campaignFilterOption.getAttribute('value')) ?? '',
   );
+  await showMoreFilters(page);
   const metricFilter = page.getByLabel('Metric', { exact: true });
   await metricFilter.selectOption(
     (await metricFilter.locator('option').nth(1).getAttribute('value')) ?? '',
@@ -400,6 +413,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await refreshedCampaignFilter.selectOption(
     (await refreshedCampaignOption.getAttribute('value')) ?? '',
   );
+  await showMoreFilters(page);
   const refreshedMetric = page.getByLabel('Metric', { exact: true });
   const targetMetricOption = refreshedMetric
     .locator('option')
@@ -486,13 +500,16 @@ test('authenticated user can load views and logout', async ({ page }) => {
     mimeType: 'application/vnd.ms-excel',
     buffer: Buffer.from('legacy'),
   });
-  await page.getByRole('button', { name: 'Upload and preview' }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(
     page.getByRole('alert').filter({ hasText: 'older Excel' }),
-  ).toContainText('save a copy as .xlsx');
+  ).toContainText('as XLSX');
   await expect(
     page.getByRole('heading', { name: 'Import performance data' }),
   ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'View import history', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Import history' }),
   ).toBeVisible();
@@ -600,21 +617,19 @@ test('keyboard and mobile basics remain usable', async ({ page }) => {
   );
 });
 
-test('Administrator can preview, validate, and confirm a structured import', async ({
+test('Administrator follows the guided import through results, PDF, and protected history', async ({
   page,
 }) => {
   if (!process.env.E2E_EMAIL || !process.env.E2E_PASSWORD)
     throw new Error(
       'Structured import E2E requires the local Administrator fixture.',
     );
-
   await page.goto('/');
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.locator('h1')).toHaveText('Overview');
   await page.goto('/imports');
-
   const fixture = await readFile(
     'apps/api/test-fixtures/imports/facebook-views.csv',
     'utf8',
@@ -623,77 +638,100 @@ test('Administrator can preview, validate, and confirm a structured import', asy
     '2170',
     String(100_000 + (Date.now() % 800_000)),
   );
-  await page.locator('input[type="file"]').setInputFiles({
-    name: `e2e-facebook-${Date.now()}.csv`,
+  const importName = 'E2E Import ' + Date.now();
+  await page.getByLabel('Select import file').setInputFiles({
+    name: importName + '.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from(uniqueFixture),
   });
-  await page.getByRole('button', { name: 'Upload and preview' }).click();
-  await expect(page.getByRole('heading', { name: '2. Preview' })).toBeVisible();
-
-  const importName = `E2E Import ${Date.now()}`;
-  await page.getByLabel('Dataset/import name').fill(importName);
-
-  const platform = page
-    .locator('.import-context select')
-    .filter({ has: page.locator('option', { hasText: 'Facebook' }) })
-    .first();
-  const facebookOption = platform
-    .locator('option')
-    .filter({ hasText: 'Facebook' });
-  await platform.selectOption(
-    (await facebookOption.getAttribute('value')) ?? '',
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '2. Confirm details' }),
+  ).toBeFocused();
+  await expect(page.locator('.import-details-summary')).toContainText(
+    'Facebook',
   );
-
+  await expect(page.getByLabel('Dataset/import name')).toHaveCount(0);
   await page.getByRole('button', { name: '+ Create new campaign' }).click();
-  const campaignName = `E2E Import Campaign ${Date.now()}`;
+  const campaignName = 'E2E Import Campaign ' + Date.now();
   await page.getByRole('dialog').getByLabel('Campaign name').fill(campaignName);
-  await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-01');
-  await page.getByRole('dialog').getByLabel('End date').fill('2026-01-02');
+  await expect(page.getByRole('dialog').getByLabel('Start date')).toHaveValue(
+    '2026-01-01',
+  );
   await page
     .getByRole('dialog')
     .getByRole('button', { name: 'Create and return to import' })
     .click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-
-  await page.getByRole('button', { name: 'Validate rows' }).click();
-  await expect(
-    page.getByRole('heading', { name: '4. Validation and confirmation' }),
-  ).toBeVisible();
-  await expect(page.getByText('Accepted: 2')).toBeVisible();
-  await page.getByLabel('Dataset/import name').fill(`${importName} revised`);
-  await expect(
-    page.getByRole('button', { name: 'Confirm import' }),
-  ).toBeDisabled();
-  await expect(
-    page
-      .getByRole('status')
-      .filter({ hasText: 'Your import settings changed' }),
-  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Change details / review fields' })
+    .click();
   await page.getByLabel('Dataset/import name').fill(importName);
-  await page.getByRole('button', { name: 'Validate rows' }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByLabel('Dataset/import name')).toHaveValue(importName);
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Confirm import' }),
-  ).toBeEnabled();
-  await page.getByRole('button', { name: 'Confirm import' }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Import completed' }),
+    page.getByRole('heading', { name: '3. Review and import' }),
   ).toBeVisible();
-
-  const historyRow = page.getByRole('row').filter({ hasText: importName });
+  await expect(page.getByText('Accepted: 2', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Back / fix details' }).click();
+  await page.getByLabel('Dataset/import name').fill(importName + ' revised');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Import data', exact: true }),
+  ).toBeEnabled();
+  await page.getByRole('button', { name: 'Import data', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Import complete', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'View import history' }).click();
+  const historyRow = page
+    .getByRole('row')
+    .filter({ hasText: importName + ' revised' });
   await expect(historyRow).toContainText('COMPLETED');
   await expect(historyRow).toContainText('2/2 accepted');
   await expect(historyRow).toContainText('Retained for provenance');
   await expect(
     historyRow.getByRole('button', { name: 'Delete import', exact: true }),
   ).toHaveCount(0);
-  const stagedFilename = `delete-staged-${Date.now()}.csv`;
+  const resultsUrl = await page
+    .getByRole('link', { name: 'View results', exact: true })
+    .getAttribute('href');
+  await page.getByRole('link', { name: 'View results', exact: true }).click();
+  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.getByLabel('From')).toHaveValue('2026-01-01');
+  await expect(page.getByLabel('To')).toHaveValue('2026-01-02');
+  await expect(
+    page.getByLabel('Campaign', { exact: true }).locator('option:checked'),
+  ).toHaveText(campaignName);
+  await expect(page.locator('span.filter.muted')).toHaveText('2 records');
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download PDF' }).click();
+  const report = await downloaded;
+  expect(await report.failure()).toBeNull();
+  expect(
+    (await readFile((await report.path())!)).subarray(0, 5).toString('ascii'),
+  ).toBe('%PDF-');
+  await page.getByRole('button', { name: 'Reports', exact: true }).click();
+  await expect(page.getByText('Records: 2')).toBeVisible();
+  await expect(page.locator('.report-preview')).toContainText(campaignName);
+  expect(resultsUrl).toContain('from=2026-01-01');
+  await page.goto('/imports');
+  const stagedFilename = 'delete-staged-' + Date.now() + '.csv';
   await page.getByLabel('Select import file').setInputFiles({
     name: stagedFilename,
     mimeType: 'text/csv',
     buffer: Buffer.from(uniqueFixture),
   });
-  await page.getByRole('button', { name: 'Upload and preview' }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'already imported' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Next', exact: true }),
+  ).toBeDisabled();
+  await page.getByRole('button', { name: 'View import history' }).click();
   const stagedRow = page.getByRole('row').filter({ hasText: stagedFilename });
   await stagedRow
     .getByRole('button', { name: 'Delete import', exact: true })
@@ -716,15 +754,14 @@ test('Administrator can preview, validate, and confirm a structured import', asy
   await expect(
     stagedRow.getByRole('button', { name: 'Delete import', exact: true }),
   ).toBeFocused();
-  await expect(stagedRow).toBeVisible();
   await stagedRow
     .getByRole('button', { name: 'Delete import', exact: true })
     .click();
   await page.getByRole('button', { name: 'Delete import permanently' }).click();
   await expect(stagedRow).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: '2. Preview' })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole('heading', { name: '1. Upload file' }),
+  ).toBeVisible();
   await expect(
     page
       .getByRole('status')

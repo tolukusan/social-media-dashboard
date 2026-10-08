@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Empty } from '../../components/empty';
 import { apiRequest } from '../../lib/api-client';
 import { ComparisonBarChart, TrendLineChart } from './charts';
+import { availableMetric } from '../../lib/available-metric';
 import type {
   Campaign,
   Channel,
@@ -86,7 +87,11 @@ export function Analytics({
   const [mode, setMode] = useState<'PERIOD' | 'LIFETIME'>('PERIOD');
   const [firstId, setFirstId] = useState('');
   const [secondId, setSecondId] = useState('');
-  const metricCode = filters.metricCode || 'SM_CTR';
+  const metricCode = availableMetric(
+    result,
+    filters.metricCode,
+    filters.channelId,
+  );
   const choices = dimension === 'CAMPAIGN' ? campaigns : channels;
   const availablePlatforms = filters.channelId
     ? (channels.find((channel) => channel.id === filters.channelId)
@@ -197,70 +202,96 @@ export function Analytics({
               </option>
             ))}
           </select>
-          <label htmlFor="analytics-channel-filter">Channel</label>
-          <select
-            id="analytics-channel-filter"
-            className="filter"
-            value={filters.channelId}
-            onChange={(event) => {
-              setChannelFilter(event.target.value);
-              setPlatformFilter('');
-            }}
-          >
-            <option value="">All channels</option>
-            {channels.map((channel) => (
-              <option key={channel.id} value={channel.id}>
-                {channel.name}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="analytics-platform-filter">Platform</label>
-          <select
-            id="analytics-platform-filter"
-            className="filter"
-            value={filters.platformId}
-            onChange={(event) => setPlatformFilter(event.target.value)}
-          >
-            <option value="">All platforms</option>
-            {availablePlatforms.map((platform) => (
-              <option key={platform.id} value={platform.id}>
-                {platform.name}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="comparison-period">Compare</label>
-          <select
-            id="comparison-period"
-            className="filter"
-            value={period}
-            onChange={(event) => setPeriod(event.target.value as typeof period)}
-          >
-            <option value="CUSTOM">Preceding equal-length period</option>
-            <option value="MONTH">Calendar month</option>
-            <option value="QUARTER">Calendar quarter</option>
-            <option value="YEAR">Calendar year</option>
-          </select>
-          <label htmlFor="analytics-metric">Metric</label>
-          <select
-            id="analytics-metric"
-            className="filter"
-            value={filters.metricCode}
-            onChange={(event) => setMetricFilter(event.target.value)}
-          >
-            <option value="">Click-through rate</option>
-            {(result?.metricMetadata ?? []).map((metric) => (
-              <option
-                key={metric.code}
-                value={metric.code}
-                disabled={Boolean(
-                  filters.channelId &&
-                  !metric.applicableChannelIds?.includes(filters.channelId),
-                )}
+          <details className="filter-disclosure">
+            <summary>
+              More filters
+              {[
+                filters.channelId,
+                filters.platformId,
+                filters.metricCode,
+              ].filter(Boolean).length
+                ? ' (' +
+                  [
+                    filters.channelId,
+                    filters.platformId,
+                    filters.metricCode,
+                  ].filter(Boolean).length +
+                  ' active)'
+                : ''}
+            </summary>
+            <div className="filters advanced-filters">
+              <label htmlFor="analytics-channel-filter">Channel</label>
+              <select
+                id="analytics-channel-filter"
+                className="filter"
+                value={filters.channelId}
+                onChange={(event) => {
+                  setChannelFilter(event.target.value);
+                  setPlatformFilter('');
+                }}
               >
-                {metric.label}
-              </option>
-            ))}
-          </select>
+                <option value="">All channels</option>
+                {channels.map((channel) => (
+                  <option key={channel.id} value={channel.id}>
+                    {channel.name}
+                  </option>
+                ))}
+              </select>
+              <label htmlFor="analytics-platform-filter">Platform</label>
+              <select
+                id="analytics-platform-filter"
+                className="filter"
+                value={filters.platformId}
+                onChange={(event) => setPlatformFilter(event.target.value)}
+              >
+                <option value="">All platforms</option>
+                {availablePlatforms.map((platform) => (
+                  <option key={platform.id} value={platform.id}>
+                    {platform.name}
+                  </option>
+                ))}
+              </select>
+              <label htmlFor="comparison-period">Compare</label>
+              <select
+                id="comparison-period"
+                className="filter"
+                value={period}
+                onChange={(event) =>
+                  setPeriod(event.target.value as typeof period)
+                }
+              >
+                <option value="CUSTOM">Preceding equal-length period</option>
+                <option value="MONTH">Calendar month</option>
+                <option value="QUARTER">Calendar quarter</option>
+                <option value="YEAR">Calendar year</option>
+              </select>
+              <label htmlFor="analytics-metric">Metric</label>
+              <select
+                id="analytics-metric"
+                className="filter"
+                value={filters.metricCode}
+                onChange={(event) => setMetricFilter(event.target.value)}
+              >
+                <option value="">
+                  {metadata
+                    ? `Suggested: ${metadata.label}`
+                    : 'Choose a metric'}
+                </option>
+                {(result?.metricMetadata ?? []).map((metric) => (
+                  <option
+                    key={metric.code}
+                    value={metric.code}
+                    disabled={Boolean(
+                      filters.channelId &&
+                      !metric.applicableChannelIds?.includes(filters.channelId),
+                    )}
+                  >
+                    {metric.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </details>
         </div>
         {!from || !to ? (
           <Empty

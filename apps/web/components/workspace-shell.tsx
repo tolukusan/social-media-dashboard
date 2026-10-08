@@ -1,13 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { AuthLoading, Login } from '../features/auth/login';
 import { useSession } from '../features/auth/use-session';
 import Link from 'next/link';
+import { WorkspaceNavigation } from './workspace-navigation';
 import { Campaigns } from '../features/campaigns/campaigns';
 import { Performance } from '../features/performance/performance';
 import { Overview } from '../features/dashboard/overview';
+import { ReportDownload } from '../features/reports/report-download';
 import { Reports } from '../features/reports/reports';
 import { CatalogueManagement } from '../features/catalogue/catalogue-management';
 import { Users } from '../features/users/users';
@@ -67,6 +73,20 @@ export function WorkspaceShell() {
   const [platformFilter, setPlatformFilter] = useState('');
   const [metricFilter, setMetricFilter] = useState('');
   const [targetPeriod, setTargetPeriod] = useState('');
+  const defaultsApplied = useRef(false);
+  const filtersRestored = useRef(false);
+  const [filtersReady, setFiltersReady] = useState(false);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setFrom(params.get('from') || '');
+    setTo(params.get('to') || '');
+    setCampaignFilter(params.get('campaignId') || '');
+    setChannelFilter(params.get('channelId') || '');
+    setPlatformFilter(params.get('platformId') || '');
+    setMetricFilter(params.get('metricCode') || '');
+    filtersRestored.current = Boolean(params.get('from') || params.get('to'));
+    setFiltersReady(true);
+  }, []);
   const workspaceFilters = {
     from,
     to,
@@ -77,22 +97,33 @@ export function WorkspaceShell() {
     targetPeriod,
   };
   const workspaceQuery = useQuery({
+    placeholderData: keepPreviousData,
     queryKey: currentUser
       ? queryKeys.workspace(currentUser.id, workspaceFilters)
       : ['workspace', 'anonymous'],
-    enabled: authStatus === 'authenticated' && Boolean(currentUser),
+    enabled:
+      filtersReady && authStatus === 'authenticated' && Boolean(currentUser),
     queryFn: async () => {
       const params = new URLSearchParams(
         Object.entries(workspaceFilters).filter(([, value]) => Boolean(value)),
       );
       try {
-        const [dashboard, campaigns, records, channels] = await Promise.all([
+        const [dashboard, context] = await Promise.all([
           apiRequest<DashboardResult>(`/analytics/dashboard?${params}`),
-          apiRequest<Campaign[]>('/campaigns'),
-          apiRequest<PerformanceRecord[]>('/performance-records'),
-          apiRequest<Channel[]>('/channels'),
+          queryClient.fetchQuery({
+            queryKey: ['workspace-context', currentUser!.id],
+            staleTime: 60_000,
+            queryFn: async () => {
+              const [campaigns, records, channels] = await Promise.all([
+                apiRequest<Campaign[]>('/campaigns'),
+                apiRequest<PerformanceRecord[]>('/performance-records'),
+                apiRequest<Channel[]>('/channels'),
+              ]);
+              return { campaigns, records, channels };
+            },
+          }),
         ]);
-        return { dashboard, campaigns, records, channels };
+        return { dashboard, ...context };
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           await queryClient.cancelQueries();
@@ -106,7 +137,9 @@ export function WorkspaceShell() {
   const trendQuery = useQuery({
     queryKey: ['trends', currentUser?.id ?? 'anonymous', workspaceFilters],
     enabled:
-      authStatus === 'authenticated' && Boolean(currentUser && from && to),
+      filtersReady &&
+      authStatus === 'authenticated' &&
+      Boolean(currentUser && from && to),
     queryFn: async () => {
       const params = new URLSearchParams(
         Object.entries(workspaceFilters).filter(([, value]) => Boolean(value)),
@@ -121,6 +154,22 @@ export function WorkspaceShell() {
     null,
   );
   const records = workspaceQuery.data?.records ?? [];
+  useEffect(() => {
+    if (!filtersReady || !workspaceQuery.data || defaultsApplied.current)
+      return;
+    defaultsApplied.current = true;
+    // Dates are a display default over existing active data, not a KPI calculation.
+    if (!filtersRestored.current && !from && !to) {
+      const dates = records
+        .filter((record) => record.status !== 'ARCHIVED')
+        .map((record) => record.recordDate.slice(0, 10))
+        .sort();
+      if (dates.length) {
+        setFrom(dates[0]);
+        setTo(dates[dates.length - 1]);
+      }
+    }
+  }, [filtersReady, workspaceQuery.data, records, from, to]);
   const loading = workspaceQuery.isFetching;
   const error =
     workspaceQuery.error instanceof Error ? workspaceQuery.error.message : '';
@@ -129,6 +178,7 @@ export function WorkspaceShell() {
     const nextId = currentUser?.id ?? null;
     if (identityRef.current && identityRef.current !== nextId) {
       queryClient.removeQueries({ queryKey: ['workspace'] });
+      queryClient.removeQueries({ queryKey: ['workspace-context'] });
       queryClient.removeQueries({ queryKey: ['report-preview'] });
       queryClient.removeQueries({ queryKey: ['imports'] });
       queryClient.removeQueries({ queryKey: ['users'] });
@@ -184,70 +234,13 @@ export function WorkspaceShell() {
       >
         Skip to content
       </a>
-      <aside
-        id="workspace-navigation"
-        className={`sidebar${navigationOpen ? ' navigation-open' : ''}`}
-      >
-        <div className="brand">
-          <span className="brand-mark">M</span>
-          <span>Marketwise</span>
-        </div>
-        <nav aria-label="Primary navigation">
-          {(
-            [
-              ['overview', 'Overview'],
-              ['campaigns', 'Campaigns'],
-              ['performance', 'Performance data'],
-              ['analytics', 'Analytics'],
-              ['targets', 'KPI targets'],
-              ['reports', 'Reports'],
-              ['profile', 'My profile'],
-              ...(currentUser?.role.code === 'ADMIN'
-                ? ([['settings', 'Settings']] as const)
-                : []),
-              ...(currentUser?.role.code === 'ADMIN'
-                ? ([['users', 'Users']] as const)
-                : []),
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              className={view === id ? 'active' : ''}
-              aria-current={view === id ? 'page' : undefined}
-              onClick={() => navigate(id)}
-            >
-              {label}
-            </button>
-          ))}
-          <Link href="/imports">Imports</Link>
-        </nav>
-        <div className="sidebar-footer">
-          <span className="avatar">
-            {currentUser?.name
-              ?.split(' ')
-              .map((part) => part[0])
-              .join('')
-              .slice(0, 2)
-              .toUpperCase() || 'U'}
-          </span>
-          <span>
-            <strong>{currentUser?.name || 'Workspace user'}</strong>
-            <small>{currentUser?.role.name || 'Authenticated user'}</small>
-          </span>
-          <button
-            className="logout"
-            onClick={() => {
-              void logout().catch((cause: unknown) =>
-                setAuthError(
-                  cause instanceof Error ? cause.message : 'Could not log out.',
-                ),
-              );
-            }}
-          >
-            Log out
-          </button>
-        </div>
-      </aside>
+      <WorkspaceNavigation
+        currentUser={currentUser}
+        view={view}
+        navigationOpen={navigationOpen}
+        navigate={navigate}
+        logout={logout}
+      />
       <section id="workspace-content" className="content" tabIndex={-1}>
         <header className="topbar">
           <button
@@ -287,6 +280,48 @@ export function WorkspaceShell() {
           <div className="notice" role="status">
             Loading workspace data…
           </div>
+        )}
+        {view === 'overview' && (
+          <section className="panel home-guidance">
+            <div>
+              <h2>
+                {dashboard?.recordCount
+                  ? 'Your performance at a glance'
+                  : records.length
+                    ? 'No data matches these filters'
+                    : 'Start with your marketing data'}
+              </h2>
+              <p>
+                {dashboard?.recordCount
+                  ? 'Review your results, add more data, or download a report for the current filters.'
+                  : records.length
+                    ? 'Adjust the date range or campaign to find your results.'
+                    : currentUser?.role.code === 'MANAGEMENT'
+                      ? 'Results will appear here when your marketing team adds data.'
+                      : 'Upload an export. We will guide you from the file to results and a report.'}
+              </p>
+            </div>
+            <div className="home-actions">
+              {currentUser?.role.code !== 'MANAGEMENT' && (
+                <>
+                  <Link className="primary download" href="/imports">
+                    {records.length ? 'Add data' : 'Add your first data'}
+                  </Link>
+                  {!records.length && (
+                    <button
+                      className="secondary"
+                      onClick={() => navigate('performance')}
+                    >
+                      Enter manually
+                    </button>
+                  )}
+                </>
+              )}
+              {records.length > 0 && (
+                <ReportDownload filters={workspaceFilters} />
+              )}
+            </div>
+          </section>
         )}
         {view === 'overview' && (
           <Overview

@@ -2,9 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { apiBlob, apiRequest, queryKeys } from '../../lib/api-client';
+import { apiRequest, queryKeys } from '../../lib/api-client';
+import { ReportDownload } from './report-download';
 
-type ReportFilters = {
+export type ReportFilters = {
   from: string;
   to: string;
   campaignId: string;
@@ -83,8 +84,6 @@ function valueLabel(
 
 export function Reports({ filters }: { filters: ReportFilters }) {
   const { from, to } = filters;
-  const [downloadError, setDownloadError] = useState('');
-  const [downloading, setDownloading] = useState(false);
   const [comparisonPeriod, setComparisonPeriod] = useState('CUSTOM');
   const query = new URLSearchParams(
     Object.entries({ ...filters, comparisonPeriod }).filter(([, value]) =>
@@ -96,49 +95,16 @@ export function Reports({ filters }: { filters: ReportFilters }) {
     queryFn: () => apiRequest<ReportPreview>(`/reports/preview?${query}`),
   });
   const preview = previewQuery.data;
-  const download = async () => {
-    setDownloading(true);
-    setDownloadError('');
-    try {
-      const blob = await apiBlob(`/reports/dashboard.pdf?${query}`);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `marketing-performance-report_${from || 'all'}_to_${to || 'all'}.pdf`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (cause) {
-      setDownloadError(
-        cause instanceof Error
-          ? cause.message
-          : 'Report could not be downloaded.',
-      );
-    } finally {
-      setDownloading(false);
-    }
-  };
 
   return (
     <section className="panel page-panel">
       <div className="panel-heading">
         <div>
           <h2>Reports</h2>
-          <p>Preview and download use the same filtered analytics service.</p>
+          <p>Download a report for the campaign and dates shown below.</p>
         </div>
-        <button
-          className="primary download"
-          type="button"
-          disabled={downloading}
-          onClick={() => void download()}
-        >
-          {downloading ? 'Preparing PDF…' : 'Download PDF'}
-        </button>
+        <ReportDownload filters={filters} comparisonPeriod={comparisonPeriod} />
       </div>
-      {downloadError && (
-        <div className="notice error" role="alert">
-          {downloadError}
-        </div>
-      )}
       <div className="report-preview">
         <strong>
           {preview?.title ?? 'Digital Marketing Performance Report'}

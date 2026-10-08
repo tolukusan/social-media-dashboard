@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type { Campaign } from '../../lib/workspace-types';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiRequest, invalidateWorkspace } from '../../lib/api-client';
@@ -114,6 +115,14 @@ export function CampaignDetails({
       <p className="muted-text">
         Performance records remain preserved when a campaign is archived.
       </p>
+      {canEdit && !editing && (
+        <Link
+          className="primary download"
+          href={`/imports?campaignId=${campaign.id}`}
+        >
+          Add data to this campaign
+        </Link>
+      )}
       {canEdit && !editing && (
         <button className="secondary" onClick={() => setEditing(true)}>
           Edit campaign

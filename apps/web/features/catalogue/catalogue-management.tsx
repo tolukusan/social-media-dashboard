@@ -34,8 +34,9 @@ export function CatalogueManagement({
 
   const refresh = async () => {
     const refreshed = await apiRequest<Channel[]>('/channels');
-    await invalidateWorkspace(queryClient);
     onChanged(refreshed);
+    // The saved catalogue is ready; analytics refresh should not block editing.
+    void invalidateWorkspace(queryClient);
   };
   const send = async (path: string, method: 'POST' | 'PATCH', body: object) => {
     setError('');

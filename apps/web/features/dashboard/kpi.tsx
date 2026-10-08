@@ -6,9 +6,7 @@ export function Kpi({ title, value }: { title: string; value: string }) {
       <span>{title}</span>
       <strong>{value}</strong>
       <small>
-        {value === '—'
-          ? 'No data in selected period'
-          : 'Backend-calculated value'}
+        {value === '—' ? 'No data in selected period' : 'For the selected data'}
       </small>
     </article>
   );

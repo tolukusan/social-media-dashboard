@@ -44,7 +44,11 @@ export class ReportsService {
     const labels = new Map(
       result.metricMetadata.map((metric) => [metric.code, metric]),
     );
-    const comparisonMetric = query.metricCode ?? 'SM_CTR';
+    const comparisonMetric =
+      query.metricCode ??
+      result.metricMetadata.find((metric) => result.kpis[metric.code] != null)
+        ?.code ??
+      'SM_CTR';
     const trendPoints = trend?.points.map((point) => ({
       bucket: point.bucket,
       value: point.kpis?.[comparisonMetric] ?? null,

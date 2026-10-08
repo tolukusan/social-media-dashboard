@@ -140,6 +140,10 @@ export const queryKeys = {
 };
 
 export async function invalidateWorkspace(queryClient: QueryClient) {
+  await queryClient.cancelQueries({ queryKey: ['workspace'] });
+  await queryClient.cancelQueries({ queryKey: ['workspace-context'] });
+  // Expire shared metadata before active workspace queries request it again.
+  await queryClient.invalidateQueries({ queryKey: ['workspace-context'] });
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ['workspace'] }),
     queryClient.invalidateQueries({ queryKey: queryKeys.imports }),

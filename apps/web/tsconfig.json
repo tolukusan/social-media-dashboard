@@ -20,7 +20,8 @@
     "features/**/*.ts",
     "features/**/*.tsx",
     "lib/**/*.ts",
-    "lib/**/*.tsx"
+    "lib/**/*.tsx",
+    ".next-e2e/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

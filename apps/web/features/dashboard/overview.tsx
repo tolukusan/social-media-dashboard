@@ -5,6 +5,7 @@ import { CampaignTable } from '../campaigns/campaign-table';
 import { Empty } from '../../components/empty';
 import { TrendLineChart } from '../analytics/charts';
 import { formatKpi, formatNumber } from '../../lib/format';
+import { availableMetric } from '../../lib/available-metric';
 import type {
   View,
   DashboardResult,
@@ -124,7 +125,11 @@ export function Overview({
       !filters.channelId ||
       metric.applicableChannelIds?.includes(filters.channelId),
   );
-  const chartMetric = filters.metricCode || 'SM_REACH';
+  const chartMetric = availableMetric(
+    result,
+    filters.metricCode,
+    filters.channelId,
+  );
   const chartMetadata = result?.metricMetadata.find(
     (metric) => metric.code === chartMetric,
   );
@@ -189,142 +194,183 @@ export function Overview({
             ))}
           </select>
         </div>
-        <div className="filter-field">
-          <label htmlFor="channel-filter">Channel</label>
-          <select
-            id="channel-filter"
-            className="filter"
-            value={filters.channelId}
-            onChange={(event) => {
-              setChannelFilter(event.target.value);
-              setPlatformFilter('');
-            }}
-          >
-            <option value="">All channels</option>
-            {channels.map((channel) => (
-              <option key={channel.id} value={channel.id}>
-                {channel.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="filter-field">
-          <label htmlFor="platform-filter">Platform</label>
-          <select
-            id="platform-filter"
-            className="filter"
-            value={filters.platformId}
-            onChange={(event) => setPlatformFilter(event.target.value)}
-          >
-            <option value="">All platforms</option>
-            {availablePlatforms.map((platform) => (
-              <option key={platform.id} value={platform.id}>
-                {platform.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="filter-field">
-          <label htmlFor="metric-filter">Metric</label>
-          <select
-            id="metric-filter"
-            className="filter"
-            value={filters.metricCode}
-            onChange={(event) => setMetricFilter(event.target.value)}
-          >
-            <option value="">All metrics</option>
-            {selectableMetrics.map((metric) => (
-              <option key={metric.code} value={metric.code}>
-                {metric.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="filter-field">
-          <label htmlFor="target-period">Target period</label>
-          <select
-            id="target-period"
-            className="filter"
-            value={filters.targetPeriod}
-            onChange={(event) => setTargetPeriod(event.target.value)}
-          >
-            <option value="">Targets off</option>
-            <option value="DAILY" disabled={!validTargetPeriods.has('DAILY')}>
-              Daily
-            </option>
-            <option value="WEEKLY" disabled={!validTargetPeriods.has('WEEKLY')}>
-              Weekly
-            </option>
-            <option
-              value="MONTHLY"
-              disabled={!validTargetPeriods.has('MONTHLY')}
-            >
-              Monthly
-            </option>
-            <option
-              value="QUARTERLY"
-              disabled={!validTargetPeriods.has('QUARTERLY')}
-            >
-              Quarterly
-            </option>
-            <option value="YEARLY" disabled={!validTargetPeriods.has('YEARLY')}>
-              Yearly
-            </option>
-            <option
-              value="CAMPAIGN"
-              disabled={!validTargetPeriods.has('CAMPAIGN')}
-            >
-              Campaign lifetime
-            </option>
-          </select>
-        </div>
+        <details className="filter-disclosure">
+          <summary>
+            More filters
+            {[
+              filters.channelId,
+              filters.platformId,
+              filters.metricCode,
+              filters.targetPeriod,
+            ].filter(Boolean).length
+              ? ' (' +
+                [
+                  filters.channelId,
+                  filters.platformId,
+                  filters.metricCode,
+                  filters.targetPeriod,
+                ].filter(Boolean).length +
+                ' active)'
+              : ''}
+          </summary>
+          <div className="filters advanced-filters">
+            <div className="filter-field">
+              <label htmlFor="channel-filter">Channel</label>
+              <select
+                id="channel-filter"
+                className="filter"
+                value={filters.channelId}
+                onChange={(event) => {
+                  setChannelFilter(event.target.value);
+                  setPlatformFilter('');
+                }}
+              >
+                <option value="">All channels</option>
+                {channels.map((channel) => (
+                  <option key={channel.id} value={channel.id}>
+                    {channel.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-field">
+              <label htmlFor="platform-filter">Platform</label>
+              <select
+                id="platform-filter"
+                className="filter"
+                value={filters.platformId}
+                onChange={(event) => setPlatformFilter(event.target.value)}
+              >
+                <option value="">All platforms</option>
+                {availablePlatforms.map((platform) => (
+                  <option key={platform.id} value={platform.id}>
+                    {platform.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-field">
+              <label htmlFor="metric-filter">Metric</label>
+              <select
+                id="metric-filter"
+                className="filter"
+                value={filters.metricCode}
+                onChange={(event) => setMetricFilter(event.target.value)}
+              >
+                <option value="">All metrics</option>
+                {selectableMetrics.map((metric) => (
+                  <option key={metric.code} value={metric.code}>
+                    {metric.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-field">
+              <label htmlFor="target-period">Target period</label>
+              <select
+                id="target-period"
+                className="filter"
+                value={filters.targetPeriod}
+                onChange={(event) => setTargetPeriod(event.target.value)}
+              >
+                <option value="">Targets off</option>
+                <option
+                  value="DAILY"
+                  disabled={!validTargetPeriods.has('DAILY')}
+                >
+                  Daily
+                </option>
+                <option
+                  value="WEEKLY"
+                  disabled={!validTargetPeriods.has('WEEKLY')}
+                >
+                  Weekly
+                </option>
+                <option
+                  value="MONTHLY"
+                  disabled={!validTargetPeriods.has('MONTHLY')}
+                >
+                  Monthly
+                </option>
+                <option
+                  value="QUARTERLY"
+                  disabled={!validTargetPeriods.has('QUARTERLY')}
+                >
+                  Quarterly
+                </option>
+                <option
+                  value="YEARLY"
+                  disabled={!validTargetPeriods.has('YEARLY')}
+                >
+                  Yearly
+                </option>
+                <option
+                  value="CAMPAIGN"
+                  disabled={!validTargetPeriods.has('CAMPAIGN')}
+                >
+                  Campaign lifetime
+                </option>
+              </select>
+            </div>
+          </div>
+        </details>
         <span className="filter muted">{result?.recordCount ?? 0} records</span>
       </div>
+      {(filters.platformId || filters.channelId || filters.metricCode) && (
+        <p className="muted-text" aria-label="Active data scope">
+          {[
+            filters.channelId
+              ? `Channel: ${selectedChannel?.name ?? 'Unavailable'}`
+              : '',
+            filters.platformId
+              ? `Platform: ${availablePlatforms.find((platform) => platform.id === filters.platformId)?.name ?? 'Unavailable'}`
+              : '',
+            filters.metricCode
+              ? `Metric: ${selectedMetric?.label ?? 'Unavailable'}`
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      )}
       <section className="kpi-grid" aria-label="KPI summary">
-        {selectedMetric ? (
+        <Kpi
+          title="Campaigns in scope"
+          value={String(result?.campaignCount ?? 0)}
+        />
+        <Kpi
+          title="Daily records in scope"
+          value={String(result?.recordCount ?? 0)}
+        />
+        {selectedMetric && (
           <Kpi title={selectedMetric.label} value={selectedMetricValue} />
-        ) : (
-          <>
-            <Kpi
-              title="Campaigns in scope"
-              value={String(result?.campaignCount ?? 0)}
-            />
-            <Kpi
-              title="Active channels in scope"
-              value={String(result?.channelCount ?? 0)}
-            />
-            <Kpi
-              title="Aggregated daily reach"
-              value={formatNumber(result, 'SM_REACH')}
-            />
-            <Kpi
-              title="Engagement rate"
-              value={formatKpi(result, 'SM_ENGAGEMENT_RATE')}
-            />
-            <Kpi
-              title="Click-through rate"
-              value={formatKpi(result, 'SM_CTR')}
-            />
-            <Kpi
-              title="Email open rate"
-              value={formatKpi(result, 'EMAIL_OPEN_RATE')}
-            />
-            <Kpi
-              title="Emails sent"
-              value={formatNumber(result, 'EMAIL_SENT')}
-            />
-            <Kpi
-              title="Website conversions"
-              value={formatNumber(result, 'WEB_CONVERSIONS')}
-            />
-            <Kpi
-              title="Advertising conversions"
-              value={formatNumber(result, 'ADS_CONVERSIONS')}
-            />
-            <Kpi title="Cost per click" value={formatKpi(result, 'ADS_CPC')} />
-          </>
         )}
+        {(result?.metricMetadata ?? [])
+          .filter(
+            (metric) =>
+              metric.code !== selectedMetric?.code &&
+              result?.kpis[metric.code] != null,
+          )
+          .slice(0, 8)
+          .map((metric) => (
+            <Kpi
+              key={metric.code}
+              title={metric.label}
+              value={
+                metric.unit === 'COUNT'
+                  ? formatNumber(result, metric.code)
+                  : formatKpi(result, metric.code)
+              }
+            />
+          ))}
       </section>
+      {selectedMetric && result?.kpis[selectedMetric.code] == null && (
+        <p className="notice">
+          {selectedMetric.label} is unavailable for this scope. Its required
+          inputs are missing or its denominator is zero. Available raw metrics
+          are shown above.
+        </p>
+      )}
       {filters.targetPeriod && result?.targetEvaluations && (
         <section className="panel" aria-labelledby="target-evaluations-title">
           <div className="panel-heading">
@@ -388,10 +434,7 @@ export function Overview({
         <div className="panel-heading">
           <div>
             <h2>{analytics ? 'Analytics trend' : 'Performance trend'}</h2>
-            <p>
-              {chartMetadata?.label ?? 'Aggregated daily reach'} by{' '}
-              {trends?.grain?.toLowerCase() ?? 'selected period'} bucket.
-            </p>
+            <p>{chartMetadata?.label ?? 'Selected metric'} over time.</p>
           </div>
           <button
             className="text-link button-link"

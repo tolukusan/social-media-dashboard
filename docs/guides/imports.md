@@ -4,7 +4,21 @@ The importer is a deterministic, two-phase workflow for CSV, JSON, and XLSX file
 Legacy `.xls` files are intentionally deferred because the selected workbook parser is XLSX-focused.
 Open older Excel exports in Excel or LibreOffice and save a copy as XLSX or CSV before uploading. Renaming the extension does not convert a file. Files must be 10 MB or smaller; export a smaller date range when necessary.
 
-The import step links jump to upload, preview, mapping, and validation as each section becomes available. If you change the configuration after validation, validate again before confirming so the reviewed result matches the settings that will be imported.
+The guided importer shows one step at a time: **Upload file → Confirm details → Review and import → View results**. Back preserves your choices. Next recognises the file, then checks its rows; Import data is the explicit final confirmation.
+
+## Quick start
+
+1. From Overview choose **Add your first data** or **Add data**. From a campaign you can choose **Add data to this campaign** to keep its context.
+2. Choose a supported file and click **Next**.
+3. Review the campaign, platform, dates, recognised fields, and action. Deterministic previous mappings are selected for review. Choose or create a missing campaign without leaving the import. Explicit source hints can suggest an active platform; ambiguous sources still need a choice. **Change details / review fields** exposes optional naming and mapping controls.
+4. Click **Next** to validate. Review accepted file rows, canonical daily records, unchanged records, warnings, and excluded/conflicting rows. A partial import requires an explicit acknowledgement of excluded rows. If dates already exist and the file adds different metrics, the review offers **Add missing metrics to matching dates**, followed by another check.
+5. Click **Import data**, then **View results**. The dashboard opens the accepted campaign/platform/date scope. For multiple campaigns, choose a separate result link for each campaign. Results include existing data within the selected scope, not only the uploaded file. **Download PDF** exports that same visible scope.
+
+Use **Add another file** to retain campaign/platform context for the next file; its initial action is Add new dates. You can change the context or action before checking it. File-specific mappings and validation are cleared. **View import history** opens history separately from the active steps.
+
+For workbooks, the worksheet chooser appears only when more than one usable sheet exists. Changing it refreshes the columns, sample rows, date hints, source campaign values, and suggestions for that sheet. Empty sheets are omitted from the chooser.
+
+Back and inline campaign creation retain the in-memory draft. Leaving or refreshing an unfinished import warns that the draft cannot currently be resumed. Staged files remain traceable in history; there is no durable draft-recovery feature in this change.
 
 ## Flow
 
@@ -30,6 +44,8 @@ upload
 - `GET /api/v1/imports/:id` — batch details
 - `GET /api/v1/imports/:id/rows` — row-level validation details
 - `DELETE /api/v1/imports/:id` — Administrator-only removal of uncommitted staging
+
+Preview includes per-worksheet suggestions and date hints. Validation and confirmation include a backend-owned summary of accepted daily records, unchanged records, and separate campaign/platform/date result scopes. These summaries do not calculate KPIs or change merge/conflict rules.
 
 Administrators can select **Delete import** in import history, then confirm permanent deletion or cancel. This removes the selected batch and its staging rows. Completed imports retain provenance; processing imports and any batch referenced by active or archived performance records cannot be deleted. No analytical records are deleted. See [ADR-010](../decisions/ADR-010-import-deletion.md).
 

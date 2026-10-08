@@ -9,6 +9,7 @@ const projectRoot = path.resolve(
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  distDir: process.env.SMD_NEXT_DIST_DIR ?? '.next',
   outputFileTracingRoot: projectRoot,
 };
 export default nextConfig;

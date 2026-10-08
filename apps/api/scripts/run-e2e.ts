@@ -83,7 +83,11 @@ const env: NodeJS.ProcessEnv = {
   NEXT_PUBLIC_API_URL: apiUrl,
   E2E_BASE_URL: webUrl,
 };
-const webEnv: NodeJS.ProcessEnv = { ...env, NODE_ENV: 'production' };
+const webEnv: NodeJS.ProcessEnv = {
+  ...env,
+  NODE_ENV: 'production',
+  SMD_NEXT_DIST_DIR: '.next-e2e',
+};
 const apiEnv: NodeJS.ProcessEnv = { ...env, NODE_ENV: 'development' };
 
 runNode(
