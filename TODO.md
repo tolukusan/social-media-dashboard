@@ -4,9 +4,9 @@ Completed implementation is recorded in the [completion ledger](docs/plans/compl
 
 ## Current execution handoff — 2026-10-08
 
-The stakeholder first asked for a read-only review of the AI-generated continuation prompt, then authorised proceeding with the review recommendations. Work is now underway locally on `chatgpt/pdfkit-renderer`, based on remote commit `d76e0a6f31d85bf4fa4d8692a0befe14eec50e96`.
+The stakeholder authorised the review recommendations and subsequently requested merging to `main` on 2026-10-08. [PR #2](https://github.com/tolukusan/social-media-dashboard/pull/2) is merged at `9e6937b`; local `main` was updated to match. The root `.env.example` was then explicitly authorised for commit and added locally as `b5dc0ac`; that commit has not been pushed.
 
-**The original AI-generated prompt is superseded by the bounded review follow-up plan. Do not execute it again as a separate task.** Its useful steps—inspect CI, fix genuine failures, reconcile evidence and prepare a PR—are already included below. Its instruction to continue until CI is green does not override acceptance requirements or repository stop conditions. No merge or external deployment is authorised.
+**The original AI-generated prompt is superseded by the bounded review follow-up plan. Do not execute it again as a separate task.** Its useful steps—inspect CI, fix genuine failures, reconcile evidence and prepare a PR—are already completed below. Its instruction to continue until CI is green does not override acceptance requirements or repository stop conditions. The merge was separately authorised and completed; external deployment still requires authorisation.
 
 ### Already performed in this follow-up
 
@@ -17,7 +17,7 @@ The stakeholder first asked for a read-only review of the AI-generated continuat
 - Added development-only PDF.js parsing and three rendered-PDF regression tests. `pnpm --filter @smd/api exec vitest run src/reports/pdf-renderer.test.ts` passed: 3 tests, covering Unicode/values/targets/post-chart bounds, long-report pagination/final content, and zero versus missing trend values.
 - Added the PDFKit renderer/font ADR and recorded the stakeholder's explicit approval of both existing own-password and `NO_DATA` precedence decisions. See [approval provenance](docs/governance/completion-decisions-2026-10-07.md).
 
-The verified follow-up changes are pushed to `chatgpt/pdfkit-renderer` and the existing draft PR #2 head branch. The exact-code PostgreSQL 18 CI run is recorded below; human and external acceptance items remain separate.
+The verified follow-up changes are merged into `main`. The final PR-head PostgreSQL 18 [CI run #37715030705](https://github.com/tolukusan/social-media-dashboard/actions/runs/37715030705) passed on `73a7aee`; human and external acceptance items remain below.
 
 ### Remaining action plan, in execution order
 
@@ -29,7 +29,8 @@ The verified follow-up changes are pushed to `chatgpt/pdfkit-renderer` and the e
 - [x] **R05 — reconcile documentation:** removed stale package blockers from current status, updated acceptance/progress/ledger/blockers, kept the historical baseline intact, and separated local, CI, human-evidence and deployment status. Linked policy approvals and PDF ADR.
 - [x] **Browser regression:** both campaign setups select the seeded `Social Media Marketing` channel and `Facebook` platform. The target edit locator is scoped to the unique campaign so prior isolated-run data cannot match another KPI target. `pnpm --filter @smd/api test:e2e` passed all 7 journeys, including the PDF download. The first rerun exposed an ambiguous import-status locator, which was narrowed to the completion notice; the next rerun exposed a target-row match against persisted fixture data, which was scoped by campaign. See [verification evidence](docs/evidence/review-follow-up-verification.md).
 - [x] **Final local checks (2026-10-08):** documentation format and 223 active relative links, lint, typecheck, 42 unit tests, 34 isolated PostgreSQL integration tests, production build, all 7 Playwright journeys, PostgreSQL 18 isolated restore, and authenticated load phases passed. No schema or migration changes. The same checks plus CI artifacts passed on commit `495b5ef` in run #37714435674.
-- [x] **Final remote verification and PR:** reviewed, committed as `495b5ef`, pushed to the continuation branch, and fast-forwarded the existing draft PR #2 head branch to the same commit. Its CI passed as [run #37714435674](https://github.com/tolukusan/social-media-dashboard/actions/runs/37714435674). PR #2 remains draft and open; it was not merged.
+- [x] **Final remote verification and PR:** final PR head `73a7aee` passed [CI run #37715030705](https://github.com/tolukusan/social-media-dashboard/actions/runs/37715030705). Following explicit stakeholder authorisation, PR #2 was marked ready and merged into `main` at `9e6937b` on 2026-10-08. Local `main` was fast-forwarded successfully.
+- [x] **Environment template:** committed only the root `.env.example` as `b5dc0ac` on local `main`, following the stakeholder's explicit request. Credential fields use template values; staged whitespace checks passed. This commit is local and has not been pushed or verified by CI.
 
 ### Timing and resumption
 

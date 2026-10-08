@@ -2,7 +2,7 @@
 
 Date: 2026-10-07. Execution authorised by the stakeholder's request to proceed with the remote-work review recommendations.
 
-Base: `chatgpt/pdfkit-renderer` at `d76e0a6f31d85bf4fa4d8692a0befe14eec50e96`. Preserve the existing continuation, local environment files, analytical data and import formats. Do not merge or deploy.
+Base: `chatgpt/pdfkit-renderer` at `d76e0a6f31d85bf4fa4d8692a0befe14eec50e96`. Preserve the existing continuation, local environment files, analytical data and import formats. The original execution excluded merging; the stakeholder separately authorised the merge on 2026-10-08. PR #2 is now merged at `9e6937b`. External deployment remains subject to separate authorisation.
 
 ## Bounded execution order
 

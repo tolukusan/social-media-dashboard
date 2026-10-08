@@ -1,6 +1,6 @@
 # Remote review follow-up verification
 
-Updated: 2026-10-08. Scope: the authorised [review follow-up](../plans/completion/review-follow-up.md), based on remote `d76e0a6`. No merge, external deployment, schema change or migration is included.
+Updated: 2026-10-08. Scope: the authorised [review follow-up](../plans/completion/review-follow-up.md), based on remote `d76e0a6`, plus the subsequently authorised merge and root environment-template commit. No external deployment, schema change or migration was performed in this follow-up.
 
 ## Implementation and policy
 
@@ -71,6 +71,8 @@ Measured mixed/PDF phases retain p95 below one second, request errors below 1%, 
 
 ## Remote and external status
 
-[Run #53](https://github.com/tolukusan/social-media-dashboard/actions/runs/37670886914) ended cancelled and remains historical evidence. [Run #37714435674](https://github.com/tolukusan/social-media-dashboard/actions/runs/37714435674) passed every workflow step on commit `495b5ef` in 5m7s, including the 25-VU k6 load profile; the existing draft [PR #2](https://github.com/tolukusan/social-media-dashboard/pull/2) remains open and unmerged. GitHub emitted a non-failing notice that several v4 actions target Node 20 while the runner forced them onto Node 24.
+[Run #53](https://github.com/tolukusan/social-media-dashboard/actions/runs/37670886914) ended cancelled and remains historical evidence. [Run #37714435674](https://github.com/tolukusan/social-media-dashboard/actions/runs/37714435674) passed every workflow step on commit `495b5ef` in 5m7s, including the 25-VU k6 load profile. The final PR head `73a7aee` also passed [run #37715030705](https://github.com/tolukusan/social-media-dashboard/actions/runs/37715030705). GitHub emitted a non-failing notice that several v4 actions target Node 20 while the runner forced them onto Node 24.
+
+Following the stakeholder's explicit merge request on 2026-10-08, [PR #2](https://github.com/tolukusan/social-media-dashboard/pull/2) was marked ready and merged at `9e6937b`; `gh pr view` confirmed `MERGED`, and local `main` was fast-forwarded to the merge commit. The pre-existing untracked root `.env.example` was preserved throughout the merge, then committed separately at the stakeholder's request as `b5dc0ac` (`docs: add environment example template`). Only that file was committed; `git diff --cached --check` passed and the working tree was clean afterward. This template commit has not been pushed or checked by CI. No application tests were rerun for the commit-only action.
 
 Human target-environment PDF inspection, authorised SMTP inbox delivery, actual usability participants, organisation reporting currency, historical import promotion provenance and external deployment remain separate prerequisites. None are inferred from automated checks.
