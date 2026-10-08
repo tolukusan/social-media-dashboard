@@ -8,7 +8,7 @@
 
 Copy `apps/api/.env.example` to `apps/api/.env` and `apps/web/.env.example` to `apps/web/.env.local`. Provide a local `DATABASE_URL`, `APP_ORIGIN`, and `API_PORT`; keep `NEXT_PUBLIC_API_URL` pointed at the API. Never commit the local files.
 
-Self-service password recovery can be exercised against the in-memory test capture without real credentials. For actual email delivery, configure the `SMTP_*` values in `apps/api/.env` using an authorised provider. Do not put real SMTP credentials in either example file or project documentation.
+With `NODE_ENV=development`, requesting password recovery prints the recipient, reset link, and 30-minute expiry in the API terminal; open that link to exercise the reset flow without SMTP credentials. The adapter sends no SMTP mail in this mode. Automated tests retain their silent in-memory capture. Other environments use the `SMTP_*` values in `apps/api/.env` and never log recovery links. Do not put real SMTP credentials or recovery links in example files or retained project documentation.
 
 ## Install, migrate, seed, and run
 

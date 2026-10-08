@@ -8,6 +8,7 @@ import { CampaignsController } from '../campaigns/campaigns.controller.js';
 import { PerformanceController } from '../performance/performance.controller.js';
 import { TargetsController } from '../targets/targets.controller.js';
 import { ImportsController } from '../imports/imports.controller.js';
+import { ReportingSettingsController } from '../settings/reporting-settings.controller.js';
 
 function effectiveRoles(controller: object, method: string) {
   const type = controller as {
@@ -22,6 +23,7 @@ function effectiveRoles(controller: object, method: string) {
 describe('route authorization metadata matrix', () => {
   it('matches the approved write-role matrix', () => {
     const cases: Array<[object, string, string[]]> = [
+      [ReportingSettingsController, 'update', ['ADMIN']],
       [AuthController, 'changeOwnPassword', []],
       [AuthController, 'updateMe', []],
       [UsersController, 'create', ['ADMIN']],

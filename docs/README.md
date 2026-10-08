@@ -2,7 +2,7 @@
 
 Start with the [completion handoff and ledger](plans/completion/README.md), then read only the documents relevant to the task. [Implementation progress](evidence/IMPLEMENTATION_PROGRESS.md) records verification; the [acceptance matrix](plans/completion/acceptance-matrix.md) records outstanding criteria.
 
-The active [review follow-up plan](plans/completion/review-follow-up.md) supersedes the AI-generated continuation prompt. See [current verification](evidence/review-follow-up-verification.md), [explicit completion-policy approvals](governance/completion-decisions-2026-10-07.md) and the [PDFKit decision](decisions/ADR-008-pdfkit-reports.md).
+The completed [review follow-up plan](plans/completion/review-follow-up.md) supersedes the AI-generated continuation prompt. The subsequent [application configuration follow-up](plans/completion/app-configuration.md) adds reporting currency in Settings and development recovery logs. See [review verification](evidence/review-follow-up-verification.md), [explicit completion-policy approvals](governance/completion-decisions-2026-10-07.md), the [PDFKit decision](decisions/ADR-008-pdfkit-reports.md), and the [reporting settings decision](decisions/ADR-009-reporting-currency-settings.md). Optional external activities belong in the [release checklist](guides/release-checklist.md).
 
 ## Document map
 

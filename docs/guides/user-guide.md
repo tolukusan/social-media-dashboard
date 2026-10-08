@@ -20,4 +20,4 @@ Administrators manage KPI targets. Targets use approved global, channel, platfor
 
 Administrators and Marketing Officers can use **Imports** to preview CSV/JSON/XLSX data, map columns and campaign/platform context, validate rows, then explicitly confirm the import. Management remains read-only.
 
-Authenticated users can preview and download filtered reports. Currency values use the deployment's configured reporting currency when one is supplied; otherwise the UI explicitly says the currency is unset.
+Authenticated users can preview and download filtered reports. Administrators choose the organisation's reporting currency in Settings. Currency values use that saved code; until one is chosen, the UI explicitly says the currency is unset. Changing the code relabels existing amounts without converting them.

@@ -12,6 +12,7 @@ import { Users } from '../features/users/users';
 import { Profile } from '../features/users/profile';
 import { Targets } from '../features/targets/targets';
 import { Analytics } from '../features/analytics/analytics';
+import { ReportingSettings } from '../features/settings/reporting-settings';
 import type {
   View,
   AuthStatus,
@@ -394,16 +395,19 @@ export function WorkspaceShell() {
           <Profile currentUser={currentUser} />
         )}
         {view === 'settings' && currentUser?.role.code === 'ADMIN' && (
-          <CatalogueManagement
-            channels={channels}
-            onChanged={(next) =>
-              queryClient.setQueryData(
-                queryKeys.workspace(currentUser!.id, workspaceFilters),
-                (data: typeof workspaceQuery.data) =>
-                  data && { ...data, channels: next },
-              )
-            }
-          />
+          <>
+            <ReportingSettings />
+            <CatalogueManagement
+              channels={channels}
+              onChanged={(next) =>
+                queryClient.setQueryData(
+                  queryKeys.workspace(currentUser!.id, workspaceFilters),
+                  (data: typeof workspaceQuery.data) =>
+                    data && { ...data, channels: next },
+                )
+              }
+            />
+          </>
         )}
       </section>
     </main>

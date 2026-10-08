@@ -161,7 +161,7 @@ export class AnalyticsService {
   async dashboard(query: DashboardQueryDto): Promise<DashboardResponse> {
     validateDateRange(query);
 
-    const [records, definitions] = await Promise.all([
+    const [records, definitions, reportingSettings] = await Promise.all([
       this.prisma.performanceRecord.findMany({
         where: buildDashboardWhere(query),
         include: {
@@ -187,6 +187,9 @@ export class AnalyticsService {
           aggregationStrategy: true,
         },
         orderBy: { code: 'asc' },
+      }),
+      this.prisma.reportingSettings.findUnique({
+        where: { id: 'organisation' },
       }),
     ]);
     validateMetricCode(query, definitions);
@@ -359,7 +362,7 @@ export class AnalyticsService {
       })),
       ...(targetEvaluations ? { targetEvaluations } : {}),
       reportingContext: {
-        currencyCode: process.env.REPORTING_CURRENCY || null,
+        currencyCode: reportingSettings?.reportingCurrency ?? null,
         timeZone: process.env.REPORTING_TIMEZONE || null,
       },
     };

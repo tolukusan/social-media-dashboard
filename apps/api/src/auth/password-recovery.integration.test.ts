@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import { randomUUID, createHash } from 'node:crypto';
-import { afterAll, beforeAll, describe, it } from 'vitest';
+import { afterAll, beforeAll, describe, it, vi } from 'vitest';
 import argon2 from 'argon2';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
@@ -115,6 +115,62 @@ describe('password recovery HTTP and PostgreSQL flow', () => {
     await app.listen(0, '127.0.0.1');
     baseUrl = await app.getUrl();
     app.get(MailDeliveryService).enableCaptureForVerification();
+  });
+
+  it('redeems a development-log recovery link through HTTP without SMTP', async () => {
+    const previousBase = baseUrl;
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('SMTP_HOST', '');
+    vi.stubEnv('SMTP_FROM', '');
+    const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+    const devApp = await NestFactory.create(AppModule, { logger: false });
+    try {
+      devApp.setGlobalPrefix('api/v1');
+      devApp.useGlobalPipes(
+        new ValidationPipe({
+          whitelist: true,
+          forbidNonWhitelisted: true,
+          transform: true,
+        }),
+      );
+      await devApp.listen(0, '127.0.0.1');
+      baseUrl = await devApp.getUrl();
+      const user = await createUser('MANAGEMENT');
+      const security = await csrf();
+      const requested = await recoveryRequest(user.email, security);
+      if (requested.status !== 202)
+        throw new Error('Development recovery request failed.');
+      const message = log.mock.calls
+        .map(([value]) => String(value))
+        .find((value) =>
+          value.startsWith('Development password recovery for '),
+        );
+      const urlText = message?.match(/https?:\/\/\S+/)?.[0];
+      if (!urlText)
+        throw new Error('Development recovery link was not logged.');
+      const token = new URLSearchParams(new URL(urlText).hash.slice(1)).get(
+        'token',
+      );
+      if (!token) throw new Error('Development recovery link has no token.');
+      const redeemed = await reset(token, security);
+      if (redeemed.status !== 200)
+        throw new Error('Logged recovery link could not be redeemed.');
+      const updated = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      if (
+        !(await argon2.verify(
+          updated.passwordHash,
+          'Replacement-Passphrase-2026',
+        ))
+      )
+        throw new Error('Development recovery did not update the password.');
+    } finally {
+      baseUrl = previousBase;
+      await devApp.close();
+      vi.unstubAllEnvs();
+      vi.restoreAllMocks();
+    }
   });
 
   afterAll(async () => {

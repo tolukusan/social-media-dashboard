@@ -635,6 +635,8 @@ The project brief mentions system settings but does not define concrete settings
 
 Do not create a generic settings table until an actual setting requires persistence.
 
+The stakeholder's 2026-10-08 request supplies that concrete need: a dedicated singleton `ReportingSettings` stores one nullable reporting currency, managed by an Administrator. It has no organisation/tenant relation and changes no existing cardinalities or analytical amounts. See [ADR-009](../decisions/ADR-009-reporting-currency-settings.md).
+
 ---
 
 # 9. Relationship Summary

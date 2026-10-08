@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import nodemailer from 'nodemailer';
 
 export type RecoveryMail = { to: string; url: string; expiresMinutes: number };
 
 @Injectable()
 export class MailDeliveryService {
+  private readonly logger = new Logger(MailDeliveryService.name);
   private pending = 0;
   private readonly maxPending = 50;
   private readonly captured: RecoveryMail[] = [];
@@ -41,6 +42,12 @@ export class MailDeliveryService {
   private async deliver(message: RecoveryMail) {
     if (this.captureEnabled) {
       this.captured.push(message);
+      return;
+    }
+    if (process.env.NODE_ENV === 'development') {
+      this.logger.log(
+        `Development password recovery for ${message.to}: ${message.url} (expires in ${message.expiresMinutes} minutes)`,
+      );
       return;
     }
     const host = process.env.SMTP_HOST;

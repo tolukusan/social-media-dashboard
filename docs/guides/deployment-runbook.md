@@ -12,7 +12,6 @@ API environment:
 - `API_PORT`
 - `SESSION_COOKIE_NAME` when the default is not used
 - `REPORTING_TIMEZONE`
-- `REPORTING_CURRENCY` using the organisation's approved ISO currency code
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` when self-service email recovery is enabled
 
 Web environment:
@@ -27,7 +26,7 @@ Do not commit production values. Production `APP_ORIGIN` must use HTTPS. CORS an
 2. Take a PostgreSQL backup and record its location outside the repository.
 3. Run the release checks against an isolated test database:
    `pnpm lint`, `pnpm typecheck`, `pnpm test:unit`, `pnpm test:integration`, `pnpm test:e2e`, `pnpm build`, and `pnpm format:docs`.
-4. Confirm `REPORTING_CURRENCY` and `REPORTING_TIMEZONE` with the deploying organisation rather than inferring them.
+4. Confirm `REPORTING_TIMEZONE` with the deploying organisation. After migration, an Administrator selects the reporting currency in the app's Settings screen; the legacy `REPORTING_CURRENCY` environment variable is ignored. Existing deployments should select their previous operational currency, since stored amounts are not converted.
 5. If password-recovery email is required, verify the authorised SMTP provider and sender before exposing the recovery workflow to users.
 
 ## Database and application rollout

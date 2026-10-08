@@ -45,6 +45,8 @@ Marketing Officers may create and update authorised campaign/performance informa
 
 Administrators manage users, channels, platforms and relevant system configuration.
 
+The 2026-10-08 application configuration follow-up applies this rule to reporting currency: all authenticated roles may read the code, and only Administrators may update it. See [ADR-009](../decisions/ADR-009-reporting-currency-settings.md).
+
 ## PERM-006 — No Normal Hard Delete
 
 Normal application workflows shall use archive/deactivation semantics for important analytical records.

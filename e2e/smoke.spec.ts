@@ -279,6 +279,15 @@ test('Administrator can manage the channel and platform catalogue lifecycle', as
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.locator('h1')).toHaveText('Overview');
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByLabel('Reporting currency').selectOption('NGN');
+  await page.getByRole('button', { name: 'Save reporting currency' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Reporting currency saved.' }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(page.locator('h1')).toHaveText('Overview');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByLabel('Reporting currency')).toHaveValue('NGN');
   await expect(
     page.getByRole('heading', { name: 'Channels & Platforms' }),
   ).toBeVisible();

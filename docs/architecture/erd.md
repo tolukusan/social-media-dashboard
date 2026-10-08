@@ -7,6 +7,8 @@
 
 ## 1. Logical ERD
 
+The 2026-10-08 [reporting currency addition](../decisions/ADR-009-reporting-currency-settings.md) adds a standalone singleton `ReportingSettings` table (`id`, nullable `reportingCurrency`, `updatedAt`) with no foreign keys. Existing relationships below remain unchanged.
+
 ```mermaid
 erDiagram
     ROLE ||--o{ USER : assigns
