@@ -9,6 +9,8 @@
 
 ## 1. Purpose
 
+The 2026-10-08 [live integration addition](../decisions/ADR-011-live-integrations.md) activates the A-002 connected-source boundary: `Platform` has multiple `IntegrationConnection` accounts; connections have external-campaign `IntegrationMapping` rows and `IntegrationRun` history. A local `CampaignPlatform` has at most one integration mapping. `PerformanceRecord` optionally references that mapping and records whether the connector may still manage it. Existing rows are unmanaged by default. Credentials remain server configuration references; raw tokens are not database fields. Existing campaign, metric, and archive semantics below remain authoritative.
+
 This document defines the logical domain model for the MVP before any framework, ORM or database engine is selected.
 
 The model is designed to support:

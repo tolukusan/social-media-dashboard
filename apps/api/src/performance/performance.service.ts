@@ -57,6 +57,12 @@ export class PerformanceService {
         },
         metricValues: { include: { metricDefinition: true } },
         importBatch: { select: { displayName: true, originalFilename: true } },
+        integrationMapping: {
+          select: {
+            externalCampaignId: true,
+            connection: { select: { displayName: true, provider: true } },
+          },
+        },
       },
       orderBy: { recordDate: 'desc' },
     });
@@ -283,6 +289,7 @@ export class PerformanceService {
             recordDate,
             ...(dto.notes === undefined ? {} : { notes: dto.notes }),
             updatedByUserId: actorId,
+            integrationManaged: false,
           },
           include: { metricValues: { include: { metricDefinition: true } } },
         });

@@ -11,6 +11,7 @@ import { TargetsModule } from './targets/targets.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { ImportsModule } from './imports/imports.module.js';
 import { SettingsModule } from './settings/settings.module.js';
+import { IntegrationsModule } from './integrations/integrations.module.js';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { SettingsModule } from './settings/settings.module.js';
     ReportsModule,
     ImportsModule,
     SettingsModule,
+    IntegrationsModule,
   ],
   controllers: [HealthController],
 })

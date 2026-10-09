@@ -781,6 +781,14 @@ export class ImportsService {
               });
             }
           } else {
+            if (Object.keys(normalized.metrics).length)
+              await tx.performanceRecord.update({
+                where: { id: record.id },
+                data: {
+                  integrationManaged: false,
+                  updatedByUserId: batch.importedByUserId,
+                },
+              });
             for (const [code, value] of Object.entries(normalized.metrics)) {
               const definition = await tx.metricDefinition.findUniqueOrThrow({
                 where: { code },

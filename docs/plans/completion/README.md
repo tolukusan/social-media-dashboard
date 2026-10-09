@@ -4,6 +4,8 @@ Date: 2026-10-05. Status: local execution authorised 2026-10-05; see the executi
 
 ## Start here
 
+Live integrations follow-up (2026-10-08): the stakeholder clarified campaign/advertising/performance scope and explicitly authorised building before keys exist. [The bounded integration plan](live-integrations.md) and [ADR-011](../../decisions/ADR-011-live-integrations.md) describe the implemented Facebook Ads, Instagram Ads, LinkedIn Ads, and Zoho Campaigns adapters, additive migration, campaign mapping, ownership protection, and PostgreSQL scheduling. See [local verification and blockers](../../evidence/live-integrations-verification.md). Existing MVP completion evidence remains historical; live account acceptance is conditional on credentials and compatible source semantics.
+
 Guided UX follow-up (2026-10-08): stakeholder authorised [UX-01?UX-04](simple-ux-proposal.md). The four-step import, automatic suggestions, accepted-scope results/PDF, grouped navigation, date/metric defaults, and mobile fixes are implemented locally. Verification passed: 50 unit tests, 53 integration tests, all 13 browser journeys, typecheck, builds, and changed-code formatting. Full lint remains blocked only by an existing untracked user script; see [execution evidence](../../evidence/simple-ux-verification.md). No migrations or expanded import formats.
 
 Import deletion follow-up (2026-10-08): Administrators can delete uncommitted import staging through a protected, audited endpoint and confirmation dialog. Completed/processing imports and imports referenced by active or archived records remain protected. Verification passed 48 unit tests, 48 integration tests, all nine browser journeys, lint/typecheck, and API/web builds. See [ADR-010](../../decisions/ADR-010-import-deletion.md) and [implementation progress](../../evidence/IMPLEMENTATION_PROGRESS.md).
@@ -112,6 +114,14 @@ Append a short row per executed task; keep detailed results in the progress/evid
 Documentation organisation follow-up (2026-10-06): complete. See the [25-file move record](documentation-reorganisation.md). Active links, moved-document integrity, archive exclusion, and maintained Markdown formatting verified. No product task statuses changed.
 
 Each implementation report must identify behaviour, files changed, tests added/updated, commands/results, migration impact, documentation changes, and remaining risks.
+
+### Integration execution addition — 2026-10-08
+
+| Task      | Status                              | Evidence                                                                                                                                                                        | Remaining condition                                                                                      |
+| --------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| INT-00    | Initial contracts selected          | [ADR-011](../../decisions/ADR-011-live-integrations.md): advertising connectors and cumulative Zoho Campaigns                                                                   | Live account/API approval and any additional provider names                                              |
+| INT-01–03 | Implemented locally                 | [Verification inventory](../../evidence/live-integrations-verification.md): additive migration, secure references, four clients, mapping, ingestion, fenced daily scheduler, UI | Tokens, supported versions, matching reporting-day semantics, live acceptance                            |
+| INT-04    | Local checks recorded with blockers | [Verification results](../../evidence/live-integrations-verification.md)                                                                                                        | Existing catalogue browser failure and unrelated script formatting prevent a clean full-repository claim |
 
 ## Copyable execution prompt
 

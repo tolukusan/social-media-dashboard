@@ -9,6 +9,7 @@ export type View =
   | 'reports'
   | 'users'
   | 'settings'
+  | 'integrations'
   | 'profile';
 
 export type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
@@ -77,6 +78,11 @@ export type PerformanceRecord = {
   importBatch?: {
     displayName?: string | null;
     originalFilename?: string;
+  } | null;
+  integrationManaged?: boolean;
+  integrationMapping?: {
+    externalCampaignId: string;
+    connection: { displayName: string; provider: string };
   } | null;
   metricValues?: Array<{
     value: number | string;

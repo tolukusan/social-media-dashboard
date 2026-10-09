@@ -27,6 +27,10 @@ const platforms = [
   ['EMAIL', 'EMAIL_GENERIC', 'Email / Generic Email Platform'],
   ['SEO', 'GOOGLE_SEARCH', 'Google Search'],
   ['ADVERTISING', 'GOOGLE_ADS', 'Google Ads'],
+  ['ADVERTISING', 'FACEBOOK_ADS', 'Facebook Ads'],
+  ['ADVERTISING', 'INSTAGRAM_ADS', 'Instagram Ads'],
+  ['ADVERTISING', 'LINKEDIN_ADS', 'LinkedIn Ads'],
+  ['EMAIL', 'ZOHO_CAMPAIGNS', 'Zoho Campaigns'],
   ['OTHER', 'OTHER', 'Other Platform'],
 ] as const;
 const metrics: Array<

@@ -45,6 +45,8 @@ Deactivation or archival shall not destroy historical attribution.
 
 Passwords, raw session tokens, password hashes and secrets must never be logged.
 
+The stakeholder-authorised [integration addition](../decisions/ADR-011-live-integrations.md) keeps read-only provider access tokens in ignored server environment configuration. Only constrained `INTEGRATION_*_ACCESS_TOKEN` references are persisted. Integration APIs never return token values, credential payloads, or lease tokens; provider error bodies are discarded in favour of safe error codes. Fixed provider hosts, request timeouts, response-size and page limits, backend role/Origin/CSRF enforcement, and active-Administrator checks protect scheduled/manual imports. Disconnect stops local work and preserves history; operator token revocation remains a provider action.
+
 ---
 
 # 3. Authentication

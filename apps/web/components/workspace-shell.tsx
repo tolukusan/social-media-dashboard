@@ -21,6 +21,7 @@ import { Profile } from '../features/users/profile';
 import { Targets } from '../features/targets/targets';
 import { Analytics } from '../features/analytics/analytics';
 import { ReportingSettings } from '../features/settings/reporting-settings';
+import { Integrations } from '../features/integrations/integrations';
 import type {
   View,
   AuthStatus,
@@ -57,6 +58,7 @@ export function WorkspaceShell() {
         'targets',
         'reports',
         'profile',
+        'integrations',
         ...(roleCode === 'ADMIN' ? ['settings', 'users'] : []),
       ];
       setView(allowed.includes(next) ? (next as View) : 'overview');
@@ -468,6 +470,13 @@ export function WorkspaceShell() {
           />
         )}
         {view === 'reports' && <Reports filters={workspaceFilters} />}
+        {view === 'integrations' && currentUser && (
+          <Integrations
+            currentUser={currentUser}
+            channels={channels}
+            campaigns={campaigns}
+          />
+        )}
         {view === 'users' && currentUser?.role.code === 'ADMIN' && <Users />}
         {view === 'profile' && currentUser && (
           <Profile currentUser={currentUser} />

@@ -49,4 +49,5 @@ await run([
   'run',
   '--config',
   'vitest.integration.config.ts',
+  ...process.argv.slice(2),
 ]);

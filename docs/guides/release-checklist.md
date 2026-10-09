@@ -9,6 +9,7 @@ The stakeholder removed human PDF review, participant testing, and external depl
 - **Human PDF review (optional):** inspect a long report for pagination, wrapping, charts, and extended characters in the intended viewer. Automated PDF rendering and download checks remain the recorded implementation evidence.
 - **Participant usability testing (optional):** use the [prepared tasks](../evidence/usability-test-plan.md) if participant evaluation is desired. Record only genuine feedback.
 - **External deployment (conditional):** use the [deployment runbook](deployment-runbook.md) when an environment is supplied and deployment is requested. No external deployment has been performed.
+- **Live provider activation (conditional):** obtain approved read-only access tokens and supported API versions, confirm account currency/reporting timezone compatibility, and compare a short mapped campaign sync with provider totals. Follow the [integration operator guide](integrations.md); synthetic tests do not establish live account access.
 - **Import provenance:** resolve or formally document the old scope-promotion approval. Preserve existing formats and behavior while this historical question remains open.
 
 Do not retain recovery links, passwords, SMTP credentials, or session tokens in release evidence.

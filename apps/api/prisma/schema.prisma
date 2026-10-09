@@ -140,6 +140,7 @@ model User {
   passwordRecoveryTokens    PasswordRecoveryToken[]
   createdTargets            KpiTarget[]             @relation("CreatedTargets")
   auditEvents               AuditLog[]
+  integrationConnections    IntegrationConnection[]
   createdAt                 DateTime                @default(now())
   updatedAt                 DateTime                @updatedAt
 
@@ -164,18 +165,19 @@ model MarketingChannel {
 }
 
 model Platform {
-  id                String             @id @default(uuid()) @db.Uuid
-  channelId         String             @db.Uuid
-  channel           MarketingChannel   @relation(fields: [channelId], references: [id])
-  code              String
-  name              String
-  description       String?
-  active            Boolean            @default(true)
-  archivedAt        DateTime?
-  campaignPlatforms CampaignPlatform[]
-  targets           KpiTarget[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                     String                  @id @default(uuid()) @db.Uuid
+  channelId              String                  @db.Uuid
+  channel                MarketingChannel        @relation(fields: [channelId], references: [id])
+  code                   String
+  name                   String
+  description            String?
+  active                 Boolean                 @default(true)
+  archivedAt             DateTime?
+  campaignPlatforms      CampaignPlatform[]
+  targets                KpiTarget[]
+  integrationConnections IntegrationConnection[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@unique([channelId, code])
   @@schema("social_media_dashboard")
@@ -227,6 +229,7 @@ model CampaignPlatform {
   platformId         String              @db.Uuid
   platform           Platform            @relation(fields: [platformId], references: [id])
   performanceRecords PerformanceRecord[]
+  integrationMapping IntegrationMapping?
   createdAt          DateTime            @default(now())
 
   @@unique([campaignChannelId, platformId])
@@ -266,25 +269,111 @@ model ChannelMetric {
 }
 
 model PerformanceRecord {
-  id                 String                   @id @default(uuid()) @db.Uuid
-  campaignPlatformId String                   @db.Uuid
-  campaignPlatform   CampaignPlatform         @relation(fields: [campaignPlatformId], references: [id])
-  recordDate         DateTime                 @db.Date
-  notes              String?
-  status             PerformanceRecordStatus  @default(ACTIVE)
-  createdByUserId    String                   @db.Uuid
-  createdByUser      User                     @relation("CreatedPerformanceRecords", fields: [createdByUserId], references: [id])
-  updatedByUserId    String                   @db.Uuid
-  updatedByUser      User                     @relation("UpdatedPerformanceRecords", fields: [updatedByUserId], references: [id])
-  metricValues       PerformanceMetricValue[]
-  importBatchId      String?                  @db.Uuid
-  importBatch        ImportBatch?             @relation(fields: [importBatchId], references: [id])
-  archivedAt         DateTime?
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
+  id                   String                   @id @default(uuid()) @db.Uuid
+  campaignPlatformId   String                   @db.Uuid
+  campaignPlatform     CampaignPlatform         @relation(fields: [campaignPlatformId], references: [id])
+  recordDate           DateTime                 @db.Date
+  notes                String?
+  status               PerformanceRecordStatus  @default(ACTIVE)
+  createdByUserId      String                   @db.Uuid
+  createdByUser        User                     @relation("CreatedPerformanceRecords", fields: [createdByUserId], references: [id])
+  updatedByUserId      String                   @db.Uuid
+  updatedByUser        User                     @relation("UpdatedPerformanceRecords", fields: [updatedByUserId], references: [id])
+  metricValues         PerformanceMetricValue[]
+  importBatchId        String?                  @db.Uuid
+  importBatch          ImportBatch?             @relation(fields: [importBatchId], references: [id])
+  archivedAt           DateTime?
+  integrationMappingId String?                  @db.Uuid
+  integrationMapping   IntegrationMapping?      @relation(fields: [integrationMappingId], references: [id], onDelete: Restrict)
+  integrationManaged   Boolean                  @default(false)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
 
   @@unique([campaignPlatformId, recordDate])
   @@index([importBatchId])
+  @@index([integrationMappingId])
+  @@schema("social_media_dashboard")
+}
+
+enum IntegrationProvider {
+  FACEBOOK_ADS
+  INSTAGRAM_ADS
+  LINKEDIN_ADS
+  ZOHO_CAMPAIGNS
+
+  @@schema("social_media_dashboard")
+}
+
+enum IntegrationRunStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  BLOCKED
+
+  @@schema("social_media_dashboard")
+}
+
+model IntegrationConnection {
+  id                  String               @id @default(uuid()) @db.Uuid
+  provider            IntegrationProvider
+  platformId          String               @db.Uuid
+  platform            Platform             @relation(fields: [platformId], references: [id], onDelete: Restrict)
+  displayName         String               @db.VarChar(120)
+  externalAccountId   String               @db.VarChar(160)
+  credentialReference String               @db.VarChar(100)
+  sourceTimezone      String               @db.VarChar(100)
+  currency            String?              @db.VarChar(3)
+  region              String               @default("US") @db.VarChar(10)
+  active              Boolean              @default(true)
+  autoSync            Boolean              @default(false)
+  nextSyncAt          DateTime             @default(now())
+  leaseToken          String?              @db.Uuid
+  leaseUntil          DateTime?
+  configuredByUserId  String               @db.Uuid
+  configuredByUser    User                 @relation(fields: [configuredByUserId], references: [id], onDelete: Restrict)
+  mappings            IntegrationMapping[]
+  runs                IntegrationRun[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@unique([provider, region, externalAccountId])
+  @@index([active, autoSync, nextSyncAt])
+  @@schema("social_media_dashboard")
+}
+
+model IntegrationMapping {
+  id                 String                @id @default(uuid()) @db.Uuid
+  connectionId       String                @db.Uuid
+  connection         IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  campaignPlatformId String                @unique @db.Uuid
+  campaignPlatform   CampaignPlatform      @relation(fields: [campaignPlatformId], references: [id], onDelete: Restrict)
+  externalCampaignId String                @db.VarChar(160)
+  performanceRecords PerformanceRecord[]
+  createdAt          DateTime              @default(now())
+
+  @@unique([connectionId, externalCampaignId])
+  @@schema("social_media_dashboard")
+}
+
+model IntegrationRun {
+  id               String                @id @default(uuid()) @db.Uuid
+  connectionId     String                @db.Uuid
+  connection       IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  status           IntegrationRunStatus  @default(RUNNING)
+  fromDate         DateTime              @db.Date
+  toDate           DateTime              @db.Date
+  triggeredBy      String                @db.VarChar(20)
+  createdRecords   Int                   @default(0)
+  updatedRecords   Int                   @default(0)
+  unchangedRecords Int                   @default(0)
+  conflicts        Int                   @default(0)
+  errorCode        String?               @db.VarChar(60)
+  summary          Json?
+  startedAt        DateTime              @default(now())
+  completedAt      DateTime?
+
+  @@index([connectionId, startedAt])
   @@schema("social_media_dashboard")
 }
 

@@ -19,6 +19,7 @@
     "test:e2e": "tsx scripts/run-e2e.ts",
     "recovery:cleanup": "tsx prisma/cleanup-password-recovery.ts",
     "session:cleanup": "tsx prisma/cleanup-sessions.ts",
+    "integrations:prepare-local": "tsx scripts/prepare-integrations.ts",
     "demo:prepare": "tsx prisma/demo.ts",
     "test:load": "tsx scripts/run-load.ts",
     "test:restore": "tsx scripts/verify-restore.ts"

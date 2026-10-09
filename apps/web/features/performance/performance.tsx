@@ -220,6 +220,7 @@ export function Performance({
           record.campaignPlatform?.platform?.name,
           record.importBatch?.displayName,
           record.importBatch?.originalFilename,
+          record.integrationMapping?.connection.displayName,
         ]
           .join(' ')
           .toLowerCase();
@@ -476,6 +477,9 @@ export function Performance({
                   <td>
                     {record.importBatch?.displayName ||
                       record.importBatch?.originalFilename ||
+                      (record.integrationMapping
+                        ? `${record.integrationMapping.connection.displayName}${record.integrationManaged ? '' : ' (edited manually)'}`
+                        : '') ||
                       'Manual'}
                   </td>
                   {canWrite && (

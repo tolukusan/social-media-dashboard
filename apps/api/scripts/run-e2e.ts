@@ -133,7 +133,11 @@ try {
     waitFor(webUrl, children),
   ]);
   runNode(
-    [path.join(rootDirectory, 'node_modules/@playwright/test/cli.js'), 'test'],
+    [
+      path.join(rootDirectory, 'node_modules/@playwright/test/cli.js'),
+      'test',
+      ...process.argv.slice(2),
+    ],
     rootDirectory,
     env,
   );

@@ -45,6 +45,8 @@ Marketing Officers may create and update authorised campaign/performance informa
 
 Administrators manage users, channels, platforms and relevant system configuration.
 
+The stakeholder-authorised 2026-10-08 [integration addition](../decisions/ADR-011-live-integrations.md) applies this boundary to provider connections, campaign mappings, schedules, disconnection, and resumption: Administrators configure these resources. All authenticated roles may view connection metadata and runs. Administrators and Marketing Officers may request manual performance syncs. Management remains read-only. Scheduled imports require an active configuring Administrator.
+
 The 2026-10-08 application configuration follow-up applies this rule to reporting currency: all authenticated roles may read the code, and only Administrators may update it. See [ADR-009](../decisions/ADR-009-reporting-currency-settings.md).
 
 ## PERM-006 — No Normal Hard Delete

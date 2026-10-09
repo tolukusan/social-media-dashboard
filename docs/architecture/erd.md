@@ -7,6 +7,8 @@
 
 ## 1. Logical ERD
 
+The 2026-10-08 [integration addition](../decisions/ADR-011-live-integrations.md) adds `Platform → IntegrationConnection → IntegrationMapping / IntegrationRun`, with each mapping referencing exactly one campaign-platform (which has at most one mapping). Performance records may reference a mapping while retaining existing daily uniqueness. Connections reference their configuring user. All new foreign keys preserve historical references; credential values are absent from the schema.
+
 The 2026-10-08 [reporting currency addition](../decisions/ADR-009-reporting-currency-settings.md) adds a standalone singleton `ReportingSettings` table (`id`, nullable `reportingCurrency`, `updatedAt`) with no foreign keys. Existing relationships below remain unchanged.
 
 ```mermaid

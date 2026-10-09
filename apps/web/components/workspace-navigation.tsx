@@ -39,6 +39,7 @@ export function WorkspaceNavigation({
           ? [['imports', 'Imports'] as [View | 'imports', string]]
           : []),
         ['performance', 'Performance data'],
+        ['integrations', 'Integrations'],
       ],
     },
     {
