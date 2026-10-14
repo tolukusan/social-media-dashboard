@@ -28,6 +28,7 @@ export function WorkspaceNavigation({
     {
       name: '',
       items: [
+        ['accounts', 'Accounts'],
         ['overview', 'Overview'],
         ['campaigns', 'Campaigns'],
       ],

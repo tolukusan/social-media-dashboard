@@ -6,6 +6,8 @@ Project specifications and implementation evidence are indexed in [docs](docs/RE
 
 Administrators select the organisation's reporting currency in Settings; monetary values use that saved code without conversion. Development password-recovery links appear in the API terminal when `NODE_ENV=development`. Optional release activities are tracked in the [release checklist](docs/guides/release-checklist.md).
 
+The account-first connected analytics experience is specified in [product design](docs/product/account-first-connected-analytics.md); server-side OAuth setup and owner handoff steps are in the [provider setup guide](docs/integrations/account-provider-setup.md).
+
 ## Local setup
 
 Requirements: Node.js 24 LTS, pnpm 11 (packageManager pins 11.8.0), PostgreSQL 18 baseline. Copy `apps/api/.env.example` to `apps/api/.env` and `apps/web/.env.example` to `apps/web/.env.local`, then replace placeholders locally; never commit credentials. SMTP values are required only for real password-recovery email delivery. Follow [local operations](docs/guides/local-operations.md) and [developer guide](docs/guides/developer-guide.md), checking database targets before migrations. Existing development data must be preserved.

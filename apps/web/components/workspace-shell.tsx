@@ -22,6 +22,7 @@ import { Targets } from '../features/targets/targets';
 import { Analytics } from '../features/analytics/analytics';
 import { ReportingSettings } from '../features/settings/reporting-settings';
 import { Integrations } from '../features/integrations/integrations';
+import { Accounts } from '../features/accounts/accounts';
 import type {
   View,
   AuthStatus,
@@ -44,13 +45,14 @@ export function WorkspaceShell() {
       : 'unauthenticated';
   const [authError, setAuthError] = useState('');
   const identityRef = useRef<string | null>(null);
-  const [view, setView] = useState<View>('overview');
+  const [view, setView] = useState<View>('accounts');
   const [navigationOpen, setNavigationOpen] = useState(false);
   const roleCode = currentUser?.role.code;
   useEffect(() => {
     const restoreView = () => {
       const next = window.location.hash.slice(1);
       const allowed = [
+        'accounts',
         'overview',
         'campaigns',
         'performance',
@@ -61,7 +63,7 @@ export function WorkspaceShell() {
         'integrations',
         ...(roleCode === 'ADMIN' ? ['settings', 'users'] : []),
       ];
-      setView(allowed.includes(next) ? (next as View) : 'overview');
+      setView(allowed.includes(next) ? (next as View) : 'accounts');
       setNavigationOpen(false);
     };
     restoreView();
@@ -104,7 +106,10 @@ export function WorkspaceShell() {
       ? queryKeys.workspace(currentUser.id, workspaceFilters)
       : ['workspace', 'anonymous'],
     enabled:
-      filtersReady && authStatus === 'authenticated' && Boolean(currentUser),
+      filtersReady &&
+      authStatus === 'authenticated' &&
+      Boolean(currentUser) &&
+      view !== 'accounts',
     queryFn: async () => {
       const params = new URLSearchParams(
         Object.entries(workspaceFilters).filter(([, value]) => Boolean(value)),
@@ -141,7 +146,8 @@ export function WorkspaceShell() {
     enabled:
       filtersReady &&
       authStatus === 'authenticated' &&
-      Boolean(currentUser && from && to),
+      Boolean(currentUser && from && to) &&
+      view !== 'accounts',
     queryFn: async () => {
       const params = new URLSearchParams(
         Object.entries(workspaceFilters).filter(([, value]) => Boolean(value)),
@@ -258,18 +264,20 @@ export function WorkspaceShell() {
             <p className="eyebrow">Digital marketing performance</p>
             <h1>
               {view === 'overview'
-                ? 'Overview'
-                : view === 'performance'
-                  ? 'Performance data'
-                  : view === 'users'
-                    ? 'Users'
-                    : view === 'targets'
-                      ? 'KPI targets'
-                      : view === 'profile'
-                        ? 'My profile'
-                        : view === 'settings'
-                          ? 'Settings'
-                          : view[0].toUpperCase() + view.slice(1)}
+                ? 'Campaign overview'
+                : view === 'accounts'
+                  ? 'Accounts'
+                  : view === 'performance'
+                    ? 'Performance data'
+                    : view === 'users'
+                      ? 'Users'
+                      : view === 'targets'
+                        ? 'KPI targets'
+                        : view === 'profile'
+                          ? 'My profile'
+                          : view === 'settings'
+                            ? 'Settings'
+                            : view[0].toUpperCase() + view.slice(1)}
             </h1>
           </div>
         </header>
@@ -277,6 +285,9 @@ export function WorkspaceShell() {
           <div className="notice error" role="alert">
             {error}
           </div>
+        )}
+        {view === 'accounts' && currentUser && (
+          <Accounts currentUser={currentUser} />
         )}
         {loading && (
           <div className="notice" role="status">
