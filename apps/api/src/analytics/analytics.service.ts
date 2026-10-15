@@ -165,7 +165,15 @@ export class AnalyticsService {
       this.prisma.performanceRecord.findMany({
         where: buildDashboardWhere(query),
         include: {
-          metricValues: { include: { metricDefinition: true } },
+          metricValues: {
+            where: {
+              OR: [
+                { sourceDataExpiresAt: null },
+                { sourceDataExpiresAt: { gt: new Date() } },
+              ],
+            },
+            include: { metricDefinition: true },
+          },
           campaignPlatform: {
             include: {
               platform: true,
@@ -378,7 +386,17 @@ export class AnalyticsService {
     const [records, definitions] = await Promise.all([
       this.prisma.performanceRecord.findMany({
         where: buildDashboardWhere(query),
-        include: { metricValues: { include: { metricDefinition: true } } },
+        include: {
+          metricValues: {
+            where: {
+              OR: [
+                { sourceDataExpiresAt: null },
+                { sourceDataExpiresAt: { gt: new Date() } },
+              ],
+            },
+            include: { metricDefinition: true },
+          },
+        },
         orderBy: [{ recordDate: 'asc' }, { id: 'asc' }],
       }),
       this.prisma.metricDefinition.findMany({

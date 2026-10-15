@@ -12,6 +12,7 @@ import { ReportsModule } from './reports/reports.module.js';
 import { ImportsModule } from './imports/imports.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { IntegrationsModule } from './integrations/integrations.module.js';
+import { AccountAnalyticsModule } from './account-analytics/account-analytics.module.js';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { IntegrationsModule } from './integrations/integrations.module.js';
     ImportsModule,
     SettingsModule,
     IntegrationsModule,
+    AccountAnalyticsModule,
   ],
   controllers: [HealthController],
 })

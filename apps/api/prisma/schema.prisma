@@ -300,6 +300,10 @@ enum IntegrationProvider {
   INSTAGRAM_ADS
   LINKEDIN_ADS
   ZOHO_CAMPAIGNS
+  FACEBOOK_ORGANIC
+  INSTAGRAM_ORGANIC
+  LINKEDIN_ORGANIC
+  YOUTUBE_ANALYTICS
 
   @@schema("social_media_dashboard")
 }
@@ -315,27 +319,29 @@ enum IntegrationRunStatus {
 }
 
 model IntegrationConnection {
-  id                  String               @id @default(uuid()) @db.Uuid
+  id                  String                            @id @default(uuid()) @db.Uuid
   provider            IntegrationProvider
-  platformId          String               @db.Uuid
-  platform            Platform             @relation(fields: [platformId], references: [id], onDelete: Restrict)
-  displayName         String               @db.VarChar(120)
-  externalAccountId   String               @db.VarChar(160)
-  credentialReference String               @db.VarChar(100)
-  sourceTimezone      String               @db.VarChar(100)
-  currency            String?              @db.VarChar(3)
-  region              String               @default("US") @db.VarChar(10)
-  active              Boolean              @default(true)
-  autoSync            Boolean              @default(false)
-  nextSyncAt          DateTime             @default(now())
-  leaseToken          String?              @db.Uuid
+  platformId          String                            @db.Uuid
+  platform            Platform                          @relation(fields: [platformId], references: [id], onDelete: Restrict)
+  displayName         String                            @db.VarChar(120)
+  externalAccountId   String                            @db.VarChar(160)
+  credentialReference String                            @db.VarChar(100)
+  sourceTimezone      String                            @db.VarChar(100)
+  currency            String?                           @db.VarChar(3)
+  region              String                            @default("US") @db.VarChar(10)
+  active              Boolean                           @default(true)
+  autoSync            Boolean                           @default(false)
+  nextSyncAt          DateTime                          @default(now())
+  leaseToken          String?                           @db.Uuid
   leaseUntil          DateTime?
-  configuredByUserId  String               @db.Uuid
-  configuredByUser    User                 @relation(fields: [configuredByUserId], references: [id], onDelete: Restrict)
+  configuredByUserId  String                            @db.Uuid
+  configuredByUser    User                              @relation(fields: [configuredByUserId], references: [id], onDelete: Restrict)
   mappings            IntegrationMapping[]
   runs                IntegrationRun[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  accountRecords      ConnectedAccountAnalyticsRecord[]
+  metricValues        PerformanceMetricValue[]
+  createdAt           DateTime                          @default(now())
+  updatedAt           DateTime                          @updatedAt
 
   @@unique([provider, region, externalAccountId])
   @@index([active, autoSync, nextSyncAt])
@@ -377,17 +383,86 @@ model IntegrationRun {
   @@schema("social_media_dashboard")
 }
 
+enum AccountAnalyticsScope {
+  ACCOUNT
+  CONTENT
+
+  @@schema("social_media_dashboard")
+}
+
+model IntegrationMetricDefinition {
+  id                  String                        @id @default(uuid()) @db.Uuid
+  provider            IntegrationProvider
+  code                String                        @db.VarChar(80)
+  scope               AccountAnalyticsScope         @default(ACCOUNT)
+  name                String                        @db.VarChar(120)
+  description         String
+  sourceField         String                        @db.VarChar(120)
+  definitionVersion   Int                           @default(1)
+  unit                MetricUnit
+  aggregationStrategy AggregationStrategy
+  weightingMetricCode String?                       @db.VarChar(80)
+  nonNegative         Boolean                       @default(true)
+  retentionDays       Int?
+  active              Boolean                       @default(true)
+  metricValues        ConnectedAccountMetricValue[]
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+
+  @@unique([provider, code, scope, definitionVersion])
+  @@index([provider, scope, active])
+  @@schema("social_media_dashboard")
+}
+
+model ConnectedAccountAnalyticsRecord {
+  id               String                        @id @default(uuid()) @db.Uuid
+  connectionId     String                        @db.Uuid
+  connection       IntegrationConnection         @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  recordDate       DateTime                      @db.Date
+  scope            AccountAnalyticsScope         @default(ACCOUNT)
+  sourceObjectId   String                        @default("ACCOUNT") @db.VarChar(160)
+  sourceApiVersion String?                       @db.VarChar(40)
+  retrievedAt      DateTime                      @default(now())
+  metricValues     ConnectedAccountMetricValue[]
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+
+  @@unique([connectionId, recordDate, scope, sourceObjectId])
+  @@index([connectionId, recordDate])
+  @@schema("social_media_dashboard")
+}
+
+model ConnectedAccountMetricValue {
+  id                  String                          @id @default(uuid()) @db.Uuid
+  recordId            String                          @db.Uuid
+  record              ConnectedAccountAnalyticsRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+  metricDefinitionId  String                          @db.Uuid
+  metricDefinition    IntegrationMetricDefinition     @relation(fields: [metricDefinitionId], references: [id], onDelete: Restrict)
+  value               Decimal                         @db.Decimal(24, 6)
+  sourceDataExpiresAt DateTime?
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @updatedAt
+
+  @@unique([recordId, metricDefinitionId])
+  @@index([sourceDataExpiresAt])
+  @@schema("social_media_dashboard")
+}
+
 model PerformanceMetricValue {
-  id                  String            @id @default(uuid()) @db.Uuid
-  performanceRecordId String            @db.Uuid
-  performanceRecord   PerformanceRecord @relation(fields: [performanceRecordId], references: [id])
-  metricDefinitionId  String            @db.Uuid
-  metricDefinition    MetricDefinition  @relation(fields: [metricDefinitionId], references: [id])
-  value               Decimal           @db.Decimal(24, 6)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  id                  String                 @id @default(uuid()) @db.Uuid
+  performanceRecordId String                 @db.Uuid
+  performanceRecord   PerformanceRecord      @relation(fields: [performanceRecordId], references: [id])
+  metricDefinitionId  String                 @db.Uuid
+  metricDefinition    MetricDefinition       @relation(fields: [metricDefinitionId], references: [id])
+  sourceConnectionId  String?                @db.Uuid
+  sourceConnection    IntegrationConnection? @relation(fields: [sourceConnectionId], references: [id], onDelete: Restrict)
+  value               Decimal                @db.Decimal(24, 6)
+  sourceDataExpiresAt DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
   @@unique([performanceRecordId, metricDefinitionId])
+  @@index([sourceConnectionId, sourceDataExpiresAt])
   @@schema("social_media_dashboard")
 }
 

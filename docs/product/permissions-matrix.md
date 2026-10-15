@@ -407,3 +407,11 @@ Approved rules include:
 Next phase:
 
 **Step 4 — KPI & Analytics Semantics**
+
+---
+
+# Connected-account analytics permissions (2026-10-14)
+
+All authenticated roles may read provider-account analytics and connection metadata. Management remains read-only. Account metric ingestion is performed only by server-side provider integrations; this slice does not expose a user-authored metric or formula endpoint. Connection setup, OAuth consent, credential lifecycle, sync controls, and disconnection retain the existing Administrator/Marketing Officer boundaries unless a provider-specific workflow receives an approved rule.
+
+See [ADR-012](../decisions/ADR-012-connected-account-analytics.md) and the [connected-account implementation plan](../plans/completion/connected-account-analytics.md).

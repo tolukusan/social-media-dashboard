@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-The 2026-10-08 [live integration addition](../decisions/ADR-011-live-integrations.md) activates the A-002 connected-source boundary: `Platform` has multiple `IntegrationConnection` accounts; connections have external-campaign `IntegrationMapping` rows and `IntegrationRun` history. A local `CampaignPlatform` has at most one integration mapping. `PerformanceRecord` optionally references that mapping and records whether the connector may still manage it. Existing rows are unmanaged by default. Credentials remain server configuration references; raw tokens are not database fields. Existing campaign, metric, and archive semantics below remain authoritative.
+The 2026-10-08 [live integration addition](../decisions/ADR-011-live-integrations.md) activates the A-002 connected-source boundary: `Platform` has multiple `IntegrationConnection` accounts; connections have external-campaign `IntegrationMapping` rows and `IntegrationRun` history. A local `CampaignPlatform` has at most one integration mapping. `PerformanceRecord` optionally references that mapping and records whether the connector may still manage it. Existing rows are unmanaged by default. Credentials remain server configuration references; raw tokens are not database fields. The 2026-10-14 [connected-account analytics addition](../decisions/ADR-012-connected-account-analytics.md) adds a distinct daily account/content analytics path; campaign requirements below remain authoritative for campaign-attributed data.
 
 This document defines the logical domain model for the MVP before any framework, ORM or database engine is selected.
 
@@ -907,3 +907,38 @@ Approved domain-model decisions include:
 Next phase:
 
 **Step 3 — Roles, Permissions & Workflows**
+
+---
+
+# 15. Connected Account Analytics Extension (2026-10-14)
+
+This additive extension implements the stakeholder-authorised account-first analytics direction. It does not change the campaign-based `PerformanceRecord` cardinality or formulas.
+
+## ConnectedAccountAnalyticsRecord
+
+Represents one daily provider observation for one connected account or one provider content object. It belongs directly to one `IntegrationConnection`, not to `Campaign`, `CampaignPlatform`, or `PerformanceRecord`.
+
+### Core attributes
+
+| Field            | Purpose                                                                      |
+| ---------------- | ---------------------------------------------------------------------------- |
+| connectionId     | Connected provider account                                                   |
+| recordDate       | Source-calendar day represented by the observation                           |
+| scope            | `ACCOUNT` or `CONTENT`                                                       |
+| sourceObjectId   | Fixed `ACCOUNT` marker for account rows; provider object ID for content rows |
+| sourceApiVersion | Provider API version used to retrieve the observation                        |
+| retrievedAt      | Time the provider data was retrieved                                         |
+
+The combination of connection, date, scope, and source object identifies one observation. Repeated retrievals update the observation; omitted metrics remain unavailable instead of becoming zero.
+
+## IntegrationMetricDefinition and ConnectedAccountMetricValue
+
+Provider fields use system-managed definitions keyed by provider, source metric code, and definition version. A definition records its provider-specific meaning, source field, unit, non-negative rule, aggregation strategy, and optional retention period. LinkedIn definitions require an explicit retention period before ingestion. Values store raw provider measurements. No derived values are stored, and similarly named provider fields are not combined without an approved semantic mapping.
+
+`ConnectedAccountMetricValue` belongs to exactly one account observation and one provider-specific metric definition. The daily account API returns these raw values and their provider metadata; it does not feed them into campaign calculations.
+
+## Provider retention and provenance
+
+`PerformanceMetricValue` now optionally records its source connection and source-data expiry, allowing campaign and account values to be retained/deleted at value grain. Provider metric definitions declare applicable retention days; LinkedIn Ads and Page reporting values currently expire after 364 days, while future content metrics may set a shorter period. Expired values are hidden from analytics and purged by the API retention worker. The one-day safety buffer keeps current LinkedIn reporting retention below its one-year maximum. Existing provider-managed rows are backfilled additively; data that cannot be classified safely is not automatically deleted. Member profile/activity data is outside this metric model.
+
+See [ADR-012](../decisions/ADR-012-connected-account-analytics.md) and the [implementation plan](../plans/completion/connected-account-analytics.md) for acceptance and operational limits.

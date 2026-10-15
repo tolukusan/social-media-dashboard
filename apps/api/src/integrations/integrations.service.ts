@@ -38,6 +38,8 @@ const contextInclude = {
   campaignChannel: { include: { campaign: true, channel: true } },
 } as const;
 const dateValue = (value: string) => new Date(`${value}T00:00:00.000Z`);
+const linkedinDataExpiry = (at: Date) =>
+  new Date(at.getTime() + 364 * 24 * 60 * 60 * 1000);
 const safeJson = (value: unknown) => value as Prisma.InputJsonValue;
 const connectionSelect = {
   id: true,
@@ -405,6 +407,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     }
     return this.prisma.$transaction(
       async (tx) => {
+        const retrievedAt = new Date();
         const fenced = await tx.integrationConnection.updateMany({
           where: {
             id: connectionId,
@@ -422,6 +425,9 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         const connection = await tx.integrationConnection.findUniqueOrThrow({
           where: { id: connectionId },
         });
+        const sourceDataExpiresAt = connection.provider.startsWith('LINKEDIN')
+          ? linkedinDataExpiry(retrievedAt)
+          : null;
         await tx.$queryRaw`SELECT id FROM social_media_dashboard."User" WHERE id IN (${actorId}::uuid, ${connection.configuredByUserId}::uuid) ORDER BY id FOR SHARE`;
         const actors = await tx.user.findMany({
           where: { id: { in: [actorId, connection.configuredByUserId] } },
@@ -551,6 +557,14 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                 Number(metric.value),
             )
           ) {
+            if (connection.provider.startsWith('LINKEDIN'))
+              await tx.performanceMetricValue.updateMany({
+                where: { performanceRecordId: existing.id },
+                data: {
+                  sourceConnectionId: connectionId,
+                  sourceDataExpiresAt,
+                },
+              });
             counts.unchangedRecords++;
             continue;
           }
@@ -580,6 +594,8 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
             data: entries.map(([code, value]) => ({
               performanceRecordId: record.id,
               metricDefinitionId: byCode.get(code)!.id,
+              sourceConnectionId: connectionId,
+              sourceDataExpiresAt,
               value,
             })),
           });

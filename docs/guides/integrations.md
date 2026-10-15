@@ -2,6 +2,8 @@
 
 The Integrations workspace supports Facebook Ads, Instagram Ads, LinkedIn Ads, and Zoho Campaigns. You can prepare setup before credentials exist. Additional providers need a specific adapter; an arbitrary API URL is not supported.
 
+The stakeholder has approved a connected-account rollout covering Facebook and Instagram organic analytics, LinkedIn Page analytics, and YouTube channel/video analytics as well as the existing products. That work has its own [ordered implementation plan](../plans/completion/connected-account-analytics.md). This guide describes only the campaign integrations currently implemented.
+
 ## Prepare setup
 
 1. As an Administrator, ensure the appropriate platform exists in Settings: Facebook Ads, Instagram Ads, or LinkedIn Ads under Online Advertising; Zoho Campaigns under Email Marketing. The normal seed includes these catalogue entries.
@@ -39,6 +41,8 @@ Manual sync accepts at most 31 completed source-calendar days. Advertising accou
 Advertising imports create daily raw impressions, clicks, and spend. Dashboards and PDF reports use the existing backend KPI calculations. Missing rows/fields remain missing. Existing manual/file records, manual corrections, and archived records are preserved and counted as conflicts. Connector-owned active records can receive late provider corrections; identical repeats make no change. Manual edits retain source provenance but prevent later connector updates.
 
 Zoho snapshots show cumulative campaign counts as observed at the run time. Repeated snapshots are historical observations, not extra daily activity. They do not populate daily charts, targets, or PDF KPIs. Provider percentages and rates are excluded. Organic Facebook/Instagram profile metrics are not included in these advertising connectors.
+
+LinkedIn advertising-account and Page reporting metrics are provider-specific and are retained for 364 days after retrieval, below LinkedIn's one-year maximum. Future content and member data must follow their shorter or non-storable policy; a provider metric without an explicit LinkedIn retention policy is rejected. Expired metric values are hidden from analytics and removed by the API retention worker. The worker runs on API startup and every minute; expired values remain hidden if a cleanup attempt fails. Keep the API available and investigate the safe `PROVIDER_DATA_RETENTION_SWEEP_FAILED` warning. A data deletion request is distinct from disconnecting an account, which preserves history. Review [LinkedIn's data storage requirements](https://learn.microsoft.com/en-us/linkedin/marketing/data-storage-requirements) and [Marketing API terms](https://www.linkedin.com/legal/l/marketing-api-terms). Older LinkedIn-mapped campaign values without value-level provenance are not automatically purged; audit them before claiming full compliance.
 
 **Disconnect** stops local scheduling and fences pending writes while preserving mappings, runs, and performance history. It does not revoke an environment token shared with other connections. Revoke tokens in the provider's tools when required. **Resume connection** reactivates setup; daily scheduling must be enabled separately.
 

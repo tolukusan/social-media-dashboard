@@ -7,6 +7,7 @@ import {
   list,
   numeric,
   object,
+  providers,
   zohoHosts,
 } from './integration-contract.js';
 import type {
@@ -88,6 +89,11 @@ export class ProviderClient {
     from: string,
     to: string,
   ): Promise<ProviderResult> {
+    if (!(providers as readonly string[]).includes(connection.provider))
+      fail(
+        'UNSUPPORTED_PROVIDER_PRODUCT',
+        'Campaign sync is not supported for this connected provider product.',
+      );
     const config = configuration(connection);
     if (!config.ready)
       fail(
