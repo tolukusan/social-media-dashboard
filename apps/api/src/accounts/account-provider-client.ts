@@ -5,6 +5,7 @@ import type {
   MetricObservation,
   OAuthCredentials,
   PostObservation,
+  ProviderAccessRevocation,
   ProviderSyncResult,
 } from './account-contract.js';
 import {
@@ -287,13 +288,9 @@ export class AccountProviderClient {
       'id,name,access_token,link,instagram_business_account{id,username,name,profile_picture_url}',
     );
     pagesUrl.searchParams.set('limit', '100');
-    const response = await this.requestJson(
-      pagesUrl,
-      userCredentials.accessToken,
-    );
-    const pages = records(response.data);
+    const pages = await this.metaPages(pagesUrl, userCredentials.accessToken);
     const candidates: ConnectedCandidate[] = [];
-    for (const pageValue of pages.slice(0, 100)) {
+    for (const pageValue of pages.slice(0, 1000)) {
       const page = record(pageValue);
       const pageId = stringValue(page.id);
       const pageToken = stringValue(page.access_token);
@@ -350,6 +347,43 @@ export class AccountProviderClient {
     return candidates;
   }
 
+  private async metaPages(
+    initialUrl: URL,
+    token: string,
+    maxPages = 5,
+  ): Promise<unknown[]> {
+    const values: unknown[] = [];
+    const seenCursors = new Set<string>();
+    let cursor: string | null = null;
+    for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+      const url = new URL(initialUrl);
+      if (cursor) url.searchParams.set('after', cursor);
+      const response = await this.requestJson(url, token);
+      const pageValues = records(response.data);
+      values.push(...pageValues);
+      if (pageValues.length === 0) break;
+      const paging =
+        response.paging && typeof response.paging === 'object'
+          ? record(response.paging)
+          : {};
+      const cursors =
+        paging.cursors && typeof paging.cursors === 'object'
+          ? record(paging.cursors)
+          : {};
+      const nextCursor = stringValue(cursors.after);
+      if (
+        typeof paging.next !== 'string' ||
+        !paging.next ||
+        !nextCursor ||
+        seenCursors.has(nextCursor)
+      )
+        break;
+      seenCursors.add(nextCursor);
+      cursor = nextCursor;
+    }
+    return values;
+  }
+
   private safeFacebookUrl(value: unknown) {
     if (typeof value !== 'string') return null;
     try {
@@ -374,13 +408,17 @@ export class AccountProviderClient {
       start: '0',
     }))
       url.searchParams.set(key, value);
-    const result = await this.requestJson(url, credentials.accessToken, {
-      'LinkedIn-Version': version,
-      'X-Restli-Protocol-Version': '2.0.0',
-    });
-    const entries = records(result.elements);
+    const entries = await this.linkedInPages(
+      url,
+      credentials.accessToken,
+      {
+        'LinkedIn-Version': version,
+        'X-Restli-Protocol-Version': '2.0.0',
+      },
+      'elements',
+    );
     const candidates: ConnectedCandidate[] = [];
-    for (const value of entries.slice(0, 100)) {
+    for (const value of entries.slice(0, 1000)) {
       const entry = record(value);
       const organizationUrn = stringValue(entry.organization);
       const id = organizationUrn.match(/^urn:li:organization:(\d+)$/)?.[1];
@@ -430,38 +468,88 @@ export class AccountProviderClient {
     return candidates;
   }
 
+  private async linkedInPages(
+    initialUrl: URL,
+    token: string,
+    headers: Record<string, string>,
+    collectionField: string,
+    maxPages = 10,
+  ): Promise<unknown[]> {
+    const values: unknown[] = [];
+    const seenStarts = new Set<number>();
+    let start = Number(initialUrl.searchParams.get('start') ?? 0);
+    const count = Number(initialUrl.searchParams.get('count') ?? 100);
+    for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+      if (seenStarts.has(start)) break;
+      seenStarts.add(start);
+      const url = new URL(initialUrl);
+      url.searchParams.set('start', String(start));
+      const response = await this.requestJson(url, token, headers);
+      const pageValues = records(response[collectionField]);
+      values.push(...pageValues);
+      const paging =
+        response.paging && typeof response.paging === 'object'
+          ? record(response.paging)
+          : {};
+      const total =
+        typeof paging.total === 'number' && Number.isFinite(paging.total)
+          ? paging.total
+          : null;
+      if (
+        pageValues.length === 0 ||
+        pageValues.length < count ||
+        (total !== null && start + pageValues.length >= total)
+      )
+        break;
+      start += pageValues.length;
+    }
+    return values;
+  }
+
   private async discoverYouTube(credentials: OAuthCredentials) {
     const url = new URL('https://www.googleapis.com/youtube/v3/channels');
     url.searchParams.set('part', 'snippet,statistics');
     url.searchParams.set('mine', 'true');
-    const result = await this.requestJson(url, credentials.accessToken);
-    return records(result.items)
-      .slice(0, 20)
-      .flatMap((value) => {
-        const item = record(value);
-        const id = stringValue(item.id);
-        const snippet = record(item.snippet);
-        const channelId = id.match(/^[A-Za-z0-9_-]{1,80}$/)?.[0];
-        if (!channelId) return [];
-        const handle = text(snippet.customUrl, 160);
-        return [
-          {
-            provider: 'YOUTUBE' as const,
-            kind: 'SOCIAL' as const,
-            externalAccountId: channelId,
-            displayName: text(snippet.title, 160) ?? 'YouTube channel',
-            handle,
-            profileUrl: handle
-              ? `https://www.youtube.com/${encodeURIComponent(handle)}`
-              : `https://www.youtube.com/channel/${channelId}`,
-            profileMetadataExpiresAt: null,
-            credentials,
-            tokenExpiresAt: credentials.expiresAt
-              ? new Date(credentials.expiresAt)
-              : null,
-          },
-        ];
-      });
+    url.searchParams.set('maxResults', '50');
+    const values: unknown[] = [];
+    const seenTokens = new Set<string>();
+    let pageToken: string | null = null;
+    for (let pageIndex = 0; pageIndex < 10; pageIndex += 1) {
+      const pageUrl = new URL(url);
+      if (pageToken) pageUrl.searchParams.set('pageToken', pageToken);
+      const result = await this.requestJson(pageUrl, credentials.accessToken);
+      const pageValues = records(result.items);
+      values.push(...pageValues);
+      const nextToken = stringValue(result.nextPageToken);
+      if (!nextToken || seenTokens.has(nextToken)) break;
+      seenTokens.add(nextToken);
+      pageToken = nextToken;
+    }
+    return values.slice(0, 500).flatMap((value) => {
+      const item = record(value);
+      const id = stringValue(item.id);
+      const snippet = record(item.snippet);
+      const channelId = id.match(/^[A-Za-z0-9_-]{1,80}$/)?.[0];
+      if (!channelId) return [];
+      const handle = text(snippet.customUrl, 160);
+      return [
+        {
+          provider: 'YOUTUBE' as const,
+          kind: 'SOCIAL' as const,
+          externalAccountId: channelId,
+          displayName: text(snippet.title, 160) ?? 'YouTube channel',
+          handle,
+          profileUrl: handle
+            ? `https://www.youtube.com/${encodeURIComponent(handle)}`
+            : `https://www.youtube.com/channel/${channelId}`,
+          profileMetadataExpiresAt: null,
+          credentials,
+          tokenExpiresAt: credentials.expiresAt
+            ? new Date(credentials.expiresAt)
+            : null,
+        },
+      ];
+    });
   }
 
   async sync(
@@ -497,7 +585,7 @@ export class AccountProviderClient {
       );
     if (account.provider === 'YOUTUBE')
       return this.syncYouTube(account.externalAccountId, credentials, from, to);
-    return this.syncZoho(credentials);
+    return this.syncZoho(credentials, from, to);
   }
 
   private async syncInstagram(
@@ -570,6 +658,7 @@ export class AccountProviderClient {
       caveats: [
         'Instagram account insights are available for up to 90 days. Views count plays or displays; reach counts unique accounts.',
         'Follower change is calculated only between audience-size snapshots collected by this app; no baseline exists before the first sync.',
+        'Top-content ranking is based on up to 20 eligible media items synced for the selected period.',
       ],
     };
   }
@@ -588,10 +677,11 @@ export class AccountProviderClient {
       'fields',
       'id,caption,media_type,permalink,timestamp',
     );
-    mediaUrl.searchParams.set('limit', '20');
-    const mediaResult = await this.requestJson(mediaUrl, token);
+    mediaUrl.searchParams.set('limit', '100');
+    const mediaRecords = await this.metaPages(mediaUrl, token);
     const posts: PostObservation[] = [];
-    for (const value of records(mediaResult.data).slice(0, 20)) {
+    for (const value of mediaRecords.slice(0, 500)) {
+      if (posts.length >= 20) break;
       const media = record(value);
       const id = stringValue(media.id);
       if (!/^\d+$/.test(id)) continue;
@@ -724,6 +814,7 @@ export class AccountProviderClient {
       caveats: [
         'Facebook page visits are visits to the Page profile. Media views are included only when Meta explicitly marks them as unpaid; paid and mixed totals are excluded.',
         'Audience size is a follower-count snapshot. Change is shown only after at least two app syncs.',
+        'Top-content ranking is based on up to 20 eligible published posts synced for the selected period.',
       ],
     };
   }
@@ -739,10 +830,11 @@ export class AccountProviderClient {
       `https://graph.facebook.com/${version}/${pageId}/published_posts`,
     );
     url.searchParams.set('fields', 'id,message,permalink_url,created_time');
-    url.searchParams.set('limit', '20');
-    const response = await this.requestJson(url, token);
+    url.searchParams.set('limit', '100');
+    const postRecords = await this.metaPages(url, token);
     const posts: PostObservation[] = [];
-    for (const value of records(response.data).slice(0, 20)) {
+    for (const value of postRecords.slice(0, 500)) {
+      if (posts.length >= 20) break;
       const post = record(value);
       const id = stringValue(post.id);
       const publishedAt = providerDate(post.created_time);
@@ -989,6 +1081,7 @@ export class AccountProviderClient {
         'LinkedIn share statistics cover organic activity and are available for a rolling 12-month period.',
         'The follower growth chart includes organic follower gains only; LinkedIn paid follower gains are excluded.',
         'LinkedIn reporting data is retained for at most one year under current platform storage requirements.',
+        'Top-content ranking is based on up to 20 eligible posts; post metadata is available for only six weeks.',
       ],
     };
   }
@@ -1013,9 +1106,14 @@ export class AccountProviderClient {
     postsUrl.searchParams.set('author', organizationUrn);
     postsUrl.searchParams.set('count', '100');
     postsUrl.searchParams.set('sortBy', 'CREATED');
-    const response = await this.requestJson(postsUrl, token, headers);
-    const candidates = records(response.elements)
-      .slice(0, 100)
+    const postRecords = await this.linkedInPages(
+      postsUrl,
+      token,
+      headers,
+      'elements',
+    );
+    const candidates = postRecords
+      .slice(0, 1000)
       .flatMap((value) => {
         const post = record(value);
         const urn = stringValue(post.id);
@@ -1195,6 +1293,7 @@ export class AccountProviderClient {
       caveats: [
         'YouTube Analytics reports can omit the newest days while provider metrics finish processing.',
         'Subscriber totals may be hidden or rounded by YouTube. Views and watch time are reported separately.',
+        'Video ranking shows up to 10 results returned by YouTube Analytics for the selected period.',
       ],
     };
   }
@@ -1269,6 +1368,8 @@ export class AccountProviderClient {
 
   private async syncZoho(
     credentials: OAuthCredentials,
+    from: string,
+    to: string,
   ): Promise<ProviderSyncResult> {
     const region =
       credentials.providerData?.region ?? process.env.INTEGRATION_ZOHO_REGION!;
@@ -1278,24 +1379,18 @@ export class AccountProviderClient {
         'PROVIDER_CONFIGURATION_REQUIRED',
         'Choose a supported Zoho data center before syncing.',
       );
-    const listUrl = new URL(
-      `https://campaigns.${domain}/api/v1.1/recentcampaigns`,
-    );
-    listUrl.searchParams.set('resfmt', 'JSON');
-    const listResponse = await this.requestJson(
-      listUrl,
+    const campaignRecords = await this.fetchZohoCampaigns(
+      domain,
       credentials.accessToken,
-      {},
-      'ZOHO',
     );
-    if (listResponse.status !== 'success')
-      providerFailure(
-        'PROVIDER_ACCESS_DENIED',
-        'Zoho did not return campaign reports. Check the Zoho Campaigns permission and data center.',
-      );
-    const campaignRecords = this.zohoCampaignList(listResponse);
     const emailCampaigns: EmailCampaignObservation[] = [];
-    for (const item of campaignRecords.slice(0, 100)) {
+    const eligibleCampaigns = campaignRecords.filter((item) => {
+      const campaign = record(item);
+      const sentAt = providerDate(campaign.sent_time ?? campaign.sentAt);
+      const sentDay = sentAt?.slice(0, 10);
+      return Boolean(sentDay && sentDay >= from && sentDay <= to);
+    });
+    for (const item of eligibleCampaigns.slice(0, 400)) {
       const campaign = record(item);
       const key = stringValue(campaign.campaign_key ?? campaign.campaignkey);
       if (!/^[A-Za-z0-9_-]{1,180}$/.test(key)) continue;
@@ -1304,38 +1399,52 @@ export class AccountProviderClient {
       );
       reportUrl.searchParams.set('resfmt', 'JSON');
       reportUrl.searchParams.set('campaignkey', key);
-      try {
-        const response = await this.requestJson(
-          reportUrl,
-          credentials.accessToken,
-          {},
-          'ZOHO',
+      const response = await this.requestJson(
+        reportUrl,
+        credentials.accessToken,
+        {},
+        'ZOHO',
+      );
+      if (response.status !== 'success') {
+        const code = stringValue(response.code);
+        if (code === '6001')
+          providerFailure(
+            'PROVIDER_UNAVAILABLE',
+            'Zoho could not prepare this campaign report. Retry the sync later.',
+          );
+        if (code === '6601')
+          providerFailure(
+            'PROVIDER_ACCESS_DENIED',
+            'Zoho denied access to this campaign report. Check the Campaigns read permission.',
+          );
+        providerFailure(
+          'PROVIDER_REQUEST_FAILED',
+          'Zoho did not return a campaign report. Retry the sync later.',
         );
-        if (response.status !== 'success') continue;
-        const report = record(records(response['campaign-reports'])[0]);
-        const metricValues: Record<string, number> = {};
-        for (const [source, target] of [
-          ['emails_sent_count', 'SENT'],
-          ['delivered_count', 'DELIVERED'],
-          ['opens_count', 'OPENS'],
-          ['unique_clicks_count', 'UNIQUE_CLICKS'],
-          ['bounces_count', 'BOUNCES'],
-          ['unsub_count', 'UNSUBSCRIBES'],
-        ]) {
-          if (report[source] !== null && report[source] !== undefined)
-            metricValues[target] = metricNumber(report[source]);
-        }
-        emailCampaigns.push({
-          externalCampaignId: key,
-          campaignName:
-            text(campaign.campaign_name ?? report.campaign_name, 300) ??
-            'Email campaign',
-          sentAt: providerDate(campaign.sent_time ?? report.sent_time),
-          metricValues,
-        });
-      } catch {
-        // A bad or deleted campaign report does not block other campaigns.
       }
+      const report = record(records(response['campaign-reports'])[0]);
+      const metricValues: Record<string, number> = {};
+      for (const [source, target] of [
+        ['emails_sent_count', 'SENT'],
+        ['delivered_count', 'DELIVERED'],
+        ['opens_count', 'OPENS'],
+        ['unique_clicks_count', 'UNIQUE_CLICKS'],
+        ['open_percent', 'OPEN_RATE'],
+        ['unique_clicked_percent', 'UNIQUE_CLICK_RATE'],
+        ['bounces_count', 'BOUNCES'],
+        ['unsub_count', 'UNSUBSCRIBES'],
+      ]) {
+        if (report[source] !== null && report[source] !== undefined)
+          metricValues[target] = metricNumber(report[source]);
+      }
+      emailCampaigns.push({
+        externalCampaignId: key,
+        campaignName:
+          text(campaign.campaign_name ?? report.campaign_name, 300) ??
+          'Email campaign',
+        sentAt: providerDate(campaign.sent_time ?? report.sent_time),
+        metricValues,
+      });
     }
     return {
       metrics: [],
@@ -1343,8 +1452,57 @@ export class AccountProviderClient {
       emailCampaigns,
       caveats: [
         'Zoho figures are cumulative campaign totals as last reported by Zoho. They are not daily observations and are kept outside social-account analytics.',
+        'This sync selects sent campaigns by send date and fetches at most 400 campaign reports per run to stay within Zoho’s API quota.',
+        ...(campaignRecords.length >= 400
+          ? [
+              'The recent campaign scan reached its 400-campaign safety limit. Older matching campaigns may not be included in this sync.',
+            ]
+          : []),
       ],
     };
+  }
+
+  private async fetchZohoCampaigns(domain: string, token: string) {
+    const pageSize = 100;
+    const maxPages = 4;
+    const campaigns: unknown[] = [];
+    const campaignKeys = new Set<string>();
+    let fromIndex = 1;
+    for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+      const listUrl = new URL(
+        `https://campaigns.${domain}/api/v1.1/recentcampaigns`,
+      );
+      listUrl.searchParams.set('resfmt', 'JSON');
+      listUrl.searchParams.set('status', 'sent');
+      listUrl.searchParams.set('sort', 'desc');
+      listUrl.searchParams.set('fromindex', String(fromIndex));
+      listUrl.searchParams.set('range', String(pageSize));
+      const result = await this.requestJson(listUrl, token, {}, 'ZOHO');
+      if (result.status !== 'success') {
+        const code = stringValue(result.code);
+        if (code === '6101') return campaigns;
+        if (code === '6601')
+          providerFailure(
+            'PROVIDER_ACCESS_DENIED',
+            'Zoho denied access to sent campaigns. Check the Campaigns read permission.',
+          );
+        providerFailure(
+          'PROVIDER_REQUEST_FAILED',
+          'Zoho did not return sent campaigns. Retry the sync later.',
+        );
+      }
+      const page = this.zohoCampaignList(result);
+      for (const item of page) {
+        const campaign = record(item);
+        const key = stringValue(campaign.campaign_key ?? campaign.campaignkey);
+        if (!key || campaignKeys.has(key)) continue;
+        campaignKeys.add(key);
+        campaigns.push(item);
+      }
+      if (page.length < pageSize) break;
+      fromIndex += page.length;
+    }
+    return campaigns;
   }
 
   async refreshCredentials(
@@ -1420,9 +1578,84 @@ export class AccountProviderClient {
     return credentials;
   }
 
+  async revokeCredentials(
+    provider: ConnectedAccountProvider,
+    credentials: OAuthCredentials,
+  ): Promise<Exclude<ProviderAccessRevocation, 'still_in_use'>> {
+    if (provider === 'YOUTUBE') {
+      return this.postRevocation(
+        new URL('https://oauth2.googleapis.com/revoke'),
+        new URLSearchParams({
+          token: credentials.refreshToken ?? credentials.accessToken,
+        }),
+      );
+    }
+
+    if (provider === 'ZOHO_CAMPAIGNS') {
+      const region =
+        credentials.providerData?.region ??
+        process.env.INTEGRATION_ZOHO_REGION!;
+      const domain = zohoDomains[region];
+      const clientId = process.env.INTEGRATION_ZOHO_CLIENT_ID?.trim();
+      const clientSecret = process.env.INTEGRATION_ZOHO_CLIENT_SECRET?.trim();
+      if (!domain || !clientId || !clientSecret) return 'failed';
+
+      const body = new URLSearchParams({
+        token: credentials.refreshToken ?? credentials.accessToken,
+        ...(!credentials.refreshToken ? { token_type: 'access_token' } : {}),
+      });
+      return this.postRevocation(
+        new URL(`https://accounts.${domain}/oauth/v2/revoke/token`),
+        body,
+        {
+          Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+        },
+      );
+    }
+
+    // Meta connections store Page access tokens, not the user token required to
+    // revoke the app grant. LinkedIn currently documents member-side revocation.
+    return 'not_supported';
+  }
+
+  private async postRevocation(
+    url: URL,
+    body: URLSearchParams,
+    extraHeaders: Record<string, string> = {},
+  ): Promise<'revoked' | 'already_inactive' | 'failed'> {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          ...extraHeaders,
+        },
+        body,
+        signal: AbortSignal.timeout(this.timeoutMs),
+        redirect: 'error',
+      });
+      if (response.ok) {
+        await response.body?.cancel();
+        return 'revoked';
+      }
+
+      let errorCode: unknown;
+      try {
+        const payload = (await response.json()) as Record<string, unknown>;
+        errorCode = payload.error;
+      } catch {
+        await response.body?.cancel();
+      }
+      return errorCode === 'invalid_token' ? 'already_inactive' : 'failed';
+    } catch {
+      return 'failed';
+    }
+  }
+
   private zohoCampaignList(result: Record<string, unknown>) {
     const content =
       result['recent-campaigns'] ??
+      result.recent_campaigns ??
       result.recentcampaigns ??
       result.campaigns ??
       result.data;
@@ -1472,12 +1705,46 @@ export class AccountProviderClient {
       const headers: Record<string, string> = { ...extraHeaders };
       if (token)
         headers.Authorization = `${scheme === 'ZOHO' ? 'Zoho-oauthtoken' : 'Bearer'} ${token}`;
-      const response = await fetch(url, {
-        headers,
-        signal: AbortSignal.timeout(this.timeoutMs),
-        redirect: 'error',
-      });
-      return await this.readJson(response);
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        let response: Response;
+        try {
+          response = await fetch(url, {
+            headers,
+            signal: AbortSignal.timeout(this.timeoutMs),
+            redirect: 'error',
+          });
+        } catch (error) {
+          if (error instanceof AccountProviderFailure) throw error;
+          if (attempt === 2) throw error;
+          await this.wait(200 * (attempt + 1));
+          continue;
+        }
+
+        const retryable =
+          response.status === 408 ||
+          response.status === 425 ||
+          response.status === 429 ||
+          response.status === 500 ||
+          response.status === 502 ||
+          response.status === 503 ||
+          response.status === 504;
+        if (retryable && attempt < 2) {
+          const delay = this.retryDelay(
+            response.headers.get('retry-after'),
+            attempt,
+          );
+          if (delay !== null) {
+            await response.body?.cancel();
+            await this.wait(delay);
+            continue;
+          }
+        }
+        return await this.readJson(response);
+      }
+      providerFailure(
+        'PROVIDER_UNAVAILABLE',
+        'The provider could not be reached. Retry later or reconnect the account.',
+      );
     } catch (error) {
       if (error instanceof AccountProviderFailure) throw error;
       providerFailure(
@@ -1485,6 +1752,22 @@ export class AccountProviderClient {
         'The provider could not be reached. Retry later or reconnect the account.',
       );
     }
+  }
+
+  private retryDelay(retryAfter: string | null, attempt: number) {
+    if (!retryAfter) return 200 * (attempt + 1);
+    const seconds = Number(retryAfter);
+    const delay = Number.isFinite(seconds)
+      ? seconds * 1000
+      : Date.parse(retryAfter) - Date.now();
+    if (!Number.isFinite(delay) || delay < 0) return 200 * (attempt + 1);
+    // A sync request will not hold a worker for long provider backoffs. Return
+    // the provider's 429 so the scheduler can retry on a later run instead.
+    return delay <= 1000 ? delay : null;
+  }
+
+  private wait(milliseconds: number) {
+    return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
   }
 
   private async readJson(response: Response): Promise<Record<string, unknown>> {

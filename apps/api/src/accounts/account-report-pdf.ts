@@ -39,6 +39,8 @@ function number(value: number | null, unit: string) {
   if (value === null || !Number.isFinite(value)) return 'Unavailable';
   if (unit === 'MINUTES')
     return `${new Intl.NumberFormat('en').format(value)} min`;
+  if (unit === 'PERCENT')
+    return `${new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(value)}%`;
   return new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(
     value,
   );

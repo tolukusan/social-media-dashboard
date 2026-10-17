@@ -1076,6 +1076,121 @@ input:focus-visible {
   margin-left: auto;
   text-align: right;
 }
+.account-sync-status {
+  display: grid;
+  max-width: 230px;
+  gap: 3px;
+  white-space: normal;
+}
+.account-sync-status strong {
+  color: #344054;
+  font-size: 11px;
+}
+.account-sync-status small {
+  color: #667085;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.account-sync-status.sync-current strong {
+  color: #067647;
+}
+.account-sync-status.sync-error strong,
+.account-sync-status.sync-stale strong {
+  color: #b42318;
+}
+.account-sync-status.sync-pending strong {
+  color: #b54708;
+}
+.account-comparison-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+}
+.account-comparison-picker legend {
+  padding: 0 5px;
+  color: #475467;
+  font-size: 11px;
+  font-weight: 650;
+}
+.account-comparison-picker label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #344054;
+  font-size: 12px;
+  cursor: pointer;
+}
+.account-comparison-picker input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+.account-comparison-picker input:disabled + span {
+  color: #98a2b3;
+}
+.account-comparison-table caption {
+  padding: 9px;
+  color: #667085;
+  text-align: left;
+  font-size: 11px;
+}
+.account-comparison-table thead small,
+.account-comparison-table td small {
+  display: block;
+  margin-top: 4px;
+  color: #667085;
+  font-size: 10px;
+  font-weight: 400;
+  white-space: normal;
+}
+.account-comparison-table td strong {
+  color: #172033;
+  font-size: 13px;
+}
+.account-comparison-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.account-comparison-content article {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+}
+.account-comparison-content h3 {
+  margin: 0;
+  color: #344054;
+  font-size: 12px;
+}
+.account-comparison-content p {
+  margin: 6px 0 10px;
+  color: #667085;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.account-comparison-content ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 22px;
+  color: #475467;
+  font-size: 11px;
+}
+.account-comparison-content li {
+  padding-left: 2px;
+}
+.account-comparison-content li strong {
+  display: block;
+  margin-top: 3px;
+  color: #172033;
+  font-size: 12px;
+}
 .text-button {
   padding: 6px 8px;
   border: 0;
@@ -1285,6 +1400,9 @@ input:focus-visible {
     width: 100%;
     margin-left: 47px;
     text-align: left;
+  }
+  .account-sync-status {
+    max-width: none;
   }
   .account-dashboard-heading {
     flex-direction: column;

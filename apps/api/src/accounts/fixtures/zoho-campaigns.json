@@ -1,0 +1,31 @@
+{
+  "recentCampaigns": {
+    "status": "success",
+    "recent_campaigns": {
+      "campaigns": [
+        {
+          "campaign_key": "campaign_fixture_001",
+          "campaign_name": "October product update",
+          "sent_time": "2026-10-14T09:30:00.000Z"
+        }
+      ]
+    }
+  },
+  "campaignReport": {
+    "status": "success",
+    "campaign-reports": [
+      {
+        "campaign_name": "October product update",
+        "sent_time": "2026-10-14T09:30:00.000Z",
+        "emails_sent_count": "1200",
+        "delivered_count": 1172,
+        "opens_count": "402",
+        "unique_clicks_count": "87",
+        "open_percent": "34.3",
+        "unique_clicked_percent": "7.42",
+        "bounces_count": 28,
+        "unsub_count": "3"
+      }
+    ]
+  }
+}

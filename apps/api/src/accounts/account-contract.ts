@@ -18,6 +18,9 @@ export type OAuthCredentials = {
   providerData?: Record<string, string>;
 };
 
+export type ProviderAccessRevocation =
+  'revoked' | 'already_inactive' | 'not_supported' | 'still_in_use' | 'failed';
+
 export type MetricObservation = {
   date: string;
   scope: AccountMetricScope;

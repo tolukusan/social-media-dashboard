@@ -17,6 +17,7 @@ import {
   type MetricObservation,
   type OAuthCredentials,
   type PostObservation,
+  type ProviderAccessRevocation,
   type ProviderSyncResult,
   validDay,
 } from './account-contract.js';
@@ -914,16 +915,38 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       'BOUNCES',
       'UNSUBSCRIBES',
     ];
-    const totals: Record<string, number> = Object.fromEntries(
-      totalCodes.map((code) => [code, 0]),
+    const totals: Record<string, number | null> = Object.fromEntries(
+      totalCodes.map((code) => [code, null]),
     );
     for (const campaign of campaigns) {
       const values = campaign.metricValues as Record<string, unknown>;
       for (const code of totalCodes) {
         const value = values[code];
         if (typeof value === 'number' && Number.isFinite(value))
-          totals[code] += value;
+          totals[code] = (totals[code] ?? 0) + value;
       }
+    }
+    for (const code of ['OPEN_RATE', 'UNIQUE_CLICK_RATE']) {
+      totals[code] = null;
+      let weightedRate = 0;
+      let deliveredWeight = 0;
+      for (const campaign of campaigns) {
+        const values = campaign.metricValues as Record<string, unknown>;
+        const rate = values[code];
+        const delivered = values.DELIVERED;
+        if (
+          typeof rate === 'number' &&
+          Number.isFinite(rate) &&
+          typeof delivered === 'number' &&
+          Number.isFinite(delivered) &&
+          delivered > 0
+        ) {
+          weightedRate += rate * delivered;
+          deliveredWeight += delivered;
+        }
+      }
+      if (deliveredWeight > 0)
+        totals[code] = Number((weightedRate / deliveredWeight).toFixed(2));
     }
     return {
       account: this.publicAccount(account),
@@ -940,6 +963,8 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       })),
       caveats: [
         'Zoho Campaigns returns cumulative report totals per email campaign. The date filter selects campaigns by sent date; it does not turn cumulative totals into daily activity.',
+        'Open rate and unique click rate are Zoho-reported percentages (unique opens or unique clicks divided by delivered emails). Summary rates are weighted by each campaign’s delivered count; campaigns without a rate or delivered count are excluded from that rate summary. A missing provider metric remains unavailable rather than being shown as zero.',
+        'This sync scans up to 400 recent sent campaigns and fetches at most 400 campaign reports per run. Older matching campaigns may not be included.',
       ],
     };
   }
@@ -957,8 +982,16 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       previousPeriod: null,
       metrics: Object.entries(report.totals).map(([code, value]) => ({
         code,
-        label: code.replaceAll('_', ' ').toLowerCase(),
-        unit: 'COUNT',
+        label:
+          code === 'OPEN_RATE'
+            ? 'Zoho-reported open rate'
+            : code === 'UNIQUE_CLICK_RATE'
+              ? 'Zoho-reported unique click rate'
+              : code.replaceAll('_', ' ').toLowerCase(),
+        unit:
+          code === 'OPEN_RATE' || code === 'UNIQUE_CLICK_RATE'
+            ? 'PERCENT'
+            : 'COUNT',
         mode: 'SUM',
         value,
         previous: null,
@@ -966,18 +999,23 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
         percentageChange: null,
       })),
       series: [],
-      topPosts: report.campaigns.map((campaign) => ({
-        externalPostId: campaign.externalCampaignId,
-        title: campaign.name,
-        postType: 'EMAIL CAMPAIGN',
-        permalink: null,
-        publishedAt: campaign.sentAt,
-        dataScope: 'CUMULATIVE',
-        metricCode: 'SENT',
-        metricValue: Number(
-          (campaign.metricValues as Record<string, unknown>).SENT ?? 0,
-        ),
-      })),
+      topPosts: report.campaigns.map((campaign) => {
+        const sentValue = (campaign.metricValues as Record<string, unknown>)
+          .SENT;
+        return {
+          externalPostId: campaign.externalCampaignId,
+          title: campaign.name,
+          postType: 'EMAIL CAMPAIGN',
+          permalink: null,
+          publishedAt: campaign.sentAt,
+          dataScope: 'CUMULATIVE',
+          metricCode: 'SENT',
+          metricValue:
+            typeof sentValue === 'number' && Number.isFinite(sentValue)
+              ? sentValue
+              : null,
+        };
+      }),
       caveats: report.caveats,
       dataAvailableThrough: report.account.lastSyncedAt,
       generatedAt: report.generatedAt,
@@ -986,6 +1024,52 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
 
   async disconnect(id: string, actorId: string) {
     const account = await this.getActiveAccount(id);
+    let providerAccessRevocation: ProviderAccessRevocation = 'not_supported';
+    if (
+      account.provider === 'YOUTUBE' ||
+      account.provider === 'ZOHO_CAMPAIGNS'
+    ) {
+      try {
+        const credentials = decryptCredentials(account.credentialCiphertext);
+        const grantToken = credentials.refreshToken ?? credentials.accessToken;
+        const relatedAccounts = await this.prisma.connectedAccount.findMany({
+          where: { provider: account.provider, id: { not: id } },
+          select: { credentialCiphertext: true },
+        });
+        let couldNotCheckAllCredentials = false;
+        const grantIsStillUsed = relatedAccounts.some((related) => {
+          try {
+            const relatedCredentials = decryptCredentials(
+              related.credentialCiphertext,
+            );
+            return credentials.refreshToken
+              ? relatedCredentials.refreshToken === grantToken
+              : relatedCredentials.accessToken === grantToken;
+          } catch {
+            // An unreadable sibling credential might still use this grant.
+            couldNotCheckAllCredentials = true;
+            return false;
+          }
+        });
+
+        if (grantIsStillUsed) {
+          providerAccessRevocation = 'still_in_use';
+        } else if (couldNotCheckAllCredentials) {
+          providerAccessRevocation = 'failed';
+        } else {
+          providerAccessRevocation =
+            await this.providerClient.revokeCredentials(
+              account.provider,
+              credentials,
+            );
+        }
+      } catch {
+        // A provider outage, unreadable credential, or missing OAuth config
+        // must not prevent deletion of this account's local data.
+        providerAccessRevocation = 'failed';
+      }
+    }
+
     await this.prisma.$transaction(async (tx) => {
       await tx.auditLog.create({
         data: {
@@ -993,12 +1077,20 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
           entityType: 'ConnectedAccount',
           entityId: id,
           action: 'CONNECTED_ACCOUNT_DISCONNECTED_AND_DATA_DELETED',
-          metadata: { provider: account.provider },
+          metadata: {
+            provider: account.provider,
+            providerAccessRevocation,
+          },
         },
       });
       await tx.connectedAccount.delete({ where: { id } });
     });
-    return { id, disconnected: true, providerDataDeleted: true };
+    return {
+      id,
+      disconnected: true,
+      providerDataDeleted: true,
+      providerAccessRevocation,
+    };
   }
 
   async runsNotApplicable() {
@@ -1249,22 +1341,26 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       return [
         'Instagram insights are limited to the provider’s available 90-day window. Views and reach use separate provider definitions.',
         'Follower change compares total follower snapshots collected by this app; the first sync creates the baseline.',
+        'Top-content ranking is based on up to 20 eligible media items synced for the selected period; post view counts are lifetime totals.',
       ];
     if (provider === 'FACEBOOK')
       return [
         'Page visits count visits to the Page profile. Paid and mixed content views are excluded; organic media views appear only when the provider explicitly returns the unpaid breakdown.',
         'Follower change compares provider follower-count snapshots when available.',
         'This app retains Facebook Page analytics and post snapshots for up to 90 days.',
+        'Top-content ranking is based on up to 20 eligible published posts; post view counts are lifetime totals.',
       ];
     if (provider === 'LINKEDIN')
       return [
         'LinkedIn organization share analytics are organic-only and available for a rolling 12-month window.',
         'Only organic follower gains are shown. The paid follower-gain field is not included in organic account analytics.',
         'LinkedIn permits one year of organization reporting data storage. Organization post content is removed after six weeks in this app.',
+        'Top-content ranking is based on up to 20 eligible posts; post impression counts are lifetime totals.',
       ];
     return [
       'YouTube views, watch time, likes, and subscriber change are channel analytics. Recent days may be delayed by YouTube.',
       'Subscriber change is gained subscribers minus lost subscribers for the selected period.',
+      'Top-content ranking is based on up to 10 videos returned for the selected date range; post view counts use that selected-period range.',
     ];
   }
 

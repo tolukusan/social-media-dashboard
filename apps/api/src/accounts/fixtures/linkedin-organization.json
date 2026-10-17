@@ -1,0 +1,62 @@
+{
+  "pageStats": {
+    "elements": [
+      {
+        "timeRange": { "start": 1791936000000, "end": 1792022400000 },
+        "totalPageStatistics": {
+          "views": { "allPageViews": { "pageViews": 45 } }
+        }
+      }
+    ]
+  },
+  "followerStats": {
+    "elements": [
+      {
+        "organizationalEntity": "urn:li:organization:987654",
+        "timeRange": { "start": 1791936000000, "end": 1792022400000 },
+        "followerGains": { "organicFollowerGain": 4, "paidFollowerGain": 99 }
+      }
+    ]
+  },
+  "shareStats": {
+    "elements": [
+      {
+        "organizationalEntity": "urn:li:organization:987654",
+        "timeRange": { "start": 1791936000000, "end": 1792022400000 },
+        "totalShareStatistics": {
+          "impressionCount": 61,
+          "uniqueImpressionsCount": 48,
+          "clickCount": 5,
+          "likeCount": 8,
+          "commentCount": 2,
+          "shareCount": 1
+        }
+      }
+    ]
+  },
+  "posts": {
+    "elements": [
+      {
+        "id": "urn:li:share:fixture123",
+        "commentary": "A LinkedIn fixture post",
+        "publishedAt": "2026-10-14T11:00:00.000Z",
+        "content": { "media": { "category": "IMAGE" } }
+      }
+    ]
+  },
+  "postStats": {
+    "elements": [
+      {
+        "share": "urn:li:share:fixture123",
+        "totalShareStatistics": {
+          "impressionCount": 61,
+          "uniqueImpressionsCount": 48,
+          "clickCount": 5,
+          "likeCount": 8,
+          "commentCount": 2,
+          "shareCount": 1
+        }
+      }
+    ]
+  }
+}

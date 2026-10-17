@@ -40,7 +40,9 @@ test('screen navigation preserves the session while rechecking it and rejects an
     .getByLabel('Password', { exact: true })
     .fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.locator('h1')).toHaveText('Accounts');
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
   await expect(page.getByLabel('Campaign', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('status').filter({ hasText: 'Loading workspace data' }),
@@ -164,7 +166,7 @@ test('screen navigation preserves the session while rechecking it and rejects an
       response.url().endsWith('/api/v1/auth/me') && response.status() === 200,
   );
   await page.getByRole('link', { name: 'Back to workspace' }).click();
-  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.locator('h1')).toHaveText('Accounts');
   await returnedCheck;
   expect(
     await page.evaluate(() => Reflect.get(window, '__navigationMarker')),
@@ -190,7 +192,7 @@ test('screen navigation preserves the session while rechecking it and rejects an
   ).toHaveCount(0);
   await page.unroute('**/api/v1/auth/me');
   await page.getByRole('link', { name: 'Return to workspace' }).click();
-  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.locator('h1')).toHaveText('Accounts');
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
   await expect(
     page.getByRole('heading', {
@@ -230,7 +232,7 @@ test('performance record pages keep filtering across the full list', async ({
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.locator('h1')).toHaveText('Accounts');
   await page
     .getByRole('button', { name: 'Performance data', exact: true })
     .click();
@@ -265,7 +267,9 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL!);
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.locator('h1')).toHaveText('Accounts');
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
   await expect(
     page.getByRole('status').filter({ hasText: 'Loading workspace data' }),
   ).toHaveCount(0);
@@ -514,7 +518,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
     page.getByRole('heading', { name: 'Import history' }),
   ).toBeVisible();
   await page.goto('/');
-  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.locator('h1')).toHaveText('Accounts');
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(
     page.getByRole('heading', { name: 'Sign in to your workspace' }),
@@ -531,7 +535,7 @@ test('Administrator can manage the channel and platform catalogue lifecycle', as
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.locator('h1')).toHaveText('Accounts');
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByLabel('Reporting currency').selectOption('NGN');
   await page.getByRole('button', { name: 'Save reporting currency' }).click();
@@ -628,7 +632,7 @@ test('Administrator follows the guided import through results, PDF, and protecte
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.locator('h1')).toHaveText('Accounts');
   await page.goto('/imports');
   const fixture = await readFile(
     'apps/api/test-fixtures/imports/facebook-views.csv',
@@ -699,7 +703,7 @@ test('Administrator follows the guided import through results, PDF, and protecte
     .getByRole('link', { name: 'View results', exact: true })
     .getAttribute('href');
   await page.getByRole('link', { name: 'View results', exact: true }).click();
-  await expect(page.locator('h1')).toHaveText('Overview');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
   await expect(page.getByLabel('From')).toHaveValue('2026-01-01');
   await expect(page.getByLabel('To')).toHaveValue('2026-01-02');
   await expect(

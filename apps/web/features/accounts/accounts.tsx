@@ -41,7 +41,7 @@ type ConnectedAccount = {
 type Metric = {
   code: string;
   label: string;
-  unit: 'COUNT' | 'MINUTES';
+  unit: 'COUNT' | 'MINUTES' | 'PERCENT';
   mode: 'SUM' | 'SNAPSHOT' | 'DERIVED';
   value: number | null;
   previous: number | null;
@@ -74,13 +74,13 @@ type EmailReport = {
   period: { from: string; to: string };
   generatedAt: string;
   campaignCount: number;
-  totals: Record<string, number>;
+  totals: Record<string, number | null>;
   campaigns: Array<{
     externalCampaignId: string;
     name: string;
     sentAt: string | null;
     observedAt: string;
-    metricValues: Record<string, number>;
+    metricValues: Record<string, number | null>;
   }>;
   caveats: string[];
 };
@@ -121,7 +121,10 @@ const metricNames: Record<string, string> = {
   ORGANIC_POST_IMPRESSIONS: 'Organic post impressions',
   PAGE_VIEWS: 'Page views',
   VIEWS: 'Video views',
+  AUDIENCE_SIZE: 'Audience size',
   AUDIENCE_CHANGE: 'Audience change',
+  OPEN_RATE: 'Zoho-reported open rate',
+  UNIQUE_CLICK_RATE: 'Zoho-reported unique click rate',
 };
 
 function dayInTimezone(timeZone: string, offset = 0) {
@@ -139,9 +142,11 @@ function dayInTimezone(timeZone: string, offset = 0) {
 function formatValue(value: number | null, unit: string) {
   if (value === null || !Number.isFinite(value)) return '—';
   const formatted = new Intl.NumberFormat(undefined, {
-    maximumFractionDigits: unit === 'MINUTES' ? 1 : 0,
+    maximumFractionDigits: unit === 'MINUTES' ? 1 : unit === 'PERCENT' ? 2 : 0,
   }).format(value);
-  return unit === 'MINUTES' ? `${formatted} min` : formatted;
+  if (unit === 'MINUTES') return `${formatted} min`;
+  if (unit === 'PERCENT') return `${formatted}%`;
+  return formatted;
 }
 
 function formatDate(value: string | null) {
@@ -149,6 +154,13 @@ function formatDate(value: string | null) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
     new Date(value),
   );
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
 }
 
 function friendlySyncError(code: string | null) {
@@ -169,8 +181,46 @@ function friendlySyncError(code: string | null) {
   );
 }
 
+function syncHealth(account: ConnectedAccount) {
+  if (account.lastSyncErrorCode) {
+    const error = friendlySyncError(account.lastSyncErrorCode);
+    return {
+      label: 'Update failed',
+      detail: account.lastSyncedAt
+        ? `Last successful update ${formatDateTime(account.lastSyncedAt)}. ${error}`
+        : error,
+      tone: 'error',
+    };
+  }
+  if (!account.lastSyncedAt) {
+    const pending =
+      Date.now() - new Date(account.connectedAt).getTime() < 30 * 60_000;
+    return {
+      label: pending ? 'First sync starting' : 'No successful sync',
+      detail: 'Automatic updates need a successful first sync.',
+      tone: pending ? 'pending' : 'stale',
+    };
+  }
+  const stale =
+    Date.now() - new Date(account.lastSyncedAt).getTime() > 26 * 60 * 60_000;
+  return {
+    label: stale ? 'Update is stale' : 'Updates current',
+    detail: `Last successful update ${formatDateTime(account.lastSyncedAt)}.`,
+    tone: stale ? 'stale' : 'current',
+  };
+}
+
 function formatProviderMetric(code: string) {
   return metricNames[code] ?? code.replaceAll('_', ' ').toLowerCase();
+}
+
+function csvCell(value: string | number) {
+  const text = String(value);
+  const protectedText =
+    typeof value === 'string' && /^[\t\r\n ]*[=+\-@]/.test(text)
+      ? `'${text}`
+      : text;
+  return `"${protectedText.replaceAll('"', '""')}"`;
 }
 
 export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
@@ -182,6 +232,8 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
   const [selectedId, setSelectedId] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [comparisonIds, setComparisonIds] = useState<string[]>([]);
+  const [comparisonInitialized, setComparisonInitialized] = useState(false);
   const [chartMetric, setChartMetric] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -198,6 +250,13 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
     refetchInterval: 30_000,
   });
   const accounts = accountsQuery.data ?? [];
+  const socialAccounts = accounts.filter(
+    (account) => account.kind === 'SOCIAL',
+  );
+  const emailAccounts = accounts.filter((account) => account.kind === 'EMAIL');
+  const comparisonAccounts = socialAccounts.filter((account) =>
+    comparisonIds.includes(account.id),
+  );
   const selected =
     accounts.find((account) => account.id === selectedId) ?? null;
   const timezone = optionsQuery.data?.reportingTimezone ?? 'UTC';
@@ -222,6 +281,12 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
       accounts[0];
     if (next) setSelectedId(next.id);
   }, [accounts, selectedId, preferredProvider]);
+
+  useEffect(() => {
+    if (comparisonInitialized || !socialAccounts.length) return;
+    setComparisonIds(socialAccounts.slice(0, 2).map((account) => account.id));
+    setComparisonInitialized(true);
+  }, [comparisonInitialized, socialAccounts]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -273,8 +338,36 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
       );
     },
   });
+  const comparisonQuery = useQuery({
+    queryKey: [
+      'account-comparison',
+      currentUser.id,
+      [...comparisonIds].sort(),
+      from,
+      to,
+    ],
+    enabled: comparisonAccounts.length >= 2 && Boolean(from && to),
+    queryFn: async () => {
+      const params = new URLSearchParams({ from, to });
+      return Promise.all(
+        comparisonAccounts.map((account) =>
+          apiRequest<AccountAnalytics>(
+            `/accounts/${account.id}/analytics?${params}`,
+          ),
+        ),
+      );
+    },
+  });
   const analytics = analyticsQuery.data;
   const email = emailQuery.data;
+  const comparisonReports = comparisonQuery.data ?? [];
+  const comparisonMetricCodes = [
+    ...new Set(
+      comparisonReports.flatMap((report) =>
+        report.metrics.map((metric) => metric.code),
+      ),
+    ),
+  ];
   const availableChartMetrics = useMemo(
     () => analytics?.metrics.filter((metric) => metric.mode === 'SUM') ?? [],
     [analytics?.metrics],
@@ -359,6 +452,89 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
     }
   }
 
+  function downloadComparisonCsv() {
+    if (comparisonReports.length < 2) return;
+    const headers = [
+      'Type',
+      'Measure',
+      'Provider definitions',
+      'Unit',
+      'Data scope',
+      'From',
+      'To',
+      ...comparisonReports.flatMap((report) => [
+        report.account.displayName,
+        `${report.account.displayName} change vs prior period`,
+      ]),
+    ];
+    const metricRows = comparisonMetricCodes.map((code) => {
+      const definitions = comparisonReports.map((report) => {
+        const metric = report.metrics.find(
+          (candidate) => candidate.code === code,
+        );
+        return `${providerNames[report.account.provider]}: ${metric?.label ?? 'not provided'}`;
+      });
+      const unit = comparisonReports
+        .flatMap((report) => report.metrics)
+        .find((metric) => metric.code === code)?.unit;
+      return [
+        'Metric',
+        formatProviderMetric(code),
+        definitions.join(' | '),
+        unit ?? '',
+        'Selected date range',
+        from,
+        to,
+        ...comparisonReports.flatMap((report) => {
+          const metric = report.metrics.find(
+            (candidate) => candidate.code === code,
+          );
+          return [metric?.value ?? '', metric?.difference ?? ''];
+        }),
+      ];
+    });
+    const contentRows = comparisonReports.flatMap((report) =>
+      report.topPosts
+        .slice(0, 3)
+        .map((post, index) => [
+          'Top content',
+          `${providerNames[report.account.provider]} rank ${index + 1}`,
+          `${post.title || post.postType || 'Content item'} · ${formatProviderMetric(post.metricCode)}`,
+          'COUNT',
+          post.dataScope === 'LIFETIME' ? 'Lifetime' : 'Selected period',
+          post.dataScope === 'LIFETIME' ? '' : from,
+          post.dataScope === 'LIFETIME' ? '' : to,
+          ...comparisonReports.flatMap((candidate) =>
+            candidate.account.id === report.account.id
+              ? [post.metricValue ?? '', '']
+              : ['', ''],
+          ),
+        ]),
+    );
+    const csv = [headers, ...metricRows, ...contentRows]
+      .map((row) => row.map(csvCell).join(','))
+      .join('\r\n');
+    const blob = new Blob([`\uFEFF${csv}`], {
+      type: 'text/csv;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `account-comparison-${from}-${to}.csv`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setMessage('Your account comparison CSV is ready.');
+  }
+
+  function toggleComparison(accountId: string) {
+    setComparisonIds((current) => {
+      if (current.includes(accountId))
+        return current.filter((id) => id !== accountId);
+      if (current.length >= 4) return current;
+      return [...current, accountId];
+    });
+  }
+
   async function disconnectAccount(account: ConnectedAccount) {
     if (
       !window.confirm(
@@ -370,13 +546,30 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
     setError('');
     setMessage('');
     try {
-      await apiRequest(`/accounts/${account.id}`, { method: 'DELETE' });
+      const result = await apiRequest<{
+        providerAccessRevocation:
+          | 'revoked'
+          | 'already_inactive'
+          | 'not_supported'
+          | 'still_in_use'
+          | 'failed';
+      }>(`/accounts/${account.id}`, { method: 'DELETE' });
       await queryClient.invalidateQueries({
         queryKey: ['connected-accounts', currentUser.id],
       });
       setSelectedId('');
+      const revocationMessage = {
+        revoked: 'Provider access was revoked.',
+        already_inactive: 'The provider grant was already inactive.',
+        not_supported:
+          'This connection cannot be revoked with the stored credential; review the provider connected app settings if you want to remove access.',
+        still_in_use:
+          'Provider access remains active because another connected account uses the same grant.',
+        failed:
+          'Provider access could not be confirmed as revoked; review the provider connected app settings.',
+      }[result.providerAccessRevocation];
       setMessage(
-        `${account.displayName} was disconnected and its stored provider data was deleted.`,
+        `${account.displayName} was disconnected and its stored provider data was deleted. ${revocationMessage}`,
       );
     } catch (cause) {
       setError(
@@ -418,10 +611,6 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
   }
 
   const setupProviders = optionsQuery.data?.providers ?? [];
-  const socialAccounts = accounts.filter(
-    (account) => account.kind === 'SOCIAL',
-  );
-  const emailAccounts = accounts.filter((account) => account.kind === 'EMAIL');
   const selectedError = selected
     ? friendlySyncError(selected.lastSyncErrorCode)
     : null;
@@ -564,51 +753,56 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
             role="list"
             aria-label="Connected social accounts"
           >
-            {socialAccounts.map((account) => (
-              <div
-                className={`connected-account ${selectedId === account.id ? 'selected' : ''}`}
-                key={account.id}
-                role="listitem"
-              >
-                <button
-                  className="connected-account-select"
-                  type="button"
-                  onClick={() => setSelectedId(account.id)}
-                  aria-pressed={selectedId === account.id}
+            {socialAccounts.map((account) => {
+              const health = syncHealth(account);
+              return (
+                <div
+                  className={`connected-account ${selectedId === account.id ? 'selected' : ''}`}
+                  key={account.id}
+                  role="listitem"
                 >
-                  <span
-                    className={`provider-icon provider-${account.provider.toLowerCase()}`}
-                    aria-hidden="true"
-                  >
-                    {providerNames[account.provider].slice(0, 1)}
-                  </span>
-                  <span className="connected-account-name">
-                    <strong>{account.displayName}</strong>
-                    <small>
-                      {providerNames[account.provider]}
-                      {account.handle
-                        ? ` · @${account.handle.replace(/^@/, '')}`
-                        : ''}
-                    </small>
-                  </span>
-                  <span className="connected-account-sync">
-                    {account.lastSyncedAt
-                      ? `Updated ${formatDate(account.lastSyncedAt)}`
-                      : 'Not synced yet'}
-                  </span>
-                </button>
-                {isAdmin && (
                   <button
-                    className="text-button disconnect-button"
+                    className="connected-account-select"
                     type="button"
-                    disabled={busy}
-                    onClick={() => void disconnectAccount(account)}
+                    onClick={() => setSelectedId(account.id)}
+                    aria-pressed={selectedId === account.id}
                   >
-                    Disconnect
+                    <span
+                      className={`provider-icon provider-${account.provider.toLowerCase()}`}
+                      aria-hidden="true"
+                    >
+                      {providerNames[account.provider].slice(0, 1)}
+                    </span>
+                    <span className="connected-account-name">
+                      <strong>{account.displayName}</strong>
+                      <small>
+                        {providerNames[account.provider]}
+                        {account.handle
+                          ? ` · @${account.handle.replace(/^@/, '')}`
+                          : ''}
+                      </small>
+                    </span>
+                    <span
+                      className={`connected-account-sync account-sync-status sync-${health.tone}`}
+                      aria-label={`${health.label}. ${health.detail}`}
+                    >
+                      <strong>{health.label}</strong>
+                      <small>{health.detail}</small>
+                    </span>
                   </button>
-                )}
-              </div>
-            ))}
+                  {isAdmin && (
+                    <button
+                      className="text-button disconnect-button"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void disconnectAccount(account)}
+                    >
+                      Disconnect
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="account-empty">
@@ -620,6 +814,156 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
           </div>
         )}
       </section>
+
+      {socialAccounts.length > 1 && (
+        <section className="panel account-comparison-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Compare connected accounts</h2>
+              <p>
+                Compare two to four accounts for {from} to {to}. Metrics stay
+                with their provider definitions; values are never added across
+                platforms.
+              </p>
+            </div>
+            <div className="account-actions">
+              <button
+                className="secondary"
+                type="button"
+                disabled={
+                  comparisonReports.length < 2 || comparisonQuery.isFetching
+                }
+                onClick={downloadComparisonCsv}
+              >
+                Download comparison CSV
+              </button>
+            </div>
+          </div>
+          <fieldset className="account-comparison-picker">
+            <legend>Select accounts</legend>
+            {socialAccounts.map((account) => {
+              const checked = comparisonIds.includes(account.id);
+              return (
+                <label key={account.id}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={!checked && comparisonIds.length >= 4}
+                    onChange={() => toggleComparison(account.id)}
+                  />
+                  <span>
+                    {account.displayName} · {providerNames[account.provider]}
+                  </span>
+                </label>
+              );
+            })}
+          </fieldset>
+          {comparisonAccounts.length < 2 ? (
+            <p role="status">Select at least two accounts to compare.</p>
+          ) : comparisonQuery.isLoading ? (
+            <p role="status">Loading account comparison…</p>
+          ) : comparisonQuery.error instanceof Error ? (
+            <div className="notice error" role="alert">
+              {comparisonQuery.error.message}
+            </div>
+          ) : comparisonReports.length ? (
+            <>
+              <div className="account-table-wrap">
+                <table className="account-table account-comparison-table">
+                  <caption>
+                    {from} to {to}. Each value is reported for its connected
+                    account; no cross-platform totals are calculated.
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Measure</th>
+                      {comparisonReports.map((report) => (
+                        <th scope="col" key={report.account.id}>
+                          {report.account.displayName}
+                          <small>
+                            {providerNames[report.account.provider]}
+                          </small>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparisonMetricCodes.map((code) => (
+                      <tr key={code}>
+                        <th scope="row">{formatProviderMetric(code)}</th>
+                        {comparisonReports.map((report) => {
+                          const metric = report.metrics.find(
+                            (candidate) => candidate.code === code,
+                          );
+                          return (
+                            <td className="numeric" key={report.account.id}>
+                              <strong>
+                                {formatValue(
+                                  metric?.value ?? null,
+                                  metric?.unit ?? 'COUNT',
+                                )}
+                              </strong>
+                              <small>
+                                {metric?.label ??
+                                  'Not provided by this platform'}
+                              </small>
+                              {metric && metric.difference !== null && (
+                                <small>
+                                  {formatValue(metric.difference, metric.unit)}{' '}
+                                  vs preceding period
+                                  {metric.percentageChange === null
+                                    ? ''
+                                    : ` (${metric.percentageChange > 0 ? '+' : ''}${metric.percentageChange}%)`}
+                                </small>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="account-comparison-content">
+                {comparisonReports.map((report) => (
+                  <article key={report.account.id}>
+                    <h3>Top content · {report.account.displayName}</h3>
+                    <p>
+                      Ranked by{' '}
+                      {formatProviderMetric(
+                        report.topPosts[0]?.metricCode ?? 'top content',
+                      )}
+                      ; each count is labeled as lifetime or selected-period,
+                      and uses this provider’s definition.
+                    </p>
+                    {report.topPosts.length ? (
+                      <ol>
+                        {report.topPosts.slice(0, 3).map((post) => (
+                          <li key={post.externalPostId}>
+                            <span>
+                              {post.title || post.postType || 'Content item'}
+                            </span>
+                            <strong>
+                              {formatValue(post.metricValue, 'COUNT')}
+                            </strong>
+                            <small>
+                              {post.dataScope === 'LIFETIME'
+                                ? 'Lifetime total'
+                                : 'Selected-period total'}
+                            </small>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p>No top content is available for this date range.</p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </section>
+      )}
 
       {selected?.kind === 'SOCIAL' && (
         <section className="panel account-dashboard">
@@ -1009,7 +1353,15 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
                       {Object.entries(email.totals).map(([code, value]) => (
                         <article className="account-metric" key={code}>
                           <span>{formatProviderMetric(code)}</span>
-                          <strong>{formatValue(value, 'COUNT')}</strong>
+                          <strong>
+                            {formatValue(
+                              value,
+                              code === 'OPEN_RATE' ||
+                                code === 'UNIQUE_CLICK_RATE'
+                                ? 'PERCENT'
+                                : 'COUNT',
+                            )}
+                          </strong>
                         </article>
                       ))}
                     </div>
@@ -1023,6 +1375,10 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
                               <th scope="col">Emails sent</th>
                               <th scope="col">Opens</th>
                               <th scope="col">Unique clicks</th>
+                              <th scope="col">Zoho-reported open rate</th>
+                              <th scope="col">
+                                Zoho-reported unique click rate
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1046,6 +1402,19 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
                                   {formatValue(
                                     campaign.metricValues.UNIQUE_CLICKS ?? null,
                                     'COUNT',
+                                  )}
+                                </td>
+                                <td className="numeric">
+                                  {formatValue(
+                                    campaign.metricValues.OPEN_RATE ?? null,
+                                    'PERCENT',
+                                  )}
+                                </td>
+                                <td className="numeric">
+                                  {formatValue(
+                                    campaign.metricValues.UNIQUE_CLICK_RATE ??
+                                      null,
+                                    'PERCENT',
                                   )}
                                 </td>
                               </tr>
