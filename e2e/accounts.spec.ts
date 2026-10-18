@@ -66,17 +66,51 @@ test('Administrator starts in Accounts and sees safe provider setup guidance', a
     page.getByText('No Zoho reporting connection yet.', { exact: true }),
   ).toBeVisible();
   await navigation
+    .getByRole('button', { name: 'Email reports', exact: true })
+    .click();
+  await expect(
+    page.getByText('No Zoho Campaigns account connected', { exact: true }),
+  ).toBeVisible();
+  await navigation
     .getByRole('button', { name: 'Compare', exact: true })
     .click();
-  await expect(page.getByLabel('From')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
-  await expect(page.getByLabel('To')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
-  const from = await page.getByLabel('From').inputValue();
-  const to = await page.getByLabel('To').inputValue();
+  await expect(page.getByLabel('From', { exact: true })).toHaveValue(
+    /^\d{4}-\d{2}-\d{2}$/,
+  );
+  await expect(page.getByLabel('To', { exact: true })).toHaveValue(
+    /^\d{4}-\d{2}-\d{2}$/,
+  );
+  const from = await page.getByLabel('From', { exact: true }).inputValue();
+  const to = await page.getByLabel('To', { exact: true }).inputValue();
   expect(from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   expect(to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   expect(Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)).toBe(
     29 * 24 * 60 * 60 * 1000,
   );
+});
+
+test('OAuth account callback outcomes are shown without credential values', async ({
+  page,
+}) => {
+  await signIn(page);
+
+  const outcomes = [
+    ['connected', 'YouTube connected. The first account sync has started.'],
+    ['no-accounts', 'No eligible YouTube accounts were found for this login.'],
+    ['cancelled', 'Account connection was cancelled.'],
+    [
+      'error',
+      'The provider could not complete account connection. Review its setup and try again.',
+    ],
+  ] as const;
+
+  for (const [outcome, message] of outcomes) {
+    await page.goto(`/?accountConnection=${outcome}&provider=YOUTUBE`);
+    await expect(page.locator('.notice.account-success')).toHaveText(message);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.has('accountConnection'))
+      .toBe(false);
+  }
 });
 
 test('Management can review Accounts but cannot start provider connections', async ({
@@ -312,6 +346,68 @@ test('compares accounts and keeps provider-specific measures and content separat
       });
     },
   );
+  let syncRange: { from: string; to: string } | undefined;
+  await page.route(
+    /\/api\/v1\/accounts\/instagram-account\/sync$/,
+    async (route) => {
+      syncRange = route.request().postDataJSON() as {
+        from: string;
+        to: string;
+      };
+      await route.fulfill({
+        json: { observations: 3, posts: 1, emailCampaigns: 0 },
+        headers: {
+          'access-control-allow-origin': baseUrl,
+          'access-control-allow-credentials': 'true',
+        },
+      });
+    },
+  );
+  let emailSyncRange: { from: string; to: string } | undefined;
+  await page.route(
+    /\/api\/v1\/accounts\/zoho-account\/sync$/,
+    async (route) => {
+      emailSyncRange = route.request().postDataJSON() as {
+        from: string;
+        to: string;
+      };
+      await route.fulfill({
+        json: { observations: 2, posts: 0, emailCampaigns: 2 },
+        headers: {
+          'access-control-allow-origin': baseUrl,
+          'access-control-allow-credentials': 'true',
+        },
+      });
+    },
+  );
+  await page.route(
+    /\/api\/v1\/accounts\/instagram-account\/report\.pdf\?/,
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/pdf',
+        body: '%PDF-1.4\nE2E fixture report\n%%EOF',
+        headers: {
+          'access-control-allow-origin': baseUrl,
+          'access-control-allow-credentials': 'true',
+        },
+      });
+    },
+  );
+  await page.route(
+    /\/api\/v1\/accounts\/zoho-account\/email-report\.pdf\?/,
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/pdf',
+        body: '%PDF-1.4\nE2E fixture email report\n%%EOF',
+        headers: {
+          'access-control-allow-origin': baseUrl,
+          'access-control-allow-credentials': 'true',
+        },
+      });
+    },
+  );
 
   await signIn(page);
   const navigation = page.getByRole('navigation', {
@@ -337,6 +433,24 @@ test('compares accounts and keeps provider-specific measures and content separat
     fullPage: true,
   });
   await verifyResponsiveWidths(page);
+  const insightsFrom = await page
+    .getByLabel('From', { exact: true })
+    .inputValue();
+  const insightsTo = await page.getByLabel('To', { exact: true }).inputValue();
+  await insights.getByRole('button', { name: 'Sync this period' }).click();
+  await expect(page.locator('.notice.account-success')).toContainText(
+    'Updated this period: 3 daily metrics, 1 content items, and 0 email campaigns.',
+  );
+  expect(syncRange).toEqual({ from: insightsFrom, to: insightsTo });
+  const pdfPromise = page.waitForEvent('download');
+  await insights.getByRole('button', { name: 'Download PDF' }).click();
+  const pdfDownload = await pdfPromise;
+  expect(pdfDownload.suggestedFilename()).toBe(
+    `instagram-report-${insightsTo}.pdf`,
+  );
+  const pdfPath = await pdfDownload.path();
+  expect(pdfPath).toBeTruthy();
+  expect(await readFile(pdfPath!, 'utf8')).toContain('%PDF-1.4');
   await navigation
     .getByRole('button', { name: 'Compare', exact: true })
     .click();
@@ -362,8 +476,8 @@ test('compares accounts and keeps provider-specific measures and content separat
     fullPage: true,
   });
   await verifyResponsiveWidths(page);
-  const from = await page.getByLabel('From').inputValue();
-  const to = await page.getByLabel('To').inputValue();
+  const from = await page.getByLabel('From', { exact: true }).inputValue();
+  const to = await page.getByLabel('To', { exact: true }).inputValue();
   const downloadPromise = page.waitForEvent('download');
   await comparison
     .getByRole('button', { name: 'Download comparison CSV' })
@@ -421,6 +535,26 @@ test('compares accounts and keeps provider-specific measures and content separat
     fullPage: true,
   });
   await verifyResponsiveWidths(page);
+  const emailFrom = await page.getByLabel('From', { exact: true }).inputValue();
+  const emailTo = await page.getByLabel('To', { exact: true }).inputValue();
+  await emailReport
+    .getByRole('button', { name: 'Refresh report data' })
+    .click();
+  await expect(page.locator('.notice.account-success')).toContainText(
+    'Updated this period: 2 daily metrics, 0 content items, and 2 email campaigns.',
+  );
+  expect(emailSyncRange).toEqual({ from: emailFrom, to: emailTo });
+  const emailPdfPromise = page.waitForEvent('download');
+  await emailReport
+    .getByRole('button', { name: 'Download PDF report' })
+    .click();
+  const emailPdfDownload = await emailPdfPromise;
+  expect(emailPdfDownload.suggestedFilename()).toBe(
+    `zoho_campaigns-email-report-${emailTo}.pdf`,
+  );
+  const emailPdfPath = await emailPdfDownload.path();
+  expect(emailPdfPath).toBeTruthy();
+  expect(await readFile(emailPdfPath!, 'utf8')).toContain('%PDF-1.4');
   await navigation
     .getByRole('button', { name: 'Accounts', exact: true })
     .click();

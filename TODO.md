@@ -4,4 +4,6 @@ The completed MVP baseline remains intact. The stakeholder approved the [connect
 
 Remaining acceptance depends on real provider credentials, approved account permissions, supported API versions, and comparison with provider reports. Audit older unmanaged LinkedIn-mapped campaign values before claiming complete retention compliance. Before deploying multiple API instances, add a durable per-account lease to the process-scheduled OAuth refresh loop.
 
+A separate campaign connector OAuth extension for `IntegrationConnection` records is implemented locally. Its mock-flow and isolated migration checks passed. Provider callback registration and live consent remain external; see [ADR-013](docs/decisions/ADR-013-oauth-credential-lifecycle.md) and [OAuth evidence](docs/evidence/oauth-credential-evidence.md).
+
 Completed work and verification are recorded in the [completion ledger](docs/plans/completion/README.md) and [implementation progress](docs/evidence/IMPLEMENTATION_PROGRESS.md). Optional and conditional release activities are in the [release checklist](docs/guides/release-checklist.md); the historical import-approval question is tracked in [BLOCKERS](BLOCKERS.md).

@@ -55,13 +55,32 @@ function request(path: string, method = 'GET', body?: unknown) {
   });
 }
 
-async function connect(provider: 'FACEBOOK' | 'ZOHO_CAMPAIGNS') {
+async function connect(provider: 'FACEBOOK' | 'YOUTUBE' | 'ZOHO_CAMPAIGNS') {
   const started = await request('/accounts/oauth/start', 'POST', { provider });
   expect(started.status).toBe(201);
   const { authorizationUrl } = (await started.json()) as {
     authorizationUrl: string;
   };
-  const state = new URL(authorizationUrl).searchParams.get('state');
+  const authorization = new URL(authorizationUrl);
+  expect(authorization.searchParams.get('redirect_uri')).toBe(
+    `${origin}/api/v1/accounts/oauth/callback`,
+  );
+  if (provider === 'YOUTUBE') {
+    expect(authorization.origin).toBe('https://accounts.google.com');
+    expect(authorization.searchParams.get('scope')?.split(' ').sort()).toEqual(
+      [
+        'https://www.googleapis.com/auth/youtube.readonly',
+        'https://www.googleapis.com/auth/yt-analytics.readonly',
+      ].sort(),
+    );
+  }
+  if (provider === 'ZOHO_CAMPAIGNS') {
+    expect(authorization.origin).toBe('https://accounts.zoho.com');
+    expect(authorization.searchParams.get('scope')).toBe(
+      'ZohoCampaigns.campaign.READ',
+    );
+  }
+  const state = authorization.searchParams.get('state');
   expect(state).toMatch(/^[A-Za-z0-9_-]{40,100}$/);
 
   const callback = await request(
@@ -73,13 +92,21 @@ async function connect(provider: 'FACEBOOK' | 'ZOHO_CAMPAIGNS') {
   );
   expect(callback.headers.get('cache-control')).toContain('no-store');
   expect(callback.headers.get('referrer-policy')).toBe('no-referrer');
+  const attempt = await prisma.accountOAuthState.findFirstOrThrow({
+    where: { userId: actor.id, provider },
+  });
+  expect(attempt.consumedAt).toBeInstanceOf(Date);
 
   const account = await prisma.connectedAccount.findUniqueOrThrow({
     where: {
       provider_externalAccountId: {
         provider,
         externalAccountId:
-          provider === 'FACEBOOK' ? `facebook-${suffix}` : `zoho-${suffix}`,
+          provider === 'FACEBOOK'
+            ? `facebook-${suffix}`
+            : provider === 'YOUTUBE'
+              ? `youtube-${suffix}`
+              : `zoho-${suffix}`,
       },
     },
   });
@@ -134,6 +161,18 @@ const socialCandidate: ConnectedCandidate = {
   tokenExpiresAt: null,
 };
 
+const youtubeCandidate: ConnectedCandidate = {
+  ...socialCandidate,
+  provider: 'YOUTUBE',
+  externalAccountId: `youtube-${suffix}`,
+  displayName: 'Integration YouTube channel',
+  handle: null,
+  profileUrl: null,
+  credentials: {
+    accessToken: 'youtube-fixture-access-token-do-not-return',
+  },
+};
+
 const emailCandidate: ConnectedCandidate = {
   provider: 'ZOHO_CAMPAIGNS',
   kind: 'EMAIL',
@@ -155,7 +194,10 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
     vi.stubEnv('APP_ORIGIN', origin);
     vi.stubEnv('REPORTING_TIMEZONE', 'UTC');
     vi.stubEnv('INTEGRATIONS_SCHEDULER_ENABLED', 'false');
-    vi.stubEnv('INTEGRATION_OAUTH_REDIRECT_URI', `${origin}/oauth/callback`);
+    vi.stubEnv(
+      'INTEGRATION_OAUTH_REDIRECT_URI',
+      `${origin}/api/v1/accounts/oauth/callback`,
+    );
     vi.stubEnv(
       'INTEGRATION_TOKEN_ENCRYPTION_KEY',
       Buffer.alloc(32, 9).toString('base64'),
@@ -166,6 +208,8 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
     vi.stubEnv('INTEGRATION_ZOHO_CLIENT_ID', 'fixture-zoho-client');
     vi.stubEnv('INTEGRATION_ZOHO_CLIENT_SECRET', 'fixture-zoho-secret');
     vi.stubEnv('INTEGRATION_ZOHO_REGION', 'US');
+    vi.stubEnv('INTEGRATION_GOOGLE_CLIENT_ID', 'fixture-google-client');
+    vi.stubEnv('INTEGRATION_GOOGLE_CLIENT_SECRET', 'fixture-google-secret');
 
     app = await NestFactory.create(AppModule, { logger: false });
     app.setGlobalPrefix('api/v1');
@@ -186,9 +230,11 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
       }));
     discover = vi
       .spyOn(accountProvider, 'discover')
-      .mockImplementation(async (provider) =>
-        provider === 'FACEBOOK' ? [socialCandidate] : [emailCandidate],
-      );
+      .mockImplementation(async (provider) => {
+        if (provider === 'FACEBOOK') return [socialCandidate];
+        if (provider === 'YOUTUBE') return [youtubeCandidate];
+        return [emailCandidate];
+      });
     syncProvider = vi
       .spyOn(accountProvider, 'sync')
       .mockImplementation(async (account, _credentials, _from, end) => {
@@ -304,7 +350,7 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
     expect(exchangeCode).toHaveBeenCalledWith(
       'FACEBOOK',
       'fixture-code',
-      `${origin}/oauth/callback`,
+      `${origin}/api/v1/accounts/oauth/callback`,
     );
     expect(discover).toHaveBeenCalledWith(
       'FACEBOOK',
@@ -385,6 +431,26 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
     expect(
       Buffer.from(await pdfResponse.arrayBuffer()).toString('ascii', 0, 5),
     ).toBe('%PDF-');
+
+    const youtubeAccount = await connect('YOUTUBE');
+    expect(exchangeCode).toHaveBeenCalledWith(
+      'YOUTUBE',
+      'fixture-code',
+      `${origin}/api/v1/accounts/oauth/callback`,
+    );
+    expect(youtubeAccount).toMatchObject({
+      provider: 'YOUTUBE',
+      displayName: 'Integration YouTube channel',
+      active: true,
+    });
+    const safeAccountList = await request('/accounts');
+    const safeAccountText = await safeAccountList.text();
+    expect(safeAccountList.status).toBe(200);
+    expect(safeAccountText).toContain('Integration YouTube channel');
+    expect(safeAccountText).not.toContain(
+      'youtube-fixture-access-token-do-not-return',
+    );
+    expect(safeAccountText).not.toContain('credentialCiphertext');
 
     const emailAccount = await connect('ZOHO_CAMPAIGNS');
     const emailSync = await request(

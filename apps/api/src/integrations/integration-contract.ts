@@ -17,9 +17,12 @@ export const zohoHosts: Record<string, string> = {
   CN: 'campaigns.zoho.com.cn',
 };
 export type SourceConnection = {
+  id?: string;
+  credentialMode?: 'SERVER_ENVIRONMENT' | 'OAUTH';
   provider: IntegrationProvider;
   externalAccountId: string;
   credentialReference: string;
+  accessToken?: string;
   sourceTimezone: string;
   currency: string | null;
   region: string;
@@ -116,15 +119,23 @@ export function shiftDay(value: string, days: number): string {
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
-export function configuration(connection: SourceConnection): {
+export function configuration(
+  connection: SourceConnection,
+  oauthCredentialReady = false,
+): {
   ready: boolean;
   code: string | null;
 } {
-  if (
-    !/^INTEGRATION_[A-Z0-9_]+_ACCESS_TOKEN$/.test(
+  const environmentCredentialReady =
+    connection.credentialMode !== 'OAUTH' &&
+    /^INTEGRATION_[A-Z0-9_]+_ACCESS_TOKEN$/.test(
       connection.credentialReference,
-    ) ||
-    !process.env[connection.credentialReference]?.trim()
+    ) &&
+    !!process.env[connection.credentialReference]?.trim();
+  if (
+    !oauthCredentialReady &&
+    !connection.accessToken?.trim() &&
+    !environmentCredentialReady
   )
     return { ready: false, code: 'CREDENTIALS_REQUIRED' };
   if (

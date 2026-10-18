@@ -26,6 +26,7 @@ import type {
   DailyObservation,
   SourceConnection,
 } from './integration-contract.js';
+import { OAuthCredentialService } from './oauth-credential.service.js';
 import type {
   CreateConnectionDto,
   CreateMappingDto,
@@ -48,6 +49,7 @@ const connectionSelect = {
   displayName: true,
   externalAccountId: true,
   credentialReference: true,
+  credentialMode: true,
   sourceTimezone: true,
   currency: true,
   region: true,
@@ -68,6 +70,17 @@ const connectionSelect = {
     },
   },
   runs: { orderBy: { startedAt: 'desc' }, take: 1 },
+  oauthCredential: {
+    select: {
+      status: true,
+      tokenExpiresAt: true,
+      refreshTokenExpiresAt: true,
+      grantedScopes: true,
+      connectedAt: true,
+      lastRefreshedAt: true,
+      lastErrorCode: true,
+    },
+  },
 } satisfies Prisma.IntegrationConnectionSelect;
 
 @Injectable()
@@ -77,6 +90,8 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ProviderClient) private readonly client: ProviderClient,
+    @Inject(OAuthCredentialService)
+    private readonly oauth: OAuthCredentialService,
   ) {}
 
   onModuleInit() {
@@ -99,7 +114,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       providers,
       regions,
       reportingTimezone: process.env.REPORTING_TIMEZONE ?? 'Africa/Lagos',
-      credentialMode: 'SERVER_ENVIRONMENT',
+      credentialMode: 'SERVER_ENCRYPTED_OR_ENVIRONMENT',
       maxMappings: 10,
     };
   }
@@ -110,7 +125,10 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     });
     return connections.map((connection) => ({
       ...connection,
-      configuration: configuration(connection),
+      configuration: configuration(
+        connection,
+        connection.oauthCredential?.status === 'CONNECTED',
+      ),
     }));
   }
   async runs(id: string) {
@@ -291,6 +309,16 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         where: { id },
         data: {
           ...dto,
+          ...(dto.credentialReference !== undefined &&
+          dto.credentialReference !== previous.credentialReference
+            ? {
+                credentialMode: 'SERVER_ENVIRONMENT' as const,
+                oauthGeneration: { increment: 1 },
+              }
+            : {}),
+          ...(dto.active === false && previous.active
+            ? { oauthGeneration: { increment: 1 } }
+            : {}),
           ...(dto.displayName !== undefined
             ? { displayName: dto.displayName.trim() }
             : {}),
@@ -299,11 +327,33 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         },
         select: connectionSelect,
       });
+      if (
+        dto.credentialReference !== undefined &&
+        dto.credentialReference !== previous.credentialReference
+      )
+        await tx.integrationOAuthCredential.deleteMany({
+          where: { connectionId: id },
+        });
+      if (
+        (dto.credentialReference !== undefined &&
+          dto.credentialReference !== previous.credentialReference) ||
+        (dto.active === false && previous.active)
+      )
+        await tx.integrationOAuthAttempt.updateMany({
+          where: { connectionId: id, status: 'PENDING' },
+          data: { status: 'EXPIRED', consumedAt: new Date() },
+        });
       await this.audit(tx, actorId, id, 'INTEGRATION_SETTINGS_UPDATED', {
         active: connection.active,
         autoSync: connection.autoSync,
       });
-      return { ...connection, configuration: configuration(connection) };
+      return {
+        ...connection,
+        configuration: configuration(
+          connection,
+          connection.oauthCredential?.status === 'CONNECTED',
+        ),
+      };
     });
   }
   async disconnect(id: string, actorId: string) {
@@ -314,6 +364,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         data: {
           active: false,
           autoSync: false,
+          oauthGeneration: { increment: 1 },
           leaseToken: null,
           leaseUntil: null,
         },
@@ -326,8 +377,20 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
           completedAt: new Date(),
         },
       });
+      await tx.integrationOAuthCredential.deleteMany({
+        where: { connectionId: id },
+      });
+      await tx.integrationOAuthAttempt.updateMany({
+        where: { connectionId: id, status: 'PENDING' },
+        data: { status: 'EXPIRED', consumedAt: new Date() },
+      });
       await this.audit(tx, actorId, id, 'INTEGRATION_DISCONNECTED');
-      return { id, active: false };
+      return {
+        id,
+        active: false,
+        oauthCredentialRemoved: true,
+        providerAuthorizationMayRemain: true,
+      };
     });
   }
   async map(id: string, dto: CreateMappingDto, actorId: string) {
@@ -723,7 +786,14 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
           'INACTIVE_INTEGRATION_CONTEXT',
           'The connection, platform, or channel is inactive.',
         );
-      const config = configuration(current);
+      const accessToken = await this.oauth.accessToken(
+        current as SourceConnection & { id: string },
+      );
+      const providerConnection = {
+        ...current,
+        ...(accessToken ? { accessToken } : {}),
+      } as SourceConnection;
+      const config = configuration(providerConnection, !!accessToken);
       if (!config.ready)
         fail(
           config.code!,
@@ -746,7 +816,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       for (const mapping of current.mappings) {
         try {
           const result = await this.client.fetchCampaign(
-            current as SourceConnection,
+            providerConnection,
             mapping.externalCampaignId,
             dto.from,
             dto.to,
@@ -771,6 +841,11 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
             });
           }
         } catch (error) {
+          if (
+            error instanceof IntegrationFailure &&
+            ['TOKEN_EXPIRED', 'PROVIDER_ACCESS_DENIED'].includes(error.code)
+          )
+            await this.oauth.markReauthorizationRequired(id, error.code);
           outcomes.push({
             mappingId: mapping.id,
             errorCode:
