@@ -3337,6 +3337,245 @@ summary:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.dataset-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+.dataset-workspace > .panel-heading,
+.dataset-card,
+.dataset-pagination,
+.dataset-template-choice,
+.dataset-comparison-tables {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.dataset-workspace .panel-heading h2,
+.dataset-workspace .panel-heading h3,
+.dataset-viewer h3,
+.dataset-comparison h4 {
+  margin: 0;
+}
+.dataset-campaign-picker,
+.dataset-upload > label,
+.dataset-template-choice > label,
+.dataset-comparison label,
+.dataset-label-editor label {
+  display: grid;
+  gap: 6px;
+}
+.dataset-campaign-actions {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dataset-new-campaign {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+.dataset-upload,
+.dataset-viewer,
+.dataset-comparison,
+.dataset-label-editor,
+.dataset-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+}
+.dataset-upload {
+  padding: 18px;
+  border: 1px dashed #b6c5d9;
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+.dataset-list > .panel-heading {
+  align-items: flex-start;
+}
+.dataset-cards {
+  display: grid;
+  gap: 10px;
+}
+.dataset-card {
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid #e4e9f0;
+  border-radius: 10px;
+  background: white;
+}
+.dataset-card h4,
+.dataset-card p,
+.dataset-comparison-side p {
+  margin: 0 0 5px;
+  overflow-wrap: anywhere;
+}
+.dataset-card .button-row {
+  flex: 0 0 auto;
+}
+.dataset-label-editor {
+  padding: 16px;
+  border: 1px solid #e4e9f0;
+  border-radius: 10px;
+  background: #fbfcfe;
+}
+.dataset-column-metadata {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 10px;
+}
+.dataset-column-metadata fieldset,
+.dataset-comparison-controls fieldset {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #e4e9f0;
+  border-radius: 9px;
+}
+.dataset-column-metadata legend,
+.dataset-comparison-controls legend {
+  padding: 0 5px;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.dataset-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  align-items: end;
+  gap: 12px;
+}
+.dataset-chart {
+  width: 100%;
+  height: 300px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e4e9f0;
+  border-radius: 10px;
+}
+.dataset-comparison {
+  padding: 16px;
+}
+.dataset-comparison > summary {
+  cursor: pointer;
+  color: #1e3557;
+  font-weight: 700;
+}
+.dataset-comparison-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.dataset-comparison-tables {
+  align-items: stretch;
+}
+.dataset-comparison-side {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.dataset-comparison-side .table-scroll {
+  margin-top: 10px;
+}
+.dataset-comparison-side table {
+  min-width: 420px;
+}
+.dataset-pagination {
+  align-items: center;
+}
+.dataset-pagination > span {
+  color: #667085;
+  font-size: 12px;
+}
+.dataset-viewer .table-scroll {
+  margin-top: 0;
+}
+.dataset-export-actions {
+  position: relative;
+  z-index: 1;
+  justify-content: flex-end;
+}
+.dataset-reports {
+  display: grid;
+  gap: 18px;
+}
+.dataset-reports .panel-heading {
+  align-items: flex-start;
+}
+.dataset-reports .button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  text-decoration: none;
+}
+.dataset-reports .dataset-card h3 {
+  margin: 0 0 6px;
+}
+.dataset-reports .button-row {
+  flex-wrap: wrap;
+}
+.dataset-reports .dataset-card .button-row > * {
+  white-space: nowrap;
+}
+.dataset-reports .dataset-campaign-picker {
+  min-width: min(280px, 100%);
+}
+.dataset-reports .historical-datasets {
+  border-top: 1px solid #e4e9f0;
+  padding-top: 16px;
+}
+@media (max-width: 900px) {
+  .dataset-workspace > .panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .dataset-campaign-actions {
+    width: 100%;
+  }
+  .dataset-campaign-picker {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
+  .dataset-campaign-picker select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+@media (max-width: 760px) {
+  .dataset-workspace > .panel-heading,
+  .dataset-card,
+  .dataset-comparison-tables {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dataset-card .button-row,
+  .dataset-pagination .button-row {
+    flex-wrap: wrap;
+  }
+  .dataset-comparison-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dataset-reports .panel-heading,
+  .dataset-reports .dataset-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dataset-comparison-side {
+    width: 100%;
+  }
+  .dataset-chart {
+    height: 240px;
+  }
+}
+
 .sidebar .nav-section {
   display: grid;
   gap: 3px;

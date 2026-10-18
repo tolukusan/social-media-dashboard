@@ -15,6 +15,8 @@ export function Campaigns({
   onUpdated,
   selectedCampaignId,
   onSelectCampaign,
+  onDatasetDraftChange,
+  canLeaveDatasetDraft,
   onArchived,
 }: {
   campaigns: Campaign[];
@@ -24,6 +26,8 @@ export function Campaigns({
   onUpdated: (campaign: Campaign) => void;
   selectedCampaignId: string | null;
   onSelectCampaign: (id: string | null) => void;
+  onDatasetDraftChange?: (pending: boolean) => void;
+  canLeaveDatasetDraft?: () => boolean;
   onArchived: (id: string) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -83,7 +87,12 @@ export function Campaigns({
             }
             canArchive={currentUser?.role.code === 'ADMIN'}
             canEdit={canCreate}
-            onBack={() => onSelectCampaign(null)}
+            currentUser={currentUser}
+            onDatasetDraftChange={onDatasetDraftChange}
+            canLeaveDatasetDraft={canLeaveDatasetDraft}
+            onBack={() => {
+              if (canLeaveDatasetDraft?.() ?? true) onSelectCampaign(null);
+            }}
             onArchived={onArchived}
             onUpdated={onUpdated}
           />

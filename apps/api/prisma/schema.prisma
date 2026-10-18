@@ -99,6 +99,20 @@ enum ImportRowStatus {
   @@schema("social_media_dashboard")
 }
 
+enum DatasetManagementCapability {
+  MANAGEABLE
+  HISTORICAL_PROTECTED
+
+  @@schema("social_media_dashboard")
+}
+
+enum DatasetImportOperation {
+  CREATE
+  REPLACE
+
+  @@schema("social_media_dashboard")
+}
+
 model ReportingSettings {
   id                String   @id @default("organisation")
   reportingCurrency String?  @db.VarChar(3)
@@ -137,6 +151,8 @@ model User {
   createdPerformanceRecords PerformanceRecord[]       @relation("CreatedPerformanceRecords")
   updatedPerformanceRecords PerformanceRecord[]       @relation("UpdatedPerformanceRecords")
   importBatches             ImportBatch[]
+  createdDatasets           Dataset[]
+  createdImportTemplates    DatasetImportTemplate[]
   sessions                  Session[]
   passwordRecoveryTokens    PasswordRecoveryToken[]
   createdTargets            KpiTarget[]               @relation("CreatedTargets")
@@ -207,6 +223,7 @@ model Campaign {
   archivedAt        DateTime?
   campaignChannels  CampaignChannel[]
   targets           KpiTarget[]
+  datasets          Dataset[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
@@ -701,28 +718,35 @@ model AuditLog {
 }
 
 model ImportBatch {
-  id                 String              @id @default(uuid()) @db.Uuid
-  sourceType         String?
-  sourcePlatform     String?
-  displayName        String?
-  originalFilename   String
-  mimeType           String?
-  checksum           String
-  importedByUserId   String              @db.Uuid
-  importedByUser     User                @relation(fields: [importedByUserId], references: [id])
-  status             ImportBatchStatus   @default(PREVIEW)
-  totalRows          Int                 @default(0)
-  acceptedRows       Int                 @default(0)
-  rejectedRows       Int                 @default(0)
-  warningCount       Int                 @default(0)
-  errorSummary       Json?
-  mapping            Json?
-  selectedSheet      String?
-  completedAt        DateTime?
-  rows               ImportRow[]
-  performanceRecords PerformanceRecord[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id                          String                  @id @default(uuid()) @db.Uuid
+  sourceType                  String?
+  sourcePlatform              String?
+  displayName                 String?
+  originalFilename            String
+  mimeType                    String?
+  checksum                    String
+  importedByUserId            String                  @db.Uuid
+  importedByUser              User                    @relation(fields: [importedByUserId], references: [id])
+  status                      ImportBatchStatus       @default(PREVIEW)
+  totalRows                   Int                     @default(0)
+  acceptedRows                Int                     @default(0)
+  rejectedRows                Int                     @default(0)
+  warningCount                Int                     @default(0)
+  errorSummary                Json?
+  mapping                     Json?
+  selectedSheet               String?
+  datasetCampaignId           String?                 @db.Uuid
+  datasetOperation            DatasetImportOperation?
+  targetDatasetId             String?                 @db.Uuid
+  expectedDatasetVersion      Int?
+  datasetAttemptStartedAt     DateTime?
+  datasetAttemptInvalidatedAt DateTime?
+  completedAt                 DateTime?
+  rows                        ImportRow[]
+  performanceRecords          PerformanceRecord[]
+  datasetRevision             DatasetRevision?
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
 
   @@index([checksum])
   @@index([importedByUserId, createdAt])
@@ -737,6 +761,7 @@ model ImportRow {
   sheetName         String?
   status            ImportRowStatus @default(PENDING)
   rawData           Json
+  rawCells          Json?
   normalizedPreview Json?
   errors            Json?
   warnings          Json?
@@ -745,6 +770,91 @@ model ImportRow {
 
   @@unique([importBatchId, sourceRowNumber, sheetName])
   @@index([importBatchId, status])
+  @@schema("social_media_dashboard")
+}
+
+model Dataset {
+  id                   String                      @id @default(uuid()) @db.Uuid
+  campaignId           String                      @db.Uuid
+  campaign             Campaign                    @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  name                 String                      @db.VarChar(240)
+  sourceFilename       String                      @db.VarChar(500)
+  sourceChecksum       String                      @db.Char(64)
+  worksheetKey         String                      @db.VarChar(255)
+  worksheetName        String?                     @db.VarChar(255)
+  currentRevision      Int                         @default(1)
+  version              Int                         @default(1)
+  managementCapability DatasetManagementCapability @default(MANAGEABLE)
+  createdByUserId      String                      @db.Uuid
+  createdByUser        User                        @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  revisions            DatasetRevision[]
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  @@unique([campaignId, sourceChecksum, worksheetKey])
+  @@index([campaignId, createdAt, id])
+  @@schema("social_media_dashboard")
+}
+
+model DatasetRevision {
+  id                String       @id @default(uuid()) @db.Uuid
+  datasetId         String       @db.Uuid
+  dataset           Dataset      @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  revisionNumber    Int
+  importBatchId     String       @unique @db.Uuid
+  importBatch       ImportBatch  @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
+  sourceFilename    String       @db.VarChar(500)
+  sourceChecksum    String       @db.Char(64)
+  worksheetKey      String       @db.VarChar(255)
+  worksheetName     String?      @db.VarChar(255)
+  headerFingerprint String       @db.Char(64)
+  columns           Json
+  rowCount          Int
+  rows              DatasetRow[]
+  createdAt         DateTime     @default(now())
+
+  @@unique([datasetId, revisionNumber])
+  @@index([datasetId, createdAt])
+  @@schema("social_media_dashboard")
+}
+
+model DatasetRow {
+  id              String          @id @default(uuid()) @db.Uuid
+  revisionId      String          @db.Uuid
+  revision        DatasetRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  sourceRowNumber Int
+  cells           Json
+  typedCells      Json
+  createdAt       DateTime        @default(now())
+
+  @@unique([revisionId, sourceRowNumber])
+  @@schema("social_media_dashboard")
+}
+
+model DatasetImportTemplate {
+  id                String   @id @default(uuid()) @db.Uuid
+  name              String   @db.VarChar(120)
+  headerFingerprint String   @db.Char(64)
+  rules             Json
+  createdByUserId   String   @db.Uuid
+  createdByUser     User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([createdByUserId, name])
+  @@index([createdByUserId, headerFingerprint])
+  @@schema("social_media_dashboard")
+}
+
+model DatasetDeletionFence {
+  id             String   @id @default(uuid()) @db.Uuid
+  campaignId     String   @db.Uuid
+  sourceChecksum String   @db.Char(64)
+  worksheetKey   String   @db.VarChar(255)
+  deletedAt      DateTime @default(now())
+
+  @@unique([campaignId, sourceChecksum, worksheetKey])
+  @@index([deletedAt])
   @@schema("social_media_dashboard")
 }
 

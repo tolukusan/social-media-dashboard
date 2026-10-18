@@ -10,9 +10,12 @@ export async function openSectionItem(
   });
   await navigation.getByRole('button', { name: section, exact: true }).click();
   if (!item || item === section) return;
+  const sectionNavigation = page.getByRole('navigation', {
+    name: 'Section navigation',
+  });
   const destination =
     item === 'Imports'
-      ? navigation.getByRole('link', { name: item, exact: true })
-      : navigation.getByRole('button', { name: item, exact: true });
+      ? sectionNavigation.getByRole('link', { name: item, exact: true })
+      : sectionNavigation.getByRole('button', { name: item, exact: true });
   await destination.click();
 }

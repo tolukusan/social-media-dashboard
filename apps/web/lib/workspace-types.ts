@@ -8,6 +8,7 @@ export type View =
   | 'email-reports'
   | 'overview'
   | 'campaigns'
+  | 'datasets'
   | 'performance'
   | 'analytics'
   | 'targets'
@@ -57,6 +58,178 @@ export type Channel = {
     name: string;
     active?: boolean;
     code?: string;
+  }>;
+};
+
+export type DatasetColumnType =
+  'text' | 'number' | 'boolean' | 'date' | 'mixed';
+
+export type DatasetColumn = {
+  id: string;
+  ordinal: number;
+  originalName: string;
+  label: string;
+  type: DatasetColumnType;
+  dateLike: boolean;
+  meaning?: string | null;
+  unit?: string | null;
+};
+
+export type DatasetComparisonResult = {
+  campaignId: string;
+  left: {
+    datasetId: string;
+    revision: number;
+    datasetName: string;
+    sourceFilename: string;
+    columnId: string;
+    columnLabel: string;
+    originalName: string;
+    meaning: string | null;
+    unit: string | null;
+    dateColumnId: string | null;
+  };
+  right: {
+    datasetId: string;
+    revision: number;
+    datasetName: string;
+    sourceFilename: string;
+    columnId: string;
+    columnLabel: string;
+    originalName: string;
+    meaning: string | null;
+    unit: string | null;
+    dateColumnId: string | null;
+  };
+  chart: {
+    eligible: boolean;
+    reason: string | null;
+    intervalMilliseconds: number | null;
+  };
+};
+
+export type DatasetCapabilities = {
+  view: boolean;
+  replace: boolean;
+  delete: boolean;
+};
+
+export type DatasetCard = {
+  id: string;
+  campaignId: string;
+  name: string;
+  sourceFilename: string;
+  worksheetName: string | null;
+  managementCapability: 'MANAGEABLE' | 'HISTORICAL_PROTECTED';
+  version: number;
+  currentRevision: number;
+  rowCount: number;
+  createdAt: string;
+  capabilities: DatasetCapabilities;
+  explanation?: string;
+};
+
+export type HistoricalImport = {
+  id: string;
+  name: string;
+  sourceFilename: string;
+  worksheetName: string | null;
+  availableRecordCount: number;
+  importedAt: string;
+  originalFileAvailable: false;
+  note: string;
+  managementCapability: 'HISTORICAL_PROTECTED';
+  explanation: string;
+};
+
+export type DatasetCampaignResult = {
+  campaign: { id: string; name: string };
+  datasets: DatasetCard[];
+  historicalImports: HistoricalImport[];
+};
+
+export type DatasetDetail = DatasetCard & {
+  campaign: { id: string; name: string };
+  headerFingerprint: string;
+  columns: DatasetColumn[];
+  sourceFilename: string;
+  importedAt: string;
+};
+
+export type DatasetRowsResult = {
+  datasetId: string;
+  revision: number;
+  page: number;
+  pageSize: number;
+  totalRows: number;
+  totalPages: number;
+  rows: Array<{
+    id: string;
+    sourceRowNumber: number;
+    cells: unknown[];
+    typedCells: Array<{ kind: string; value: unknown }>;
+  }>;
+};
+
+export type DatasetImportSheet = {
+  key: string;
+  name: string;
+  rowCount: number;
+  columns?: DatasetColumn[];
+  headerFingerprint?: string;
+};
+
+export type DatasetImportAttempt = {
+  id: string;
+  filename: string;
+  operation: 'CREATE' | 'REPLACE';
+  targetDatasetId: string | null;
+  expectedVersion: number | null;
+  status: string;
+  sheetSelectionRequired: boolean;
+  selectedSheet: string | null;
+  sheets: DatasetImportSheet[];
+  selected:
+    | (DatasetImportSheet & {
+        sampleRows: Array<{ sourceRowNumber: number; cells: unknown[] }>;
+      })
+    | null;
+  duplicate: {
+    dataset: DatasetCard;
+    actions: { view: boolean; replace: boolean };
+  } | null;
+  matchingTemplates?: Array<{
+    id: string;
+    name: string;
+    rules: { columns?: Array<{ id: string; label: string }> };
+  }>;
+};
+
+export type DatasetHistoryDetail = {
+  id: string;
+  campaignId: string;
+  name: string;
+  sourceFilename: string;
+  worksheetName: string | null;
+  importedAt: string;
+  originalFileAvailable: false;
+  note: string;
+  page: number;
+  pageSize: number;
+  totalRecords: number;
+  totalPages: number;
+  rows: Array<{
+    id: string;
+    date: string;
+    status: string;
+    channel: string;
+    platform: string;
+    values: Array<{
+      code: string;
+      name: string;
+      unit: string;
+      value: string;
+    }>;
   }>;
 };
 

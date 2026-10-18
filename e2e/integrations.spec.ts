@@ -13,7 +13,7 @@ async function signIn(page: Page, role = 'administrator') {
     .getByLabel('Password', { exact: true })
     .fill(credentials[role].password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('h1')).toHaveText('Campaign overview');
+  await expect(page.locator('h1')).toHaveText('Overview');
 }
 
 test('Administrator can prepare a mapped connection without keys, enable scheduling, inspect blocked history, and disconnect', async ({
@@ -51,7 +51,7 @@ test('Administrator can prepare a mapped connection without keys, enable schedul
   expect(campaignResponse.status()).toBe(201);
   const campaign = await campaignResponse.json();
   await page.reload();
-  await expect(page.locator('h1')).toHaveText('Campaign overview');
+  await expect(page.locator('h1')).toHaveText('Overview');
   await openSectionItem(page, 'Accounts', 'Connections');
   await expect(page.locator('h1')).toHaveText('Connections');
   const name = `Pending provider ${randomUUID()}`;

@@ -107,7 +107,11 @@ export function CampaignForm({
         </label>
       </div>
       <fieldset className="channel-selection">
-        <legend>Channels and platforms</legend>
+        <legend>Channels and platforms (optional)</legend>
+        <p className="field-help">
+          These associations are optional. You can use a campaign only to
+          organize imported datasets.
+        </p>
         {channels
           .filter((channel) => channel.active !== false)
           .map((channel) => (

@@ -11,7 +11,7 @@ async function signIn(page: Page, role = 'administrator') {
     .getByLabel('Password', { exact: true })
     .fill(credentials[role].password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('h1')).toHaveText('Campaign overview');
+  await expect(page.locator('h1')).toHaveText('Overview');
   await page
     .getByRole('navigation', { name: 'Primary navigation' })
     .getByRole('button', { name: 'Accounts', exact: true })
@@ -39,6 +39,9 @@ test('Administrator opens Accounts and sees safe provider setup guidance', async
   ).toBeVisible();
   const navigation = page.getByRole('navigation', {
     name: 'Primary navigation',
+  });
+  const sectionNavigation = page.getByRole('navigation', {
+    name: 'Section navigation',
   });
   await expect(
     navigation.getByRole('button', { name: 'Accounts', exact: true }),
@@ -70,13 +73,13 @@ test('Administrator opens Accounts and sees safe provider setup guidance', async
   await expect(
     page.getByText('No Zoho reporting connection yet.', { exact: true }),
   ).toBeVisible();
-  await navigation
+  await sectionNavigation
     .getByRole('button', { name: 'Email reports', exact: true })
     .click();
   await expect(
     page.getByText('No Zoho Campaigns account connected', { exact: true }),
   ).toBeVisible();
-  await navigation
+  await sectionNavigation
     .getByRole('button', { name: 'Compare', exact: true })
     .click();
   await expect(page.getByLabel('From', { exact: true })).toHaveValue(
@@ -418,6 +421,9 @@ test('compares accounts and keeps provider-specific measures and content separat
   const navigation = page.getByRole('navigation', {
     name: 'Primary navigation',
   });
+  const sectionNavigation = page.getByRole('navigation', {
+    name: 'Section navigation',
+  });
   await expect(page.locator('.connected-account-select')).toHaveCount(2);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.screenshot({
@@ -456,7 +462,7 @@ test('compares accounts and keeps provider-specific measures and content separat
   const pdfPath = await pdfDownload.path();
   expect(pdfPath).toBeTruthy();
   expect(await readFile(pdfPath!, 'utf8')).toContain('%PDF-1.4');
-  await navigation
+  await sectionNavigation
     .getByRole('button', { name: 'Compare', exact: true })
     .click();
   const comparison = page.locator('.account-comparison-panel');
@@ -514,7 +520,7 @@ test('compares accounts and keeps provider-specific measures and content separat
   expect(youtubeFields?.[4]).toBe('Selected period');
   expect(youtubeFields?.[5]).toBe(from);
   expect(youtubeFields?.[6]).toBe(to);
-  await navigation
+  await sectionNavigation
     .getByRole('button', { name: 'Email reports', exact: true })
     .click();
   await page.getByLabel('Zoho account').selectOption('zoho-account');

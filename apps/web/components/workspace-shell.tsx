@@ -10,13 +10,11 @@ import {
 } from '@tanstack/react-query';
 import { AuthLoading, Login } from '../features/auth/login';
 import { useSession } from '../features/auth/use-session';
-import Link from 'next/link';
 import { WorkspaceNavigation, SectionNavigation } from './workspace-navigation';
 import { Campaigns } from '../features/campaigns/campaigns';
 import { Performance } from '../features/performance/performance';
-import { Overview } from '../features/dashboard/overview';
-import { ReportDownload } from '../features/reports/report-download';
-import { Reports } from '../features/reports/reports';
+import { DatasetWorkspace } from '../features/datasets/dataset-workspace';
+import { DatasetReports } from '../features/datasets/dataset-reports';
 import { CatalogueManagement } from '../features/catalogue/catalogue-management';
 import { Users } from '../features/users/users';
 import { Profile } from '../features/users/profile';
@@ -63,8 +61,10 @@ export function WorkspaceShell() {
       : 'unauthenticated';
   const [authError, setAuthError] = useState('');
   const identityRef = useRef<string | null>(null);
+  const lastHashRef = useRef<string | null>(null);
   const [view, setView] = useState<View>('overview');
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const [datasetDraftPending, setDatasetDraftPending] = useState(false);
   const roleCode = currentUser?.role.code;
   useEffect(() => {
     const restoreView = () => {
@@ -78,10 +78,23 @@ export function WorkspaceShell() {
           `${window.location.pathname}${window.location.search}#accounts`,
         );
       const raw = window.location.hash.slice(1);
+      if (lastHashRef.current !== null && raw !== lastHashRef.current) {
+        if (
+          datasetDraftPending &&
+          !window.confirm(
+            'Leave this page and discard the unfinished dataset upload?',
+          )
+        ) {
+          window.history.forward();
+          return;
+        }
+        if (datasetDraftPending) setDatasetDraftPending(false);
+      }
+      lastHashRef.current = raw;
       const next =
         (
           {
-            data: 'performance',
+            data: 'datasets',
             administration: 'settings',
             connections: 'integrations',
           } as Record<string, string>
@@ -93,6 +106,7 @@ export function WorkspaceShell() {
         'email-reports',
         'overview',
         'campaigns',
+        'datasets',
         'performance',
         'analytics',
         'targets',
@@ -113,7 +127,7 @@ export function WorkspaceShell() {
     restoreView();
     window.addEventListener('hashchange', restoreView);
     return () => window.removeEventListener('hashchange', restoreView);
-  }, [roleCode]);
+  }, [datasetDraftPending, roleCode]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [campaignFilter, setCampaignFilter] = useState('');
@@ -149,40 +163,17 @@ export function WorkspaceShell() {
     targetPeriod,
   };
   const workspaceQuery = useQuery({
-    placeholderData: keepPreviousData,
-    queryKey: currentUser
-      ? queryKeys.workspace(currentUser.id, workspaceFilters)
-      : ['workspace', 'anonymous'],
+    queryKey: ['workspace-context', currentUser?.id ?? 'anonymous'],
     enabled:
-      filtersReady &&
-      authStatus === 'authenticated' &&
-      Boolean(currentUser) &&
-      !isAccountView(view),
+      filtersReady && authStatus === 'authenticated' && Boolean(currentUser),
+    staleTime: 60_000,
     queryFn: async () => {
-      const params = new URLSearchParams(
-        Object.entries(workspaceFilters).filter(([, value]) => Boolean(value)),
-      );
       try {
-        const [dashboard, context] = await Promise.all([
-          apiRequest<DashboardResult>(`/analytics/dashboard?${params}`),
-          queryClient.fetchQuery({
-            queryKey: ['workspace-context', currentUser!.id],
-            staleTime: 60_000,
-            queryFn: async () => {
-              const [campaigns, records, channels, defaultPeriod] =
-                await Promise.all([
-                  apiRequest<Campaign[]>('/campaigns'),
-                  apiRequest<PerformanceRecord[]>('/performance-records'),
-                  apiRequest<Channel[]>('/channels'),
-                  apiRequest<{ from: string; to: string; hasData: boolean }>(
-                    '/analytics/default-period',
-                  ),
-                ]);
-              return { campaigns, records, channels, defaultPeriod };
-            },
-          }),
+        const [campaigns, channels] = await Promise.all([
+          apiRequest<Campaign[]>('/campaigns'),
+          apiRequest<Channel[]>('/channels'),
         ]);
-        return { dashboard, ...context };
+        return { campaigns, channels };
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           await queryClient.cancelQueries();
@@ -193,13 +184,42 @@ export function WorkspaceShell() {
       }
     },
   });
+  const dashboardQuery = useQuery({
+    placeholderData: keepPreviousData,
+    queryKey: currentUser
+      ? queryKeys.workspace(currentUser.id, workspaceFilters)
+      : ['workspace', 'anonymous'],
+    enabled:
+      filtersReady && authStatus === 'authenticated' && view === 'analytics',
+    queryFn: async () => {
+      const params = new URLSearchParams(
+        Object.entries(workspaceFilters).filter(([, value]) => Boolean(value)),
+      );
+      return apiRequest<DashboardResult>(`/analytics/dashboard?${params}`);
+    },
+  });
+  const recordsQuery = useQuery({
+    queryKey: ['performance-records', currentUser?.id ?? 'anonymous'],
+    enabled:
+      filtersReady && authStatus === 'authenticated' && view === 'performance',
+    queryFn: () => apiRequest<PerformanceRecord[]>('/performance-records'),
+  });
+  const defaultPeriodQuery = useQuery({
+    queryKey: ['analytics-default-period', currentUser?.id ?? 'anonymous'],
+    enabled:
+      filtersReady && authStatus === 'authenticated' && view === 'analytics',
+    queryFn: () =>
+      apiRequest<{ from: string; to: string; hasData: boolean }>(
+        '/analytics/default-period',
+      ),
+  });
   const trendQuery = useQuery({
     queryKey: ['trends', currentUser?.id ?? 'anonymous', workspaceFilters],
     enabled:
       filtersReady &&
       authStatus === 'authenticated' &&
       Boolean(currentUser && from && to) &&
-      !isAccountView(view),
+      view === 'analytics',
     queryFn: async () => {
       const params = new URLSearchParams(
         Object.entries(workspaceFilters).filter(([, value]) => Boolean(value)),
@@ -207,34 +227,42 @@ export function WorkspaceShell() {
       return apiRequest<TrendResult>(`/analytics/trends?${params}`);
     },
   });
-  const dashboard = workspaceQuery.data?.dashboard ?? null;
+  const dashboard = dashboardQuery.data ?? null;
   const campaigns = workspaceQuery.data?.campaigns ?? [];
   const channels = workspaceQuery.data?.channels ?? [];
   const [usersRevision, setUsersRevision] = useState(0);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
     null,
   );
-  const records = workspaceQuery.data?.records ?? [];
+  const records = recordsQuery.data ?? [];
   useEffect(() => {
-    if (!filtersReady || !workspaceQuery.data || defaultsApplied.current)
+    if (
+      view !== 'analytics' ||
+      !filtersReady ||
+      !defaultPeriodQuery.data ||
+      defaultsApplied.current
+    )
       return;
     defaultsApplied.current = true;
-    // Dates are a display default over existing active data, not a KPI calculation.
     if (!filtersRestored.current && !from && !to) {
-      const period = workspaceQuery.data.defaultPeriod;
+      const period = defaultPeriodQuery.data;
       setFrom(period.from);
       setTo(period.to);
     }
-  }, [filtersReady, workspaceQuery.data, records, from, to]);
-  const loading = workspaceQuery.isFetching;
+  }, [defaultPeriodQuery.data, filtersReady, from, to, view]);
+  const loading =
+    workspaceQuery.isFetching ||
+    dashboardQuery.isFetching ||
+    recordsQuery.isFetching;
   const viewTitles: Record<View, string> = {
     archive: 'Archive',
     accounts: 'Accounts',
     'account-insights': 'Account insights',
     'account-comparison': 'Compare accounts',
     'email-reports': 'Email reports',
-    overview: 'Campaign overview',
+    overview: 'Overview',
     campaigns: 'Campaigns',
+    datasets: 'Data',
     performance: 'Performance data',
     analytics: 'Campaign analytics',
     targets: 'KPI targets',
@@ -245,7 +273,9 @@ export function WorkspaceShell() {
     profile: 'My profile',
   };
   const error =
-    workspaceQuery.error instanceof Error ? workspaceQuery.error.message : '';
+    [workspaceQuery.error, dashboardQuery.error, recordsQuery.error].find(
+      (item): item is Error => item instanceof Error,
+    )?.message ?? '';
 
   useEffect(() => {
     const nextId = currentUser?.id ?? null;
@@ -260,14 +290,25 @@ export function WorkspaceShell() {
   }, [currentUser?.id, queryClient]);
 
   useEffect(() => {
-    if (
-      workspaceQuery.error instanceof ApiError &&
-      workspaceQuery.error.status === 401
-    ) {
+    const queryError = [
+      workspaceQuery.error,
+      dashboardQuery.error,
+      recordsQuery.error,
+      defaultPeriodQuery.error,
+      trendQuery.error,
+    ].find((item): item is ApiError => item instanceof ApiError);
+    if (queryError?.status === 401) {
       queryClient.clear();
       queryClient.setQueryData(queryKeys.session, null);
     }
-  }, [workspaceQuery.error, queryClient]);
+  }, [
+    dashboardQuery.error,
+    defaultPeriodQuery.error,
+    queryClient,
+    recordsQuery.error,
+    trendQuery.error,
+    workspaceQuery.error,
+  ]);
 
   const logout = async () => {
     await apiRequest('/auth/logout', { method: 'POST' });
@@ -295,6 +336,14 @@ export function WorkspaceShell() {
     setNavigationOpen(false);
     window.location.hash = next;
   };
+  const canLeaveDatasetDraft = () => {
+    if (!datasetDraftPending) return true;
+    const approved = window.confirm(
+      'Leave this page and discard the unfinished dataset upload?',
+    );
+    if (approved) setDatasetDraftPending(false);
+    return approved;
+  };
   return (
     <main className="shell">
       <a
@@ -313,6 +362,7 @@ export function WorkspaceShell() {
         navigationOpen={navigationOpen}
         navigate={navigate}
         logout={logout}
+        canLeave={canLeaveDatasetDraft}
       />
       <section id="workspace-content" className="content" tabIndex={-1}>
         <header className="topbar">
@@ -330,6 +380,7 @@ export function WorkspaceShell() {
               currentUser={currentUser}
               view={view}
               navigate={navigate}
+              canLeave={canLeaveDatasetDraft}
             />
             <h1>{viewTitles[view]}</h1>
           </div>
@@ -361,95 +412,11 @@ export function WorkspaceShell() {
         {view === 'archive' && currentUser?.role.code === 'ADMIN' && (
           <Archive />
         )}
-        {view === 'overview' && (
-          <section className="panel home-guidance">
-            <div>
-              <h2>
-                {dashboard?.recordCount
-                  ? 'Your performance at a glance'
-                  : records.length
-                    ? 'No data matches these filters'
-                    : 'Start with your marketing data'}
-              </h2>
-              <p>
-                {dashboard?.recordCount
-                  ? 'Campaign results include imported and manually entered data. Connected-account analytics are available separately under Accounts.'
-                  : records.length
-                    ? 'Adjust the date range or campaign to find your results.'
-                    : currentUser?.role.code === 'MANAGEMENT'
-                      ? 'Results will appear here when your marketing team adds data.'
-                      : 'Upload an export. We will guide you from the file to results and a report.'}
-              </p>
-            </div>
-            <div className="home-actions">
-              {currentUser?.role.code !== 'MANAGEMENT' && (
-                <>
-                  <Link className="primary download" href="/imports">
-                    {records.length ? 'Add data' : 'Add your first data'}
-                  </Link>
-                  {!records.length && (
-                    <button
-                      className="secondary"
-                      onClick={() => navigate('performance')}
-                    >
-                      Enter manually
-                    </button>
-                  )}
-                </>
-              )}
-              {records.length > 0 && (
-                <ReportDownload filters={workspaceFilters} />
-              )}
-            </div>
-          </section>
-        )}
-        {view === 'overview' && (
-          <Overview
-            result={dashboard}
+        {(view === 'overview' || view === 'datasets') && currentUser && (
+          <DatasetWorkspace
             campaigns={campaigns}
-            setFrom={(value) => {
-              setFrom(value);
-              if (targetPeriod) setTargetPeriod('');
-            }}
-            setTo={(value) => {
-              setTo(value);
-              if (targetPeriod) setTargetPeriod('');
-            }}
-            navigate={navigate}
-            analytics={false}
-            channels={channels}
-            filters={workspaceFilters}
-            setCampaignFilter={(value) => {
-              setCampaignFilter(value);
-              if (!value && targetPeriod === 'CAMPAIGN') setTargetPeriod('');
-            }}
-            setChannelFilter={(value) => {
-              setChannelFilter(value);
-              setPlatformFilter('');
-              if (
-                value &&
-                metricFilter &&
-                !dashboard?.metricMetadata
-                  .find((metric) => metric.code === metricFilter)
-                  ?.applicableChannelIds?.includes(value)
-              )
-                setMetricFilter('');
-            }}
-            setPlatformFilter={setPlatformFilter}
-            setMetricFilter={setMetricFilter}
-            setTargetPeriod={(value) => {
-              setTargetPeriod(value);
-              if (value === 'CAMPAIGN') {
-                setFrom('');
-                setTo('');
-              }
-            }}
-            trends={trendQuery.data ?? null}
-            trendsLoading={trendQuery.isFetching}
-            trendsError={
-              trendQuery.error instanceof Error ? trendQuery.error.message : ''
-            }
-            retryTrends={() => void trendQuery.refetch()}
+            currentUser={currentUser}
+            onDraftChange={setDatasetDraftPending}
           />
         )}
         {view === 'analytics' && (
@@ -500,7 +467,7 @@ export function WorkspaceShell() {
             currentUser={currentUser}
             onCreated={(campaign) =>
               queryClient.setQueryData(
-                queryKeys.workspace(currentUser!.id, workspaceFilters),
+                ['workspace-context', currentUser!.id],
                 (data: typeof workspaceQuery.data) =>
                   data && {
                     ...data,
@@ -515,7 +482,7 @@ export function WorkspaceShell() {
             }
             onUpdated={(campaign) =>
               queryClient.setQueryData(
-                queryKeys.workspace(currentUser!.id, workspaceFilters),
+                ['workspace-context', currentUser!.id],
                 (data: typeof workspaceQuery.data) =>
                   data && {
                     ...data,
@@ -527,9 +494,11 @@ export function WorkspaceShell() {
             }
             selectedCampaignId={selectedCampaignId}
             onSelectCampaign={setSelectedCampaignId}
+            onDatasetDraftChange={setDatasetDraftPending}
+            canLeaveDatasetDraft={canLeaveDatasetDraft}
             onArchived={(id) => {
               queryClient.setQueryData(
-                queryKeys.workspace(currentUser!.id, workspaceFilters),
+                ['workspace-context', currentUser!.id],
                 (data: typeof workspaceQuery.data) =>
                   data && {
                     ...data,
@@ -547,25 +516,7 @@ export function WorkspaceShell() {
             currentUser={currentUser}
           />
         )}
-        {view === 'reports' && (
-          <Reports
-            filters={workspaceFilters}
-            campaigns={campaigns}
-            channels={channels}
-            metrics={dashboard?.metricMetadata ?? []}
-            onChange={(key, value) => {
-              ({
-                from: setFrom,
-                to: setTo,
-                campaignId: setCampaignFilter,
-                channelId: setChannelFilter,
-                platformId: setPlatformFilter,
-                metricCode: setMetricFilter,
-                targetPeriod: setTargetPeriod,
-              })[key](value);
-            }}
-          />
-        )}
+        {view === 'reports' && <DatasetReports campaigns={campaigns} />}
         {view === 'integrations' && currentUser && (
           <Integrations
             currentUser={currentUser}
@@ -591,7 +542,7 @@ export function WorkspaceShell() {
               channels={channels}
               onChanged={(next) =>
                 queryClient.setQueryData(
-                  queryKeys.workspace(currentUser!.id, workspaceFilters),
+                  ['workspace-context', currentUser!.id],
                   (data: typeof workspaceQuery.data) =>
                     data && { ...data, channels: next },
                 )

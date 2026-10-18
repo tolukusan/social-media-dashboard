@@ -16,6 +16,7 @@ import { SettingsModule } from './settings/settings.module.js';
 import { IntegrationsModule } from './integrations/integrations.module.js';
 import { AccountAnalyticsModule } from './account-analytics/account-analytics.module.js';
 import { ConnectedAccountsModule } from './accounts/connected-accounts.module.js';
+import { DatasetsModule } from './datasets/datasets.module.js';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { ConnectedAccountsModule } from './accounts/connected-accounts.module.js
     IntegrationsModule,
     AccountAnalyticsModule,
     ConnectedAccountsModule,
+    DatasetsModule,
   ],
   controllers: [HealthController],
 })

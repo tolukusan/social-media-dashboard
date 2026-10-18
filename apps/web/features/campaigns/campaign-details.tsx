@@ -1,16 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import type { Campaign } from '../../lib/workspace-types';
+import type { Campaign, CurrentUser } from '../../lib/workspace-types';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiRequest, invalidateWorkspace } from '../../lib/api-client';
 import { CampaignEditForm } from './campaign-edit-form';
+import { DatasetWorkspace } from '../datasets/dataset-workspace';
 
 export function CampaignDetails({
   campaign,
   canArchive,
   canEdit,
+  currentUser,
+  onDatasetDraftChange,
+  canLeaveDatasetDraft = () => true,
   onBack,
   onArchived,
   onUpdated,
@@ -18,6 +21,9 @@ export function CampaignDetails({
   campaign: Campaign | null;
   canArchive: boolean;
   canEdit: boolean;
+  currentUser: CurrentUser | null;
+  onDatasetDraftChange?: (pending: boolean) => void;
+  canLeaveDatasetDraft?: () => boolean;
   onBack: () => void;
   onArchived: (id: string) => void;
   onUpdated: (campaign: Campaign) => void;
@@ -33,6 +39,7 @@ export function CampaignDetails({
       </div>
     );
   const archive = async () => {
+    if (!canLeaveDatasetDraft()) return;
     if (
       !window.confirm(
         `Archive “${campaign.name}”? Historical performance data will be preserved.`,
@@ -116,14 +123,6 @@ export function CampaignDetails({
         Performance records remain preserved when a campaign is archived.
       </p>
       {canEdit && !editing && (
-        <Link
-          className="primary download"
-          href={`/imports?campaignId=${campaign.id}`}
-        >
-          Add data to this campaign
-        </Link>
-      )}
-      {canEdit && !editing && (
         <button className="secondary" onClick={() => setEditing(true)}>
           Edit campaign
         </button>
@@ -137,6 +136,14 @@ export function CampaignDetails({
           {busy ? 'Archiving…' : 'Archive campaign'}
         </button>
       )}
+      {currentUser ? (
+        <DatasetWorkspace
+          campaigns={[campaign]}
+          currentUser={currentUser}
+          campaignId={campaign.id}
+          onDraftChange={onDatasetDraftChange}
+        />
+      ) : null}
     </section>
   );
 }

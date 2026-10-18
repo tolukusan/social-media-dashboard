@@ -14,7 +14,7 @@ async function login(page: Page, email?: string, password?: string) {
   await page.getByLabel('Email address').fill(email!);
   await page.getByLabel('Password', { exact: true }).fill(password!);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('h1')).toHaveText('Campaign overview');
+  await expect(page.locator('h1')).toHaveText('Overview');
 }
 async function mutate(
   page: Page,
@@ -92,7 +92,7 @@ test('public request waits for Administrator approval and receives the selected 
   await login(page, email, password);
   await expect(
     page
-      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('navigation', { name: 'Section navigation' })
       .getByRole('button', { name: 'Archive', exact: true }),
   ).toHaveCount(0);
 });
@@ -124,136 +124,75 @@ test('Administrator invitation is accepted with its bound email and removed from
   await login(recipient, email, password);
   await expect(
     recipient
-      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('navigation', { name: 'Section navigation' })
       .getByRole('button', { name: 'Users', exact: true }),
   ).toHaveCount(0);
   await context.close();
 });
-test('campaign defaults, report scope and Archive restore/delete work on desktop and mobile', async ({
+test('dataset reports stay separate while Archive restores or deletes the campaign safely', async ({
   page,
 }) => {
   await login(page);
   const api = process.env.NEXT_PUBLIC_API_URL!;
-  const period = await (
-    await page.request.get(`${api}/analytics/default-period`)
-  ).json();
-  await expect(page.getByLabel('From', { exact: true })).toHaveValue(
-    period.from,
-  );
-  await expect(page.getByLabel('To', { exact: true })).toHaveValue(period.to);
-  await page.goto('/?from=2024-01-02#overview');
-  await expect(page.getByLabel('From', { exact: true })).toHaveValue(
-    '2024-01-02',
-  );
-  await expect(page.getByLabel('To', { exact: true })).toHaveValue('');
   const me = await (await page.request.get(`${api}/auth/me`)).json();
-  const channels = await (await page.request.get(`${api}/channels`)).json();
-  const channel = channels.find((c: { code: string }) => c.code === 'SOCIAL');
-  const platform = channel.platforms.find((p: { active: boolean }) => p.active);
-  const name = `Archive journey ${randomUUID()}`;
+  const name = `Archive dataset journey ${randomUUID()}`;
   const created = await mutate(page, '/campaigns', 'POST', {
     name,
     startDate: '2024-01-01',
     responsibleUserId: me.id,
-    channels: [{ channelId: channel.id, platformIds: [platform.id] }],
+    channels: [],
   });
   expect(created.status()).toBe(201);
   const campaign = await created.json();
-  const context = campaign.campaignChannels[0].campaignPlatforms[0];
-  const record = await mutate(page, '/performance-records', 'POST', {
-    campaignPlatformId: context.id,
-    recordDate: '2024-01-02',
-    values: {
-      SM_ENGAGEMENTS: 0,
-      SM_REACH: 1,
-      SM_IMPRESSIONS: 2,
-      SM_LINK_CLICKS: 3,
-      SM_FOLLOWERS_GAINED: 4,
+  const csrf = await (await page.request.get(`${api}/auth/csrf`)).json();
+  const upload = await page.request.post(`${api}/datasets/imports/preview`, {
+    headers: {
+      Origin: process.env.E2E_BASE_URL!,
+      'x-csrf-token': csrf.csrfToken,
+    },
+    multipart: {
+      campaignId: campaign.id,
+      file: {
+        name: 'archive-data.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from('Date,Reach\n2024-01-02,0\n'),
+      },
     },
   });
-  expect(record.status()).toBe(201);
-  await page.goto(
-    `/?from=2024-01-01&to=2024-01-30&campaignId=${campaign.id}#overview`,
+  expect(upload.status()).toBe(201);
+  const attempt = await upload.json();
+  const imported = await mutate(
+    page,
+    `/datasets/imports/${attempt.id}/confirm`,
+    'POST',
+    {},
   );
-  const socialHeadlines = page.getByRole('region', {
-    name: 'Social Media Marketing headline metrics',
-  });
-  await expect(socialHeadlines.locator('.kpi')).toHaveCount(4);
-  await expect(socialHeadlines.locator('.kpi span')).toHaveText([
-    'Engagements',
-    'Aggregated daily reach',
-    'Impressions',
-    'Link Clicks',
-  ]);
-  await expect(page.getByLabel('Trend metric')).toBeVisible();
-  const emailChannel = channels.find(
-    (item: { code: string }) => item.code === 'EMAIL',
-  );
-  const emailPlatform = emailChannel.platforms.find(
-    (item: { active: boolean }) => item.active,
-  );
-  const emailCampaignResponse = await mutate(page, '/campaigns', 'POST', {
-    name: `Email headline journey ${randomUUID()}`,
-    startDate: '2024-01-01',
-    responsibleUserId: me.id,
-    channels: [{ channelId: emailChannel.id, platformIds: [emailPlatform.id] }],
-  });
-  expect(emailCampaignResponse.status()).toBe(201);
-  const emailCampaign = await emailCampaignResponse.json();
-  const emailContext = emailCampaign.campaignChannels[0].campaignPlatforms[0];
-  const emailRecord = await mutate(page, '/performance-records', 'POST', {
-    campaignPlatformId: emailContext.id,
-    recordDate: '2024-01-02',
-    values: {
-      EMAIL_OPENS: 0,
-      EMAIL_SENT: 2,
-      EMAIL_DELIVERED: 1,
-      EMAIL_CLICKS: 3,
-      EMAIL_UNSUBSCRIBES: 4,
-    },
-  });
-  expect(emailRecord.status()).toBe(201);
-  await page.goto(
-    `/?from=2024-01-01&to=2024-01-30&channelId=${emailChannel.id}#overview`,
-  );
-  const emailHeadlines = page.getByRole('region', {
-    name: `${emailChannel.name} headline metrics`,
-  });
-  await expect(emailHeadlines.locator('.kpi')).toHaveCount(4);
-  await expect(emailHeadlines.locator('.kpi span')).toHaveText([
-    'Opens',
-    'Emails Sent',
-    'Emails Delivered',
-    'Email Clicks',
-  ]);
-  await page.goto(
-    `/?from=2024-01-01&to=2024-01-30&campaignId=${campaign.id}#reports`,
-  );
-  await expect(page.getByLabel('Campaign', { exact: true })).toHaveValue(
-    campaign.id,
-  );
+  expect(imported.status()).toBe(201);
+  const dataset = await imported.json();
+
+  await page.goto(`/?campaignId=${campaign.id}#reports`);
+  await page
+    .getByRole('combobox', { name: 'Campaign', exact: true })
+    .selectOption(campaign.id);
   await expect(
-    page.getByRole('rowheader', { name: 'Engagements', exact: true }),
+    page.getByRole('heading', { name: 'Reports by dataset' }),
   ).toBeVisible();
-  const preview = await (
-    await page.request.get(
-      `${api}/reports/preview?campaignId=${campaign.id}&from=2024-01-01&to=2024-01-30`,
-    )
-  ).json();
+  await expect(
+    page.getByRole('heading', { name: 'archive-data' }),
+  ).toBeVisible();
+  const reportDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export PDF' }).click();
+  const report = await reportDownload;
+  expect(await report.failure()).toBeNull();
   expect(
-    preview.summary.kpis.every(
-      (k: { value: number | null }) => k.value !== null,
-    ),
-  ).toBe(true);
-  expect(
-    preview.summary.kpis.some((k: { value: number | null }) => k.value === 0),
-  ).toBe(true);
-  await page.getByLabel('Include unavailable metrics').check();
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download PDF', exact: true }).click();
-  expect((await downloadPromise).suggestedFilename()).toContain(
-    '2024-01-01_to_2024-01-30',
-  );
+    (await readFile((await report.path())!)).subarray(0, 5).toString('ascii'),
+  ).toBe('%PDF-');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(390);
+  await page.setViewportSize({ width: 1280, height: 720 });
   expect(
     (await mutate(page, `/campaigns/${campaign.id}`, 'DELETE')).status(),
   ).toBe(200);
@@ -276,13 +215,10 @@ test('campaign defaults, report scope and Archive restore/delete work on desktop
   ).toContainText('of');
   await row.getByRole('button', { name: 'Review deletion' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('dialog')).toContainText(/Datasets\s*:\s*1/);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await row.getByRole('button', { name: 'Review deletion' }).click();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
-    .toBeLessThanOrEqual(390);
   await page
     .getByRole('dialog')
     .getByLabel(`Type ${name} to confirm`)
@@ -294,5 +230,8 @@ test('campaign defaults, report scope and Archive restore/delete work on desktop
   await expect(row).toHaveCount(0);
   expect(
     (await page.request.get(`${api}/campaigns/${campaign.id}`)).status(),
+  ).toBe(404);
+  expect(
+    (await page.request.get(`${api}/datasets/${dataset.id}`)).status(),
   ).toBe(404);
 });

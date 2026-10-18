@@ -30,8 +30,9 @@ export class CreateCampaignDto {
   @IsOptional() @IsNumber() @Min(0) budget?: number;
   @IsUUID() responsibleUserId!: string;
   @IsOptional() @IsString() notes?: string;
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CampaignChannelSelectionDto)
-  channels!: CampaignChannelSelectionDto[];
+  channels: CampaignChannelSelectionDto[] = [];
 }

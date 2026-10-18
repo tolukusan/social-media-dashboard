@@ -87,6 +87,27 @@ export class DeletionService {
             orderBy: { id: 'asc' },
           })
         : [];
+    const datasets =
+      kind === 'campaigns'
+        ? await tx.dataset.findMany({
+            where: { campaignId },
+            include: { revisions: { select: { id: true, rowCount: true } } },
+            orderBy: { id: 'asc' },
+          })
+        : [];
+    const datasetAttempts =
+      kind === 'campaigns'
+        ? await tx.importBatch.findMany({
+            where: {
+              datasetCampaignId: campaignId,
+              datasetOperation: { not: null },
+              status: { in: ['PREVIEW', 'READY', 'IMPORTING'] },
+              datasetAttemptInvalidatedAt: null,
+            },
+            include: { _count: { select: { rows: true } } },
+            orderBy: { id: 'asc' },
+          })
+        : [];
     const retainedImportIds = [
       ...new Set(
         records.flatMap((r) => (r.importBatchId ? [r.importBatchId] : [])),
@@ -98,6 +119,25 @@ export class DeletionService {
       campaignTargets: targets.length,
       campaignChannels: kind === 'campaigns' ? channels.length : 0,
       campaignPlatforms: kind === 'campaigns' ? platformIds.length : 0,
+      datasets: datasets.length,
+      datasetRevisions: datasets.reduce(
+        (count, dataset) => count + dataset.revisions.length,
+        0,
+      ),
+      datasetRows: datasets.reduce(
+        (count, dataset) =>
+          count +
+          dataset.revisions.reduce(
+            (revisionCount, revision) => revisionCount + revision.rowCount,
+            0,
+          ),
+        0,
+      ),
+      pendingDatasetImports: datasetAttempts.length,
+      stagedDatasetRows: datasetAttempts.reduce(
+        (count, attempt) => count + attempt._count.rows,
+        0,
+      ),
     };
     const blockers = mappings.map((m) => ({
       mappingId: m.id,
@@ -115,6 +155,8 @@ export class DeletionService {
         records,
         mappings,
         targets,
+        datasets,
+        datasetAttempts,
       }),
     );
     return {
@@ -134,6 +176,8 @@ export class DeletionService {
       retainedImportIds,
       platformIds,
       channelIds: channels.map((c) => c.id),
+      datasetIds: datasets.map((dataset) => dataset.id),
+      datasetAttemptIds: datasetAttempts.map((attempt) => attempt.id),
     };
   }
   async preview(kind: ArchiveKind, id: string, actorId: string) {
@@ -230,6 +274,20 @@ export class DeletionService {
           where: { id: { in: recordIds } },
         });
         if (kind === 'campaigns') {
+          await tx.importRow.deleteMany({
+            where: { importBatchId: { in: s.datasetAttemptIds } },
+          });
+          await tx.importBatch.updateMany({
+            where: { id: { in: s.datasetAttemptIds } },
+            data: {
+              status: 'REJECTED',
+              datasetAttemptInvalidatedAt: new Date(),
+              errorSummary: { code: 'CAMPAIGN_DELETED' },
+            },
+          });
+          await tx.dataset.deleteMany({
+            where: { id: { in: s.datasetIds } },
+          });
           await tx.kpiTarget.deleteMany({ where: { campaignId: id } });
           await tx.campaignPlatform.deleteMany({
             where: { id: { in: s.platformIds } },

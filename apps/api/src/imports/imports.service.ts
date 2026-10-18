@@ -47,9 +47,7 @@ export function parseDate(value: unknown) {
     const date = new Date(`${iso}T00:00:00.000Z`);
     return Number.isNaN(date.getTime()) ? null : date;
   }
-  const monthDayYear = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+.*)?$/.exec(
-    text,
-  );
+  const monthDayYear = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+.*)?$/.exec(text);
   if (monthDayYear) {
     const month = Number(monthDayYear[1]) - 1;
     const day = Number(monthDayYear[2]);
@@ -114,10 +112,10 @@ export class ImportsService {
     const parsed = await this.parser.parse(file);
     const checksum = createHash('sha256').update(file.buffer).digest('hex');
     const completed = await this.prisma.importBatch.findFirst({
-      where: { checksum, status: 'COMPLETED' },
+      where: { checksum, status: 'COMPLETED', datasetOperation: null },
     });
     const completedImports = await this.prisma.importBatch.findMany({
-      where: { status: 'COMPLETED' },
+      where: { status: 'COMPLETED', datasetOperation: null },
       orderBy: { completedAt: 'desc' },
       take: 50,
       select: { displayName: true, originalFilename: true, mapping: true },
@@ -261,7 +259,9 @@ export class ImportsService {
       async (tx) => {
         await lockLifecycle(tx);
         await tx.$queryRaw`SELECT id FROM social_media_dashboard."ImportBatch" WHERE id = ${id}::uuid FOR UPDATE`;
-        const batch = await tx.importBatch.findUnique({ where: { id } });
+        const batch = await tx.importBatch.findFirst({
+          where: { id, datasetOperation: null },
+        });
         if (!batch) throw new NotFoundException('Import batch not found.');
         if (batch.status === 'COMPLETED' || batch.status === 'IMPORTING')
           throw new ConflictException({
@@ -759,7 +759,12 @@ export class ImportsService {
         message: 'The import must be mapped and validated before confirmation.',
       });
     const duplicate = await this.prisma.importBatch.findFirst({
-      where: { checksum: batch.checksum, status: 'COMPLETED', id: { not: id } },
+      where: {
+        checksum: batch.checksum,
+        status: 'COMPLETED',
+        datasetOperation: null,
+        id: { not: id },
+      },
     });
     if (duplicate)
       throw new ConflictException({
@@ -767,7 +772,7 @@ export class ImportsService {
         message: 'This exact file was already imported successfully.',
       });
     const claimed = await this.prisma.importBatch.updateMany({
-      where: { id, status: 'READY' },
+      where: { id, status: 'READY', datasetOperation: null },
       data: { status: 'IMPORTING' },
     });
     if (!claimed.count)
@@ -783,6 +788,7 @@ export class ImportsService {
           where: {
             checksum: batch.checksum,
             status: 'COMPLETED',
+            datasetOperation: null,
             id: { not: id },
           },
         });
@@ -910,7 +916,9 @@ export class ImportsService {
       await lockLifecycle(tx);
       // Serialize deletion with confirmation/status transitions for this batch.
       await tx.$queryRaw`SELECT id FROM social_media_dashboard."ImportBatch" WHERE id = ${id}::uuid FOR UPDATE`;
-      const batch = await tx.importBatch.findUnique({ where: { id } });
+      const batch = await tx.importBatch.findFirst({
+        where: { id, datasetOperation: null },
+      });
       if (!batch)
         throw new NotFoundException({
           code: 'IMPORT_NOT_FOUND',
@@ -949,6 +957,7 @@ export class ImportsService {
 
   list() {
     return this.prisma.importBatch.findMany({
+      where: { datasetOperation: null },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -973,14 +982,14 @@ export class ImportsService {
   }
   rows(id: string) {
     return this.prisma.importRow.findMany({
-      where: { importBatchId: id },
+      where: { importBatch: { id, datasetOperation: null } },
       orderBy: { sourceRowNumber: 'asc' },
     });
   }
 
   private async getBatch(id: string) {
-    const batch = await this.prisma.importBatch.findUnique({
-      where: { id },
+    const batch = await this.prisma.importBatch.findFirst({
+      where: { id, datasetOperation: null },
       include: {
         importedByUser: { select: { id: true, name: true, email: true } },
       },

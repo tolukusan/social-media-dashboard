@@ -287,6 +287,12 @@ export function Archive() {
                     campaignTargets: 'Campaign targets',
                     campaignChannels: 'Campaign channels',
                     campaignPlatforms: 'Campaign platforms',
+                    datasets: 'Datasets',
+                    datasetRevisions:
+                      'Stored dataset copies, including earlier replacements',
+                    datasetRows: 'Rows in all stored dataset copies',
+                    pendingDatasetImports: 'Pending uploads',
+                    stagedDatasetRows: 'Rows in pending uploads',
                   } as Record<string, string>
                 )[key] ?? key}
                 : {value}
@@ -294,8 +300,10 @@ export function Archive() {
             ))}
           </ul>
           <p>
-            Import batches, source rows, and audit history will remain. This
-            action cannot be undone.
+            Current datasets and their replacement contents will be deleted.
+            Pending uploads for this campaign will be invalidated and their
+            uploaded rows removed. Earlier import records and audit history will
+            remain. This action cannot be undone.
           </p>
           {preview.blockers.map((blocker) => (
             <p className="notice error" key={blocker.mappingId}>

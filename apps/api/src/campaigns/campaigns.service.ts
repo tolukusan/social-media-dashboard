@@ -35,14 +35,6 @@ export class CampaignsService {
         code: 'CAMPAIGN_NAME_INVALID',
         message: 'Campaign name must contain at least two non-space characters',
       });
-    if (
-      !dto.channels.length ||
-      dto.channels.some((selection) => !selection.platformIds.length)
-    )
-      throw new BadRequestException({
-        code: 'CAMPAIGN_CHANNELS_REQUIRED',
-        message: 'Select at least one platform for every channel',
-      });
     const startDate = new Date(`${dto.startDate.slice(0, 10)}T00:00:00.000Z`);
     const endDate = dto.endDate
       ? new Date(`${dto.endDate.slice(0, 10)}T00:00:00.000Z`)
@@ -366,14 +358,6 @@ export class CampaignsService {
   }
 
   private async validateSelections(dto: CreateCampaignDto) {
-    if (
-      !dto.channels.length ||
-      dto.channels.some((selection) => !selection.platformIds.length)
-    )
-      throw new BadRequestException({
-        code: 'CAMPAIGN_CHANNELS_REQUIRED',
-        message: 'Select at least one platform for every channel',
-      });
     const platforms = await this.prisma.platform.findMany({
       where: {
         id: { in: dto.channels.flatMap((selection) => selection.platformIds) },

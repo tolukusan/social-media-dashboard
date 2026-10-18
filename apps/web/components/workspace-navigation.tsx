@@ -27,7 +27,7 @@ export function WorkspaceNavigation({
     { id: 'overview', label: 'Overview' },
     { id: 'accounts', label: 'Accounts' },
     { id: 'campaigns', label: 'Campaigns' },
-    { id: 'performance', label: 'Data' },
+    { id: 'datasets', label: 'Data' },
     { id: 'reports', label: 'Reports' },
     { id: 'settings', label: 'Administration' },
   ];
@@ -165,7 +165,7 @@ export function SectionNavigation({
       ['analytics', 'Campaign analytics'],
       ['targets', 'KPI targets'],
     ],
-    performance: [
+    datasets: [
       ...(currentUser?.role.code !== 'MANAGEMENT'
         ? [['imports', 'Imports'] as [View | 'imports', string]]
         : []),
@@ -216,12 +216,7 @@ export function SectionNavigation({
 }
 
 type Section =
-  | 'overview'
-  | 'accounts'
-  | 'campaigns'
-  | 'performance'
-  | 'reports'
-  | 'settings';
+  'overview' | 'accounts' | 'campaigns' | 'datasets' | 'reports' | 'settings';
 
 function sectionForView(view: View | 'imports'): Section {
   if (
@@ -234,7 +229,8 @@ function sectionForView(view: View | 'imports'): Section {
     return 'accounts';
   if (view === 'campaigns' || view === 'analytics' || view === 'targets')
     return 'campaigns';
-  if (view === 'performance' || view === 'imports') return 'performance';
+  if (view === 'datasets' || view === 'performance' || view === 'imports')
+    return 'datasets';
   if (view === 'reports') return 'reports';
   if (view === 'settings' || view === 'users' || view === 'archive')
     return 'settings';
@@ -288,6 +284,12 @@ function NavIcon({ view }: { view: View | 'imports' }) {
       <>
         <path d="M4 6h16v13H4z" />
         <path d="M8 6V4h8v2M8 11h8m-8 4h5" />
+      </>
+    ),
+    datasets: (
+      <>
+        <path d="M4 5.5 12 2l8 3.5v13L12 22l-8-3.5z" />
+        <path d="m4 5.5 8 3.5 8-3.5M12 9v13" />
       </>
     ),
     imports: (
