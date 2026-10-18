@@ -75,14 +75,19 @@ export class ReportsService {
         recordCount: result.recordCount,
         campaignCount: result.campaignCount,
         channelCount: result.channelCount,
-        kpis: Object.entries(result.kpis).map(([code, value]) => ({
-          code,
-          label: labels.get(code)?.label ?? code,
-          unit: labels.get(code)?.unit ?? 'UNAVAILABLE',
-          value,
-          aggregationNote: labels.get(code)?.aggregationNote ?? null,
-          target: result.targetEvaluations?.[code] ?? null,
-        })),
+        kpis: Object.entries(result.kpis)
+          .filter(
+            ([, value]) =>
+              query.includeUnavailableMetrics === 'true' || value !== null,
+          )
+          .map(([code, value]) => ({
+            code,
+            label: labels.get(code)?.label ?? code,
+            unit: labels.get(code)?.unit ?? 'UNAVAILABLE',
+            value,
+            aggregationNote: labels.get(code)?.aggregationNote ?? null,
+            target: result.targetEvaluations?.[code] ?? null,
+          })),
       },
       comparison: comparison
         ? {

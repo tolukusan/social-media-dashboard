@@ -1,4 +1,9 @@
 import {
+  eligiblePerformanceWhere,
+  lockLifecycle,
+  requireWritableCampaign,
+} from '../common/lifecycle.js';
+import {
   BadRequestException,
   ConflictException,
   Inject,
@@ -47,7 +52,7 @@ export class PerformanceService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
   list() {
     return this.prisma.performanceRecord.findMany({
-      where: { status: 'ACTIVE' },
+      where: eligiblePerformanceWhere,
       include: {
         campaignPlatform: {
           include: {
@@ -150,6 +155,8 @@ export class PerformanceService {
       });
     return this.prisma
       .$transaction(async (tx) => {
+        await lockLifecycle(tx);
+        await requireWritableCampaign(tx, context.campaignChannel.campaignId);
         const record = await tx.performanceRecord.create({
           data: {
             campaignPlatformId: dto.campaignPlatformId,
@@ -257,6 +264,16 @@ export class PerformanceService {
     }
     return this.prisma
       .$transaction(async (tx) => {
+        await lockLifecycle(tx);
+        await requireWritableCampaign(
+          tx,
+          existing.campaignPlatform.campaignChannel.campaignId,
+        );
+        const currentRecord = await tx.performanceRecord.findUnique({
+          where: { id },
+        });
+        if (currentRecord?.status !== 'ACTIVE')
+          throw new ConflictException('Record is no longer active.');
         if (dto.values) {
           const channel = await tx.campaignChannel.findUnique({
             where: { id: existing.campaignPlatform.campaignChannelId },
@@ -307,9 +324,20 @@ export class PerformanceService {
         message: 'Active performance record not found',
       });
     return this.prisma.$transaction(async (tx) => {
+      await lockLifecycle(tx);
+      const current = await tx.performanceRecord.findUnique({ where: { id } });
+      if (!current || current.status !== 'ACTIVE')
+        throw new NotFoundException({
+          code: 'PERFORMANCE_RECORD_NOT_FOUND',
+          message: 'Active performance record not found',
+        });
       const archived = await tx.performanceRecord.update({
         where: { id },
-        data: { status: 'ARCHIVED', updatedByUserId: actorId },
+        data: {
+          status: 'ARCHIVED',
+          archivedAt: new Date(),
+          updatedByUserId: actorId,
+        },
       });
       await tx.auditLog.create({
         data: {

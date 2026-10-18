@@ -424,3 +424,9 @@ The implementation shall follow the authentication, session, CSRF/CORS, authoriz
 ## Current completion approval provenance
 
 The own-password current-password check and revocation of all sessions/recovery links were explicitly approved by the stakeholder on 2026-10-07; see [CD-001](../governance/completion-decisions-2026-10-07.md). This is the current decision date, not evidence that the preceding AI implementation had historical approval. Other approved controls remain unchanged.
+
+## Archive and registration extension
+
+[ADR-014](../decisions/ADR-014-archive-lifecycle.md) authorizes confirmed Administrator-only permanent deletion of archived campaigns and performance records. Five-minute confirmation hashes are actor/entity/dependency bound, single-use, and revalidated transactionally. Raw references are never audited. Shared transaction locks coordinate imports, edits, mappings, and ingestion; import provenance and deletion audit summaries survive.
+
+[ADR-015](../decisions/ADR-015-registration-approval.md) retains seeded Administrators and adds pending public applications plus Administrator-controlled invitations. Signup creates no session or workspace user. Invitation tokens are hash-only at rest, email/role-bound, expiring, single-use, revocable, and omitted from audit/list APIs. Existing Origin, CSRF, password hashing, and session controls apply; public submissions have bounded IP/email throttles. Invitation pages remove fragment tokens from history and use no-referrer. No external email is sent.

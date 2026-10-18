@@ -28,7 +28,12 @@ export class SessionGuard implements CanActivate {
       .getRequest<Request & { user?: AuthenticatedUser }>();
     if (
       (request.method === 'GET' && request.path === '/api/v1/health') ||
-      (request.method === 'POST' && request.path === '/api/v1/auth/login') ||
+      (request.method === 'POST' &&
+        [
+          '/api/v1/auth/login',
+          '/api/v1/auth/register',
+          '/api/v1/auth/accept-invitation',
+        ].includes(request.path)) ||
       (request.method === 'GET' && request.path === '/api/v1/auth/csrf') ||
       (request.method === 'GET' &&
         request.path === '/api/v1/accounts/oauth/callback') ||

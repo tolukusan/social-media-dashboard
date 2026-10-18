@@ -3,9 +3,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { apiRequest, queryKeys } from '../../lib/api-client';
+import type { Campaign, Channel } from '../../lib/workspace-types';
 import { ReportDownload } from './report-download';
 
 export type ReportFilters = {
+  includeUnavailableMetrics?: string;
   from: string;
   to: string;
   campaignId: string;
@@ -82,7 +84,27 @@ function valueLabel(
   return new Intl.NumberFormat().format(value);
 }
 
-export function Reports({ filters }: { filters: ReportFilters }) {
+export function Reports({
+  filters: originalFilters,
+  campaigns,
+  channels,
+  metrics,
+  onChange,
+}: {
+  filters: ReportFilters;
+  campaigns: Campaign[];
+  channels: Channel[];
+  metrics: Array<{ code: string; label: string }>;
+  onChange: (
+    key: Exclude<keyof ReportFilters, 'includeUnavailableMetrics'>,
+    value: string,
+  ) => void;
+}) {
+  const [includeUnavailable, setIncludeUnavailable] = useState(false);
+  const filters = {
+    ...originalFilters,
+    includeUnavailableMetrics: String(includeUnavailable),
+  };
   const { from, to } = filters;
   const [comparisonPeriod, setComparisonPeriod] = useState('CUSTOM');
   const query = new URLSearchParams(
@@ -98,6 +120,99 @@ export function Reports({ filters }: { filters: ReportFilters }) {
 
   return (
     <section className="panel page-panel">
+      <fieldset className="report-filter-grid">
+        <legend>Report filters</legend>
+        <label>
+          From
+          <input
+            type="date"
+            value={filters.from}
+            onChange={(event) => onChange('from', event.target.value)}
+          />
+        </label>
+        <label>
+          To
+          <input
+            type="date"
+            value={filters.to}
+            onChange={(event) => onChange('to', event.target.value)}
+          />
+        </label>
+        <label>
+          Campaign
+          <select
+            aria-label="Campaign"
+            value={filters.campaignId}
+            onChange={(event) => onChange('campaignId', event.target.value)}
+          >
+            <option value="">All campaigns</option>
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Channel
+          <select
+            aria-label="Channel"
+            value={filters.channelId}
+            onChange={(event) => {
+              onChange('channelId', event.target.value);
+              onChange('platformId', '');
+            }}
+          >
+            <option value="">All channels</option>
+            {channels.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Platform
+          <select
+            aria-label="Platform"
+            value={filters.platformId}
+            onChange={(event) => onChange('platformId', event.target.value)}
+          >
+            <option value="">All platforms</option>
+            {channels
+              .filter((c) => !filters.channelId || c.id === filters.channelId)
+              .flatMap((c) => c.platforms)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label>
+          Metric
+          <select
+            aria-label="Metric"
+            value={filters.metricCode}
+            onChange={(event) => onChange('metricCode', event.target.value)}
+          >
+            <option value="">All metrics</option>
+            {metrics.map((m) => (
+              <option key={m.code} value={m.code}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={includeUnavailable}
+            onChange={(event) => setIncludeUnavailable(event.target.checked)}
+          />
+          Include unavailable metrics
+        </label>
+      </fieldset>
       <div className="panel-heading">
         <div>
           <h2>Reports</h2>
@@ -222,7 +337,12 @@ export function Reports({ filters }: { filters: ReportFilters }) {
                   </tbody>
                 </table>
               </div>
-            ) : null}
+            ) : (
+              <p>
+                No available metrics match these filters. Choose another metric
+                or include unavailable metrics.
+              </p>
+            )}
             {preview.comparison && (
               <span>
                 {preview.comparison.metric} comparison:{' '}

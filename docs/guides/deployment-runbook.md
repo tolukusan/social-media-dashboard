@@ -80,3 +80,13 @@ If an application release fails, roll back the application version first. Do not
 ## Current deployment status
 
 No external environment is recorded as deployed by this repository task. M12 remains dependent on an authorised external environment.
+
+## Usability/archive/access migrations (2026-10-18)
+
+Back up the application schema using the existing backup procedure, deploy the API/web code together, generate Prisma, and apply committed migrations with `pnpm --filter @smd/api exec prisma migrate deploy`. Never reset the database or rerun demo seeds to deploy this feature.
+
+- `20261018070000_archive_timestamps` fills only missing archived-record timestamps backed by existing matching archive audit events. Unverifiable dates remain null.
+- `20261018071000_archive_deletion` adds actor-bound confirmation storage and persistent deleted daily-key tombstones. It deletes no application records during deployment.
+- `20261018072000_registration_approval` adds registration requests, invitation hashes, and status/role constraints. It inserts only missing fixed role codes; existing role IDs, users, seeded Administrators, and historical data remain intact.
+
+No provider scope, OAuth credential migration, external mail, or organization bootstrap is required. Keep invitation links and confirmation references out of logs. For multiple API processes, configure shared ingress limits equivalent to the public per-process IP/email limits. Campaign lifecycle writes are serialized by one PostgreSQL transaction advisory lock; monitor latency before increasing ingestion concurrency. Take a backup before intentional permanent deletion; retained import provenance and tombstones are not an undo facility.

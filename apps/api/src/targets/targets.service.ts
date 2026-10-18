@@ -1,4 +1,9 @@
 import {
+  lockLifecycle,
+  requireWritableCampaign,
+  preventDeletedImport,
+} from '../common/lifecycle.js';
+import {
   BadRequestException,
   ConflictException,
   Inject,
@@ -36,7 +41,9 @@ export class TargetsService {
   async create(dto: CreateTargetDto, actorId: string) {
     const data = await this.validate(dto);
     return this.prisma.$transaction(async (tx) => {
+      await lockLifecycle(tx);
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${this.lockKey(data)})::bigint)`;
+      if (data.campaignId) await requireWritableCampaign(tx, data.campaignId);
       await this.ensureNoOverlap(data, undefined, tx);
       const target = await tx.kpiTarget.create({
         data: { ...data, createdByUserId: actorId },
@@ -77,7 +84,9 @@ export class TargetsService {
       });
     const next = { ...target, effectiveTo };
     return this.prisma.$transaction(async (tx) => {
+      await lockLifecycle(tx);
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${this.lockKey(next)})::bigint)`;
+      if (next.campaignId) await requireWritableCampaign(tx, next.campaignId);
       await this.ensureNoOverlap(next, id, tx);
       const updated = await tx.kpiTarget.update({
         where: { id },

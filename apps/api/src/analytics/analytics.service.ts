@@ -1,3 +1,5 @@
+import { calendarRangeEnding, todayInReportingZone } from './date-defaults.js';
+import { eligiblePerformanceWhere } from '../common/lifecycle.js';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
 import { isUUID } from 'class-validator';
@@ -15,7 +17,9 @@ import type { DashboardQueryDto } from './dto/dashboard-query.dto.js';
 import type { DashboardResponse } from '@smd/shared';
 
 export function buildDashboardWhere(query: DashboardQueryDto) {
-  const campaignChannel: Record<string, string> = {};
+  const campaignChannel: Record<string, unknown> = {
+    campaign: { archivedAt: null },
+  };
   if (query.campaignId) campaignChannel.campaignId = query.campaignId;
   if (query.channelId) campaignChannel.channelId = query.channelId;
 
@@ -157,6 +161,21 @@ function targetPeriodBounds(
 @Injectable()
 export class AnalyticsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  async defaultPeriod() {
+    const latest = await this.prisma.performanceRecord.findFirst({
+      where: eligiblePerformanceWhere,
+      orderBy: { recordDate: 'desc' },
+      select: { recordDate: true },
+    });
+    return {
+      ...calendarRangeEnding(
+        latest?.recordDate.toISOString().slice(0, 10) ??
+          todayInReportingZone(process.env.REPORTING_TIMEZONE || 'UTC'),
+      ),
+      hasData: Boolean(latest),
+    };
+  }
 
   async dashboard(query: DashboardQueryDto): Promise<DashboardResponse> {
     validateDateRange(query);

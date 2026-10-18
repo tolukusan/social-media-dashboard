@@ -942,3 +942,9 @@ Provider fields use system-managed definitions keyed by provider, source metric 
 `PerformanceMetricValue` now optionally records its source connection and source-data expiry, allowing campaign and account values to be retained/deleted at value grain. Provider metric definitions declare applicable retention days; LinkedIn Ads and Page reporting values currently expire after 364 days, while future content metrics may set a shorter period. Expired values are hidden from analytics and purged by the API retention worker. The one-day safety buffer keeps current LinkedIn reporting retention below its one-year maximum. Existing provider-managed rows are backfilled additively; data that cannot be classified safely is not automatically deleted. Member profile/activity data is outside this metric model.
 
 See [ADR-012](../decisions/ADR-012-connected-account-analytics.md) and the [implementation plan](../plans/completion/connected-account-analytics.md) for acceptance and operational limits.
+
+## Approved lifecycle and registration additions (2026-10-18)
+
+ArchiveDeletionConfirmation stores a five-minute, actor/entity-bound token hash and dependency fingerprint; it survives entity deletion. DeletedPerformanceKey retains a daily context/date tombstone to fence stale automated import/sync recreation. Restrictive analytical foreign keys remain. Import batches/rows and audits are retained.
+
+RegistrationRequest separately models PENDING/APPROVED/REJECTED applicants without granting a User or Role until approval. UserInvitation references an existing Role, binds email, records expiry/use/revocation, and stores only a token hash. Existing User/Role identities and seeded Administrator setup are unchanged. See ADR-014 and ADR-015.

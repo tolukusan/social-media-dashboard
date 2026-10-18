@@ -8,6 +8,8 @@ import {
 } from 'class-validator';
 
 export class DashboardQueryDto {
+  @IsOptional() @IsIn(['true', 'false']) includeUnavailableMetrics?: string;
+
   @IsOptional()
   @IsIn(['CAMPAIGN', 'CHANNEL'])
   dimension?: 'CAMPAIGN' | 'CHANNEL';

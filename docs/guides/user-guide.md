@@ -27,3 +27,23 @@ Administrators manage KPI targets. Targets use approved global, channel, platfor
 Administrators and Marketing Officers can use **Imports** for **Upload file → Confirm details → Review and import → View results**. Recognised fields and deterministic mapping suggestions are selected for review. Change details only when needed, or create a missing campaign within the flow. Next checks the data; Import data commits it. Excluded rows require explicit acknowledgement. View results carries the accepted campaign/platform/date scope into Overview, where Download PDF uses the same filters. See the [import guide](imports.md). Management remains read-only.
 
 Authenticated users can preview and download filtered reports. Administrators choose the organisation's reporting currency in Settings. Currency values use that saved code; until one is chosen, the UI explicitly says the currency is unset. Changing the code relabels existing amounts without converting them.
+
+## Workspace navigation and dates
+
+Overview opens after sign-in and shows imported/manual campaign performance. Accounts contains connected-account insights, comparison, email reports, and Connections. Campaigns contains campaign management, campaign analytics, and KPI targets. Data contains Imports and Performance data. Reports exposes campaign, date, channel, platform, and metric filters. Administration contains Settings, Users, and Archive for Administrators.
+
+The default campaign period is the latest eligible record date and its preceding 29 calendar days. With no eligible records it uses today in the reporting timezone (UTC when unconfigured). Explicit dates, including a partially filled range, are preserved. Choose a trend metric to investigate available channel metrics. Reports omit unavailable metrics by default; select Include unavailable metrics when needed. Zero is a valid value.
+
+## Archive, restore, and permanent deletion
+
+Existing campaign and performance Delete actions archive data. Archived records and records of archived campaigns leave normal campaign analytics and exports. In Administration → Archive, search Campaigns or Performance records and restore an item. Restore a parent campaign before individually archived records; restoring a campaign does not restore individually archived records.
+
+Review deletion loads current dependency counts and blockers from the server. Remove listed campaign mappings through Accounts → Connections first; a running synchronization must finish before mapping removal. Mapping removal preserves historical records. Permanent deletion requires typing the exact displayed identity within five minutes. Any changed dependency requires a new preview. This action cannot be undone. Import source rows, batch history, duplicate-file protection, and audits remain. Previously deleted daily keys cannot be recreated by automatic import/sync; deliberate manual entry remains possible.
+
+## Apply for access and invite users
+
+Request workspace access from the sign-in page, enter your name, email, and password, and wait for Administrator approval. Submitting an application never grants workspace access or Administrator status. Existing users should use sign-in/password recovery. This deployment continues to use its existing seeded Administrator setup.
+
+Administrators review applications in Administration → Users, explicitly choose an existing role, and approve or reject. Approval preserves the applicant's chosen credentials. Existing user creation and role management remain available.
+
+To invite someone without a pending application, choose their role and email in Users, create an invitation, and copy its link for manual delivery. Deliver it privately; the application does not send email. Links expire after seven days and can be revoked before use. The recipient enters the invited email, name, and a password, then signs in. Each link works once. Existing accounts cannot be replaced by invitations.

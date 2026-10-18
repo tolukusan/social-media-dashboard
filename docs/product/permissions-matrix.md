@@ -415,3 +415,9 @@ Next phase:
 All authenticated roles may read provider-account analytics and connection metadata. Management remains read-only. Account metric ingestion is performed only by server-side provider integrations; this slice does not expose a user-authored metric or formula endpoint. Connection setup, OAuth consent, credential lifecycle, sync controls, and disconnection retain the existing Administrator/Marketing Officer boundaries unless a provider-specific workflow receives an approved rule.
 
 See [ADR-012](../decisions/ADR-012-connected-account-analytics.md) and the [connected-account implementation plan](../plans/completion/connected-account-analytics.md).
+
+## 2026-10-18 archive and access additions
+
+Administrators alone may view Archive, restore campaigns/records, prepare deletion previews, and permanently delete already archived campaigns/records after authoritative confirmation. Legacy DELETE endpoints still archive. Dependency mapping removal is Administrator-only and preserves imported history. See [ADR-014](../decisions/ADR-014-archive-lifecycle.md).
+
+Public registration only creates a pending request. Administrators approve/reject and explicitly assign existing roles; pending/rejected applicants have no session or workspace access. Administrators issue/revoke invitations. No public registrant becomes Administrator automatically and the seeded Administrator setup remains. See [ADR-015](../decisions/ADR-015-registration-approval.md).

@@ -11,6 +11,11 @@ async function signIn(page: Page, role = 'administrator') {
     .getByLabel('Password', { exact: true })
     .fill(credentials[role].password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
+  await page
+    .getByRole('navigation', { name: 'Primary navigation' })
+    .getByRole('button', { name: 'Accounts', exact: true })
+    .click();
   await expect(page.locator('h1')).toHaveText('Accounts');
 }
 
@@ -24,7 +29,7 @@ async function verifyResponsiveWidths(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 
-test('Administrator starts in Accounts and sees safe provider setup guidance', async ({
+test('Administrator opens Accounts and sees safe provider setup guidance', async ({
   page,
 }) => {
   await signIn(page);

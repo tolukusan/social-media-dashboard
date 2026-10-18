@@ -8,6 +8,11 @@ export class AnalyticsController {
     @Inject(AnalyticsService) private readonly analytics: AnalyticsService,
   ) {}
 
+  @Get('default-period')
+  defaultPeriod() {
+    return this.analytics.defaultPeriod();
+  }
+
   @Get('dashboard')
   dashboard(@Query() query: DashboardQueryDto) {
     return this.analytics.dashboard(query);

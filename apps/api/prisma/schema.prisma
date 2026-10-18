@@ -108,14 +108,15 @@ model ReportingSettings {
 }
 
 model Role {
-  id          String   @id @default(uuid()) @db.Uuid
-  code        String   @unique
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique
   name        String
   description String?
-  active      Boolean  @default(true)
+  active      Boolean          @default(true)
   users       User[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  invitations UserInvitation[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@schema("social_media_dashboard")
 }
@@ -744,5 +745,70 @@ model ImportRow {
 
   @@unique([importBatchId, sourceRowNumber, sheetName])
   @@index([importBatchId, status])
+  @@schema("social_media_dashboard")
+}
+
+model ArchiveDeletionConfirmation {
+  id          String    @id @default(uuid()) @db.Uuid
+  tokenHash   String    @unique @db.Char(64)
+  actorUserId String    @db.Uuid
+  entityKind  String    @db.VarChar(20)
+  entityId    String    @db.Uuid
+  fingerprint String    @db.Char(64)
+  typedText   String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@schema("social_media_dashboard")
+}
+
+model DeletedPerformanceKey {
+  id                 String   @id @default(uuid()) @db.Uuid
+  campaignPlatformId String   @db.Uuid
+  recordDate         DateTime @db.Date
+  deletedRecordId    String   @db.Uuid
+  deletedAt          DateTime @default(now())
+
+  @@unique([campaignPlatformId, recordDate])
+  @@schema("social_media_dashboard")
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@schema("social_media_dashboard")
+}
+
+model RegistrationRequest {
+  id               String              @id @default(uuid()) @db.Uuid
+  email            String              @unique @db.VarChar(254)
+  name             String              @db.VarChar(120)
+  passwordHash     String?
+  status           AccessRequestStatus @default(PENDING)
+  reviewedByUserId String?             @db.Uuid
+  reviewedAt       DateTime?
+  approvedUserId   String?             @db.Uuid
+  createdAt        DateTime            @default(now())
+
+  @@schema("social_media_dashboard")
+}
+
+model UserInvitation {
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String    @db.VarChar(254)
+  roleId          String    @db.Uuid
+  role            Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  invitedByUserId String    @db.Uuid
+  tokenHash       String    @unique @db.Char(64)
+  expiresAt       DateTime
+  usedAt          DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([email, expiresAt])
   @@schema("social_media_dashboard")
 }

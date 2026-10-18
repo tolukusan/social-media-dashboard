@@ -559,6 +559,29 @@ export function Integrations({
                 <li key={item.id}>
                   {item.campaignPlatform.campaignChannel.campaign.name} —
                   external campaign {item.externalCampaignId}
+                  {admin && (
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Remove this mapping? Existing records and import history will remain.',
+                          )
+                        )
+                          void action(
+                            () =>
+                              apiRequest(
+                                `/integrations/${selected.id}/mappings/${item.id}`,
+                                { method: 'DELETE' },
+                              ),
+                            'Campaign mapping removed. History retained.',
+                          );
+                      }}
+                    >
+                      Remove mapping
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

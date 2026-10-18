@@ -1,3 +1,4 @@
+import { openSectionItem } from './navigation-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -12,7 +13,7 @@ async function signIn(page: Page, role = 'administrator') {
     .getByLabel('Password', { exact: true })
     .fill(credentials[role].password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('h1')).toHaveText('Accounts');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
 }
 
 test('Administrator can prepare a mapped connection without keys, enable scheduling, inspect blocked history, and disconnect', async ({
@@ -50,9 +51,9 @@ test('Administrator can prepare a mapped connection without keys, enable schedul
   expect(campaignResponse.status()).toBe(201);
   const campaign = await campaignResponse.json();
   await page.reload();
-  await expect(page.locator('h1')).toHaveText('Accounts');
-  await page.getByRole('button', { name: 'Integrations', exact: true }).click();
-  await expect(page.locator('h1')).toHaveText('Integrations');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
+  await openSectionItem(page, 'Accounts', 'Connections');
+  await expect(page.locator('h1')).toHaveText('Connections');
   const name = `Pending provider ${randomUUID()}`;
   await page
     .getByRole('combobox', { name: 'Provider', exact: true })
@@ -130,11 +131,9 @@ test('Administrator can prepare a mapped connection without keys, enable schedul
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
   await expect(
-    page
-      .getByRole('status')
-      .filter({
-        hasText: 'Disconnected locally and removed the saved OAuth token.',
-      }),
+    page.getByRole('status').filter({
+      hasText: 'Disconnected locally and removed the saved OAuth token.',
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Resume connection', exact: true }),
@@ -146,9 +145,7 @@ for (const role of ['marketingOfficer', 'management']) {
     page,
   }) => {
     await signIn(page, role);
-    await page
-      .getByRole('button', { name: 'Integrations', exact: true })
-      .click();
+    await openSectionItem(page, 'Accounts', 'Connections');
     await expect(
       page.getByRole('heading', { name: 'Automatic imports' }),
     ).toBeVisible();

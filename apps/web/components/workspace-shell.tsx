@@ -1,4 +1,6 @@
 'use client';
+import { AccessManagement } from '../features/access/access-management';
+import { Archive } from '../features/archive/archive';
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -61,12 +63,29 @@ export function WorkspaceShell() {
       : 'unauthenticated';
   const [authError, setAuthError] = useState('');
   const identityRef = useRef<string | null>(null);
-  const [view, setView] = useState<View>('accounts');
+  const [view, setView] = useState<View>('overview');
   const [navigationOpen, setNavigationOpen] = useState(false);
   const roleCode = currentUser?.role.code;
   useEffect(() => {
     const restoreView = () => {
-      const next = window.location.hash.slice(1);
+      const callback = new URLSearchParams(window.location.search).has(
+        'accountConnection',
+      );
+      if (callback && !window.location.hash)
+        window.history.replaceState(
+          null,
+          '',
+          `${window.location.pathname}${window.location.search}#accounts`,
+        );
+      const raw = window.location.hash.slice(1);
+      const next =
+        (
+          {
+            data: 'performance',
+            administration: 'settings',
+            connections: 'integrations',
+          } as Record<string, string>
+        )[raw] ?? raw;
       const allowed = [
         'accounts',
         'account-insights',
@@ -80,9 +99,15 @@ export function WorkspaceShell() {
         'reports',
         'profile',
         'integrations',
-        ...(roleCode === 'ADMIN' ? ['settings', 'users'] : []),
+        ...(roleCode === 'ADMIN' ? ['settings', 'users', 'archive'] : []),
       ];
-      setView(allowed.includes(next) ? (next as View) : 'accounts');
+      setView(
+        allowed.includes(next)
+          ? (next as View)
+          : new URLSearchParams(window.location.search).has('accountConnection')
+            ? 'accounts'
+            : 'overview',
+      );
       setNavigationOpen(false);
     };
     restoreView();
@@ -107,7 +132,11 @@ export function WorkspaceShell() {
     setChannelFilter(params.get('channelId') || '');
     setPlatformFilter(params.get('platformId') || '');
     setMetricFilter(params.get('metricCode') || '');
-    filtersRestored.current = Boolean(params.get('from') || params.get('to'));
+    filtersRestored.current = Boolean(
+      params.has('from') ||
+      params.has('to') ||
+      params.get('targetPeriod') === 'CAMPAIGN',
+    );
     setFiltersReady(true);
   }, []);
   const workspaceFilters = {
@@ -140,12 +169,16 @@ export function WorkspaceShell() {
             queryKey: ['workspace-context', currentUser!.id],
             staleTime: 60_000,
             queryFn: async () => {
-              const [campaigns, records, channels] = await Promise.all([
-                apiRequest<Campaign[]>('/campaigns'),
-                apiRequest<PerformanceRecord[]>('/performance-records'),
-                apiRequest<Channel[]>('/channels'),
-              ]);
-              return { campaigns, records, channels };
+              const [campaigns, records, channels, defaultPeriod] =
+                await Promise.all([
+                  apiRequest<Campaign[]>('/campaigns'),
+                  apiRequest<PerformanceRecord[]>('/performance-records'),
+                  apiRequest<Channel[]>('/channels'),
+                  apiRequest<{ from: string; to: string; hasData: boolean }>(
+                    '/analytics/default-period',
+                  ),
+                ]);
+              return { campaigns, records, channels, defaultPeriod };
             },
           }),
         ]);
@@ -177,6 +210,7 @@ export function WorkspaceShell() {
   const dashboard = workspaceQuery.data?.dashboard ?? null;
   const campaigns = workspaceQuery.data?.campaigns ?? [];
   const channels = workspaceQuery.data?.channels ?? [];
+  const [usersRevision, setUsersRevision] = useState(0);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
     null,
   );
@@ -187,18 +221,14 @@ export function WorkspaceShell() {
     defaultsApplied.current = true;
     // Dates are a display default over existing active data, not a KPI calculation.
     if (!filtersRestored.current && !from && !to) {
-      const dates = records
-        .filter((record) => record.status !== 'ARCHIVED')
-        .map((record) => record.recordDate.slice(0, 10))
-        .sort();
-      if (dates.length) {
-        setFrom(dates[0]);
-        setTo(dates[dates.length - 1]);
-      }
+      const period = workspaceQuery.data.defaultPeriod;
+      setFrom(period.from);
+      setTo(period.to);
     }
   }, [filtersReady, workspaceQuery.data, records, from, to]);
   const loading = workspaceQuery.isFetching;
   const viewTitles: Record<View, string> = {
+    archive: 'Archive',
     accounts: 'Accounts',
     'account-insights': 'Account insights',
     'account-comparison': 'Compare accounts',
@@ -206,12 +236,12 @@ export function WorkspaceShell() {
     overview: 'Campaign overview',
     campaigns: 'Campaigns',
     performance: 'Performance data',
-    analytics: 'Analytics',
+    analytics: 'Campaign analytics',
     targets: 'KPI targets',
     reports: 'Reports',
     users: 'Users',
     settings: 'Settings',
-    integrations: 'Integrations',
+    integrations: 'Connections',
     profile: 'My profile',
   };
   const error =
@@ -328,6 +358,9 @@ export function WorkspaceShell() {
             Loading workspace data…
           </div>
         )}
+        {view === 'archive' && currentUser?.role.code === 'ADMIN' && (
+          <Archive />
+        )}
         {view === 'overview' && (
           <section className="panel home-guidance">
             <div>
@@ -340,7 +373,7 @@ export function WorkspaceShell() {
               </h2>
               <p>
                 {dashboard?.recordCount
-                  ? 'Review your results, add more data, or download a report for the current filters.'
+                  ? 'Campaign results include imported and manually entered data. Connected-account analytics are available separately under Accounts.'
                   : records.length
                     ? 'Adjust the date range or campaign to find your results.'
                     : currentUser?.role.code === 'MANAGEMENT'
@@ -514,7 +547,25 @@ export function WorkspaceShell() {
             currentUser={currentUser}
           />
         )}
-        {view === 'reports' && <Reports filters={workspaceFilters} />}
+        {view === 'reports' && (
+          <Reports
+            filters={workspaceFilters}
+            campaigns={campaigns}
+            channels={channels}
+            metrics={dashboard?.metricMetadata ?? []}
+            onChange={(key, value) => {
+              ({
+                from: setFrom,
+                to: setTo,
+                campaignId: setCampaignFilter,
+                channelId: setChannelFilter,
+                platformId: setPlatformFilter,
+                metricCode: setMetricFilter,
+                targetPeriod: setTargetPeriod,
+              })[key](value);
+            }}
+          />
+        )}
         {view === 'integrations' && currentUser && (
           <Integrations
             currentUser={currentUser}
@@ -522,7 +573,14 @@ export function WorkspaceShell() {
             campaigns={campaigns}
           />
         )}
-        {view === 'users' && currentUser?.role.code === 'ADMIN' && <Users />}
+        {view === 'users' && currentUser?.role.code === 'ADMIN' && (
+          <>
+            <AccessManagement
+              onChanged={() => setUsersRevision((value) => value + 1)}
+            />
+            <Users key={usersRevision} />
+          </>
+        )}
         {view === 'profile' && currentUser && (
           <Profile currentUser={currentUser} />
         )}
