@@ -924,11 +924,6 @@ export function Accounts({
                     </div>
                   </div>
                   <p>{providerDescriptions[setup.provider]}</p>
-                  {setup.notes.map((note) => (
-                    <p className="provider-note" key={note}>
-                      {note}
-                    </p>
-                  ))}
                   <div className="provider-card-footer">
                     <span
                       className={`status-pill ${setup.ready ? 'ready' : 'pending'}`}
@@ -944,11 +939,16 @@ export function Accounts({
                       {busy ? 'Working…' : 'Connect'}
                     </button>
                   </div>
-                  {!setup.ready && (
+                  {
                     <details className="setup-details">
                       <summary>
                         What the workspace administrator needs to configure
                       </summary>
+                      {setup.notes.map((note) => (
+                        <p className="provider-note" key={note}>
+                          {note}
+                        </p>
+                      ))}
                       <span>
                         Required server settings: {setup.missing.join(', ')}.
                       </span>
@@ -956,7 +956,7 @@ export function Accounts({
                         Requested permissions: {setup.scopes.join(', ')}.
                       </span>
                     </details>
-                  )}
+                  }
                 </article>
               ))}
               {!setupProviders.length && (
@@ -1249,7 +1249,15 @@ export function Accounts({
               </button>
             </div>
           ) : comparisonAccounts.length < 2 ? (
-            <p role="status">Select at least two accounts to compare.</p>
+            <div role="status">
+              <p>Select at least two accounts to compare.</p>
+              <button
+                className="secondary"
+                onClick={() => navigate('accounts')}
+              >
+                Connect accounts
+              </button>
+            </div>
           ) : comparisonQuery.isLoading ? (
             <p role="status">Loading account comparison…</p>
           ) : comparisonQuery.error instanceof Error ? (

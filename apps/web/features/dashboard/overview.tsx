@@ -345,24 +345,45 @@ export function Overview({
         {selectedMetric && (
           <Kpi title={selectedMetric.label} value={selectedMetricValue} />
         )}
-        {(result?.metricMetadata ?? [])
-          .filter(
+        {[
+          ...channels.map((channel) => ({
+            id: channel.id,
+            name: channel.name,
+          })),
+          { id: 'shared', name: 'Shared campaign metrics' },
+        ].map((group) => {
+          const metrics = (result?.metricMetadata ?? []).filter(
             (metric) =>
               metric.code !== selectedMetric?.code &&
-              result?.kpis[metric.code] != null,
-          )
-          .slice(0, 8)
-          .map((metric) => (
-            <Kpi
-              key={metric.code}
-              title={metric.label}
-              value={
-                metric.unit === 'COUNT'
-                  ? formatNumber(result, metric.code)
-                  : formatKpi(result, metric.code)
-              }
-            />
-          ))}
+              result?.kpis[metric.code] != null &&
+              (metric.applicableChannelIds?.length === 1
+                ? metric.applicableChannelIds[0] === group.id
+                : group.id === 'shared'),
+          );
+          if (!metrics.length) return null;
+          return (
+            <section
+              className="channel-kpi-group"
+              key={group.id}
+              aria-label={`${group.name} headline metrics`}
+            >
+              <h3>{group.name}</h3>
+              <div className="kpi-grid">
+                {metrics.slice(0, 8).map((metric) => (
+                  <Kpi
+                    key={metric.code}
+                    title={metric.label}
+                    value={
+                      metric.unit === 'COUNT'
+                        ? formatNumber(result, metric.code)
+                        : formatKpi(result, metric.code)
+                    }
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </section>
       {selectedMetric && result?.kpis[selectedMetric.code] == null && (
         <p className="notice">
@@ -435,6 +456,20 @@ export function Overview({
           <div>
             <h2>{analytics ? 'Analytics trend' : 'Performance trend'}</h2>
             <p>{chartMetadata?.label ?? 'Selected metric'} over time.</p>
+            <label>
+              Trend metric
+              <select
+                value={chartMetric}
+                onChange={(event) => setMetricFilter(event.target.value)}
+              >
+                {selectableMetrics.map((metric) => (
+                  <option key={metric.code} value={metric.code}>
+                    {metric.label}
+                    {result?.kpis[metric.code] == null ? ' (unavailable)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <button
             className="text-link button-link"

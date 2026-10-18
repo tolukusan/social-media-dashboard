@@ -18,12 +18,19 @@ describe('buildDashboardWhere', () => {
       lte: new Date('2026-01-31T23:59:59.999Z'),
     });
     assert.deepEqual(where.campaignPlatform, {
-      campaignChannel: { campaignId: 'campaign-id', channelId: 'channel-id' },
+      campaignChannel: {
+        campaign: { archivedAt: null },
+        campaignId: 'campaign-id',
+        channelId: 'channel-id',
+      },
       platformId: 'platform-id',
     });
   });
 
   it('does not add optional filters when they are absent', () => {
-    assert.deepEqual(buildDashboardWhere({}), { status: 'ACTIVE' });
+    assert.deepEqual(buildDashboardWhere({}), {
+      status: 'ACTIVE',
+      campaignPlatform: { campaignChannel: { campaign: { archivedAt: null } } },
+    });
   });
 });

@@ -1,3 +1,4 @@
+import { lockLifecycle, requireWritableCampaign } from '../common/lifecycle.js';
 import {
   BadRequestException,
   ConflictException,
@@ -96,6 +97,7 @@ export class CampaignsService {
       }
     }
     return this.prisma.$transaction(async (tx) => {
+      await lockLifecycle(tx);
       const campaign = await tx.campaign.create({
         data: {
           name: dto.name.trim(),
@@ -268,6 +270,8 @@ export class CampaignsService {
       } as CreateCampaignDto;
       await this.validateSelections(createDto);
       return this.prisma.$transaction(async (tx) => {
+        await lockLifecycle(tx);
+        await requireWritableCampaign(tx, id);
         for (const selection of dto.channels!) {
           const channel = await tx.campaignChannel.upsert({
             where: {
@@ -325,35 +329,39 @@ export class CampaignsService {
         });
       });
     }
-    return this.prisma.campaign.update({
-      where: { id },
-      data: {
-        ...(dto.name === undefined ? {} : { name: dto.name.trim() }),
-        ...(dto.description === undefined
-          ? {}
-          : { description: dto.description }),
-        ...(dto.objective === undefined ? {} : { objective: dto.objective }),
-        ...(dto.targetAudience === undefined
-          ? {}
-          : { targetAudience: dto.targetAudience }),
-        startDate,
-        endDate,
-        ...(dto.status === undefined ? {} : { status: dto.status }),
-        ...(dto.budget === undefined ? {} : { budget: dto.budget }),
-        ...(dto.responsibleUserId === undefined
-          ? {}
-          : { responsibleUserId: dto.responsibleUserId }),
-        ...(dto.notes === undefined ? {} : { notes: dto.notes }),
-        updatedByUserId: actorId,
-      },
-      include: {
-        campaignChannels: {
-          include: {
-            channel: true,
-            campaignPlatforms: { include: { platform: true } },
+    return this.prisma.$transaction(async (tx) => {
+      await lockLifecycle(tx);
+      await requireWritableCampaign(tx, id);
+      return tx.campaign.update({
+        where: { id },
+        data: {
+          ...(dto.name === undefined ? {} : { name: dto.name.trim() }),
+          ...(dto.description === undefined
+            ? {}
+            : { description: dto.description }),
+          ...(dto.objective === undefined ? {} : { objective: dto.objective }),
+          ...(dto.targetAudience === undefined
+            ? {}
+            : { targetAudience: dto.targetAudience }),
+          startDate,
+          endDate,
+          ...(dto.status === undefined ? {} : { status: dto.status }),
+          ...(dto.budget === undefined ? {} : { budget: dto.budget }),
+          ...(dto.responsibleUserId === undefined
+            ? {}
+            : { responsibleUserId: dto.responsibleUserId }),
+          ...(dto.notes === undefined ? {} : { notes: dto.notes }),
+          updatedByUserId: actorId,
+        },
+        include: {
+          campaignChannels: {
+            include: {
+              channel: true,
+              campaignPlatforms: { include: { platform: true } },
+            },
           },
         },
-      },
+      });
     });
   }
 
@@ -399,6 +407,13 @@ export class CampaignsService {
         message: 'Campaign not found',
       });
     return this.prisma.$transaction(async (tx) => {
+      await lockLifecycle(tx);
+      const current = await tx.campaign.findUnique({ where: { id } });
+      if (!current || current.archivedAt)
+        throw new NotFoundException({
+          code: 'CAMPAIGN_NOT_FOUND',
+          message: 'Campaign not found',
+        });
       const archived = await tx.campaign.update({
         where: { id },
         data: { archivedAt: new Date(), updatedByUserId: actorId },

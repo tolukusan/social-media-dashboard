@@ -1,3 +1,5 @@
+import { AccessModule } from './access/access.module.js';
+import { ArchiveModule } from './archive/archive.module.js';
 import { Module } from '@nestjs/common';
 import { HealthController } from './health/health.controller.js';
 import { PrismaModule } from './database/prisma.module.js';
@@ -18,6 +20,8 @@ import { ConnectedAccountsModule } from './accounts/connected-accounts.module.js
 @Module({
   imports: [
     PrismaModule,
+    AccessModule,
+    ArchiveModule,
     AuthModule,
     ChannelsModule,
     UsersModule,

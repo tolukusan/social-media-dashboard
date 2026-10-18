@@ -316,3 +316,7 @@ erDiagram
 ```
 
 Unique keys are `(provider, code, definition_version)` for provider metrics, `(connection_id, record_date, scope, source_object_id)` for observations, and `(record_id, metric_definition_id)` for values. LinkedIn reporting values carry a source expiry; the API excludes expired values and deletes them through the provider-specific retention worker. Details: [ADR-012](../decisions/ADR-012-connected-account-analytics.md).
+
+## 2026-10-18 additions
+
+Role has many UserInvitation rows (restrictive role reference). RegistrationRequest retains resolution actor and approved-user identifiers as historical evidence. ArchiveDeletionConfirmation and DeletedPerformanceKey intentionally retain entity identifiers without entity foreign keys so confirmation consumption and deletion evidence survive entity removal. Existing entity relationships are unchanged; no organization or tenancy entity is introduced.

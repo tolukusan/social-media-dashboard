@@ -25,14 +25,22 @@ export function WorkspaceNavigation({
     name: string;
     items: Array<[View | 'imports', string]>;
   }> = [
+    { name: 'Overview', items: [['overview', 'Overview']] },
     {
-      name: 'Workspace',
+      name: 'Accounts',
       items: [
-        ['overview', 'Overview'],
         ['accounts', 'Accounts'],
         ['account-comparison', 'Compare'],
         ['email-reports', 'Email reports'],
+        ['integrations', 'Connections'],
+      ],
+    },
+    {
+      name: 'Campaigns',
+      items: [
         ['campaigns', 'Campaigns'],
+        ['analytics', 'Campaign analytics'],
+        ['targets', 'KPI targets'],
       ],
     },
     {
@@ -42,17 +50,9 @@ export function WorkspaceNavigation({
           ? [['imports', 'Imports'] as [View | 'imports', string]]
           : []),
         ['performance', 'Performance data'],
-        ['integrations', 'Integrations'],
       ],
     },
-    {
-      name: 'Results',
-      items: [
-        ['analytics', 'Analytics'],
-        ['targets', 'KPI targets'],
-        ['reports', 'Reports'],
-      ],
-    },
+    { name: 'Reports', items: [['reports', 'Reports']] },
     ...(currentUser?.role.code === 'ADMIN'
       ? [
           {
@@ -60,6 +60,7 @@ export function WorkspaceNavigation({
             items: [
               ['settings', 'Settings'],
               ['users', 'Users'],
+              ['archive', 'Archive'],
             ] as Array<[View, string]>,
           },
         ]
@@ -175,6 +176,7 @@ function navIsActive(view: View | 'imports', item: View | 'imports') {
 
 function NavIcon({ view }: { view: View | 'imports' }) {
   const paths: Record<View | 'imports', ReactNode> = {
+    archive: <path d="M3 4h18v5H3zm2 5v11h14V9m-10 4h6" />,
     accounts: (
       <>
         <rect x="4" y="4" width="6" height="6" rx="1" />

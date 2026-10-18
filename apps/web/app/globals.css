@@ -3242,3 +3242,59 @@ summary:focus-visible {
     gap: 7px;
   }
 }
+
+.report-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border, #dce5f1);
+  padding: 16px;
+}
+.archive-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: 85vh;
+  overflow: auto;
+  border: 1px solid #dce5f1;
+  border-radius: 14px;
+  padding: 24px;
+  color: #1e3557;
+}
+.archive-dialog::backdrop {
+  background: #10213d99;
+}
+.archive-id {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  font-weight: normal;
+}
+.channel-kpi-group {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.channel-kpi-group > h3 {
+  margin: 16px 0 12px;
+  font-size: 16px;
+}
+
+.chart-panel .panel-heading {
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.chart-panel .panel-heading > div {
+  min-width: 0;
+  max-width: 100%;
+}
+.chart-panel .panel-heading label {
+  display: grid;
+  gap: 6px;
+}
+.chart-panel .panel-heading select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.archive-dialog {
+  overflow-wrap: anywhere;
+}

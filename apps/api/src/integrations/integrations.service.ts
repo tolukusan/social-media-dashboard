@@ -1,3 +1,4 @@
+import { lockLifecycle, preventDeletedImport } from '../common/lifecycle.js';
 import {
   BadRequestException,
   ConflictException,
@@ -229,6 +230,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       });
     return this.prisma
       .$transaction(async (tx) => {
+        await lockLifecycle(tx);
         const connection = await tx.integrationConnection.create({
           data: {
             provider: dto.provider,
@@ -272,6 +274,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     if (dto.displayName !== undefined && !dto.displayName.trim())
       throw new BadRequestException('Enter a connection name.');
     return this.prisma.$transaction(async (tx) => {
+      await lockLifecycle(tx);
       const previous = await this.lockConfiguration(tx, id);
       if (dto.sourceTimezone !== undefined) {
         try {
@@ -359,6 +362,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   async disconnect(id: string, actorId: string) {
     await this.get(id);
     return this.prisma.$transaction(async (tx) => {
+      await lockLifecycle(tx);
       await tx.integrationConnection.update({
         where: { id },
         data: {
@@ -396,6 +400,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   async map(id: string, dto: CreateMappingDto, actorId: string) {
     return this.prisma
       .$transaction(async (tx) => {
+        await lockLifecycle(tx);
         const connection = await this.lockConfiguration(tx, id);
         if (!connection.active)
           throw new BadRequestException(
@@ -444,6 +449,27 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       .catch((error: unknown) => this.conflict(error));
   }
 
+  async unmap(id: string, mappingId: string, actorId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await lockLifecycle(tx);
+      await this.lockConfiguration(tx, id);
+      const mapping = await tx.integrationMapping.findFirst({
+        where: { id: mappingId, connectionId: id },
+      });
+      if (!mapping) throw new NotFoundException('Mapping not found.');
+      await tx.performanceRecord.updateMany({
+        where: { integrationMappingId: mappingId },
+        data: { integrationMappingId: null, integrationManaged: false },
+      });
+      await tx.integrationMapping.delete({ where: { id: mappingId } });
+      await this.audit(tx, actorId, id, 'INTEGRATION_CAMPAIGN_UNMAPPED', {
+        mappingId,
+        campaignPlatformId: mapping.campaignPlatformId,
+      });
+      return { removed: true, historyRetained: true };
+    });
+  }
+
   private async ingest(
     connectionId: string,
     token: string,
@@ -470,6 +496,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     }
     return this.prisma.$transaction(
       async (tx) => {
+        await lockLifecycle(tx);
         const retrievedAt = new Date();
         const fenced = await tx.integrationConnection.updateMany({
           where: {
@@ -593,6 +620,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
               );
           }
           await tx.$queryRaw`SELECT id FROM social_media_dashboard."PerformanceRecord" WHERE "campaignPlatformId" = ${context.id}::uuid AND "recordDate" = ${recordDate} FOR UPDATE`;
+          await preventDeletedImport(tx, context.id, recordDate);
           const existing = await tx.performanceRecord.findUnique({
             where: {
               campaignPlatformId_recordDate: {
@@ -701,6 +729,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     }
     const token = randomUUID();
     const run = await this.prisma.$transaction(async (tx) => {
+      await lockLifecycle(tx);
       const claim = await tx.integrationConnection.updateMany({
         where: {
           id,
@@ -870,6 +899,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
           : 'SUCCEEDED';
     const finalCode = errorCode ?? failed[0]?.errorCode ?? null;
     return this.prisma.$transaction(async (tx) => {
+      await lockLifecycle(tx);
       const released = await tx.integrationConnection.updateMany({
         where: {
           id,

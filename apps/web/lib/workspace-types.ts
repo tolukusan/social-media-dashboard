@@ -1,6 +1,7 @@
 import type { DashboardResponse, TrendResponse } from '@smd/shared';
 
 export type View =
+  | 'archive'
   | 'accounts'
   | 'account-insights'
   | 'account-comparison'

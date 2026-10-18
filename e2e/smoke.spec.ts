@@ -40,7 +40,7 @@ test('screen navigation preserves the session while rechecking it and rejects an
     .getByLabel('Password', { exact: true })
     .fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('h1')).toHaveText('Accounts');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
   await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.locator('h1')).toHaveText('Campaign overview');
   await expect(page.getByLabel('Campaign', { exact: true })).toBeVisible();
@@ -91,7 +91,7 @@ test('screen navigation preserves the session while rechecking it and rejects an
   for (const name of [
     'Campaigns',
     'Performance data',
-    'Analytics',
+    'Campaign analytics',
     'Reports',
     'Settings',
   ]) {
@@ -166,7 +166,7 @@ test('screen navigation preserves the session while rechecking it and rejects an
       response.url().endsWith('/api/v1/auth/me') && response.status() === 200,
   );
   await page.getByRole('link', { name: 'Back to workspace' }).click();
-  await expect(page.locator('h1')).toHaveText('Accounts');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
   await returnedCheck;
   expect(
     await page.evaluate(() => Reflect.get(window, '__navigationMarker')),
@@ -192,7 +192,7 @@ test('screen navigation preserves the session while rechecking it and rejects an
   ).toHaveCount(0);
   await page.unroute('**/api/v1/auth/me');
   await page.getByRole('link', { name: 'Return to workspace' }).click();
-  await expect(page.locator('h1')).toHaveText('Accounts');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
   await expect(
     page.getByRole('heading', {
@@ -232,7 +232,7 @@ test('performance record pages keep filtering across the full list', async ({
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('h1')).toHaveText('Accounts');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
   await page
     .getByRole('button', { name: 'Performance data', exact: true })
     .click();
@@ -267,7 +267,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL!);
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.locator('h1')).toHaveText('Accounts');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
   await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.locator('h1')).toHaveText('Campaign overview');
   await expect(
@@ -435,7 +435,9 @@ test('authenticated user can load views and logout', async ({ page }) => {
     'Status rule requires clarification',
   );
 
-  await page.getByRole('button', { name: 'Analytics', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Campaign analytics', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Period comparison' }),
   ).toBeVisible();
@@ -466,6 +468,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await expect(
     page.getByRole('heading', { level: 1, name: 'Reports' }),
   ).toBeVisible();
+  await page.getByLabel('Include unavailable metrics').check();
   await expect(
     page.getByRole('table', { name: 'Report KPI summary' }),
   ).toBeVisible();
@@ -518,7 +521,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
     page.getByRole('heading', { name: 'Import history' }),
   ).toBeVisible();
   await page.goto('/');
-  await expect(page.locator('h1')).toHaveText('Accounts');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(
     page.getByRole('heading', { name: 'Sign in to your workspace' }),
@@ -535,7 +538,7 @@ test('Administrator can manage the channel and platform catalogue lifecycle', as
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.locator('h1')).toHaveText('Accounts');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByLabel('Reporting currency').selectOption('NGN');
   await page.getByRole('button', { name: 'Save reporting currency' }).click();
@@ -632,7 +635,7 @@ test('Administrator follows the guided import through results, PDF, and protecte
   await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.locator('h1')).toHaveText('Accounts');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
   await page.goto('/imports');
   const fixture = await readFile(
     'apps/api/test-fixtures/imports/facebook-views.csv',

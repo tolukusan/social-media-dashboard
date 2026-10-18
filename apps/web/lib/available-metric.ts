@@ -7,6 +7,16 @@ export function availableMetric(
   channelId = '',
 ) {
   if (selected) return selected;
+  const candidates =
+    result?.metricMetadata.filter(
+      (metric) =>
+        (!channelId || metric.applicableChannelIds?.includes(channelId)) &&
+        result.kpis[metric.code] != null,
+    ) ?? [];
+  const preferred = ['SM_ENGAGEMENTS', 'EMAIL_OPENS'].find((code) =>
+    candidates.some((metric) => metric.code === code),
+  );
+  if (preferred) return preferred;
   return (
     result?.metricMetadata.find(
       (metric) =>

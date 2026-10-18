@@ -2,7 +2,7 @@
 
 Date: 2026-10-18. Owner: Codex Cloud implementation handoff.
 
-Status: planning complete; implementation has not started. This handoff commit changes documentation only. Implement on this feature branch; do not merge unfinished work into main.
+Status: implementation completed on the feature branch; final verification and review are recorded in [execution evidence](../../evidence/usability-archive-registration-verification.md). Do not merge directly into main.
 
 ## Start here and Cloud prerequisites
 
@@ -21,7 +21,7 @@ Do not copy credentials, test passwords, tokens, or environment files into Git o
 3. Build the consolidated interface, Archive, defaults, and matching report preview/PDF behaviour around verified endpoints.
 4. Implement registration, approval, and invitations with additive migrations and security verification.
 
-No application implementation or migrations were performed while preparing this handoff. The following is work for Cloud, not a claim of completed behaviour.
+The original handoff contained no implementation. The following approved requirements now describe the implemented scope; the registration correction below supersedes the original bootstrap proposal.
 
 ## 1. Archive and restore correctness
 
@@ -80,9 +80,9 @@ Policy: only administrators may permanently delete already archived campaigns or
 
 ## 4. Registration and access requests
 
-- Fresh installations offer open first registration, without setup code or user seed. Serialize the first-user decision in the database so only one registrant becomes Administrator. A deployment with existing users must never reopen first-administrator registration because users are deactivated or no active administrator exists.
+- One organization per deployment. Retain the existing seeded Administrator setup and all existing users and roles. Public applicants always require Administrator approval; no registrant automatically becomes Administrator. No first-user bootstrap flow, organizations model, platform administrator, multi-tenancy, subscriptions, or billing.
 - Provision required fixed role reference data through deployment migrations, without depending on a demo/user seed. Preserve existing reference identities and users.
-- Existing installations offer public signup as pending access requests. Applicants set credentials but receive no workspace access until an administrator approves and assigns an approved role. Model pending/approved/rejected requests explicitly without conflating them with existing active/deactivated accounts.
+- All installations offer public signup as pending access requests. Applicants set credentials but receive no workspace access until an administrator approves and assigns an approved role. Model pending/approved/rejected requests explicitly without conflating them with existing active/deactivated accounts.
 - Provide administrator approval/rejection and invitations bound to email and chosen role. Invitation links expire after seven days, are single-use and revocable, and are copied for manual delivery; no mail service is required.
 - Recipients set their name/password. Bind acceptance to invited email and prevent existing-account takeover; direct existing users to login/recovery. Pending requests require explicit admin resolution rather than silently replacing credentials.
 - Store invitation-token hashes only. The initial authorised administrator response may supply the copyable link; never log it. Prevent URL tokens entering referrers/analytics.
@@ -95,7 +95,7 @@ Policy: only administrators may permanently delete already archived campaigns or
 - Test dependency deletion order, retained provenance/audits, active-item rejection, typed text, expired/replayed references, stale previews, concurrent edits/imports/syncs, and rollback on every failure.
 - Test calendar/timezone boundaries, the explicit September 11–October 10 example, explicit/partial filters, empty data, and distinct provider semantics.
 - Test backend preview/PDF parity with unavailable metrics included/excluded and valid zeros preserved.
-- Test racing first registrations, existing-user installations, pending/rejected access denial, approval/roles, invitation binding/expiry/reuse/revocation, and existing-account protection.
+- Test concurrent pending registrations, preservation of seeded/existing Administrator accounts, pending/rejected access denial, approval/roles, invitation binding/expiry/reuse/revocation, and existing-account protection.
 - Run repository-required formatting/lint, typecheck, relevant unit/integration tests, build, and focused browser E2E flows using isolated databases. Inspect package scripts for exact commands: pnpm lint, pnpm typecheck, pnpm test:unit, pnpm test:integration, pnpm build, pnpm test:e2e. Do not reset shared databases or claim checks that did not run.
 - Review desktop/narrow layouts, keyboard navigation, focus, dialogs, empty/error states, Back/Forward, and full add data → review → investigate → export flow.
 - Stop web dev before building into shared Next.js output; restart and verify script assets afterward. A prior production build overwrote dev assets and caused 404s despite page HTTP 200.

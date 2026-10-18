@@ -12,7 +12,7 @@ async function signIn(page: Page, role = 'administrator') {
     .getByLabel('Password', { exact: true })
     .fill(credentials[role].password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('h1')).toHaveText('Accounts');
+  await expect(page.locator('h1')).toHaveText('Campaign overview');
 }
 async function createCampaign(page: Page) {
   const api = process.env.NEXT_PUBLIC_API_URL!;

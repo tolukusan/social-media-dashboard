@@ -76,6 +76,10 @@ export function Login({
           </button>
         </form>
         <p>
+          <a className="text-link" href="/register">
+            Request workspace access
+          </a>{' '}
+          ·{' '}
           <a className="text-link" href="/forgot-password">
             Forgot password?
           </a>

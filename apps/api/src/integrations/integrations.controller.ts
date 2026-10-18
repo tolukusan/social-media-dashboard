@@ -1,3 +1,4 @@
+import { Delete } from '@nestjs/common';
 import {
   Body,
   Controller,
@@ -94,5 +95,14 @@ export class IntegrationsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.integrations.disconnect(id, user.id);
+  }
+  @Delete(':id/mappings/:mappingId')
+  @Roles('ADMIN')
+  unmap(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('mappingId', ParseUUIDPipe) mappingId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.integrations.unmap(id, mappingId, user.id);
   }
 }
