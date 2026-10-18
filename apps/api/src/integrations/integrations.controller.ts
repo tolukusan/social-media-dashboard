@@ -7,7 +7,11 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
+  Res,
+  Header,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../common/auth.decorator.js';
 import type { AuthenticatedUser } from '../common/auth.types.js';
 import { Roles } from '../common/roles.decorator.js';
@@ -18,12 +22,15 @@ import {
   UpdateConnectionDto,
 } from './integration.dto.js';
 import { IntegrationsService } from './integrations.service.js';
+import { OAuthCredentialService } from './oauth-credential.service.js';
 
 @Controller('integrations')
 export class IntegrationsController {
   constructor(
     @Inject(IntegrationsService)
     private readonly integrations: IntegrationsService,
+    @Inject(OAuthCredentialService)
+    private readonly oauth: OAuthCredentialService,
   ) {}
   @Get('options') options() {
     return this.integrations.options();
@@ -33,6 +40,27 @@ export class IntegrationsController {
   }
   @Get(':id/runs') runs(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.integrations.runs(id);
+  }
+  @Post(':id/oauth/start')
+  @Roles('ADMIN')
+  @Header('Cache-Control', 'no-store')
+  startOAuth(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.oauth.start(id, user.id);
+  }
+  @Get('oauth/:family/callback')
+  @Header('Cache-Control', 'no-store')
+  async oauthCallback(
+    @Param('family') family: string,
+    @Query('state') state: string | undefined,
+    @Query('code') code: string | undefined,
+    @Query('error') error: string | undefined,
+    @Res() response: Response,
+  ) {
+    const result = await this.oauth.callback(family, state, code, error);
+    response.redirect(303, await this.oauth.redirectDestination(result));
   }
   @Post() @Roles('ADMIN') create(
     @Body() dto: CreateConnectionDto,

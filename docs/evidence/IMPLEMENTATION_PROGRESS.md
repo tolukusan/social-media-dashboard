@@ -234,6 +234,12 @@ Commands: node .reorganisation-backup/check-docs.cjs (155 links resolve); node .
 - Added provider unit fixtures, ten HTTP/PostgreSQL integration cases, and three browser tests. Final checks, changed-file inventory, observed failures, and verification limits are in [integration evidence](live-integrations-verification.md). The existing catalogue lifecycle browser test and unrelated tracked script formatting remain separate repository blockers; no clean full-repository pass is claimed.
 - Live account/token permissions and supported API versions remain unverified. Zoho campaign totals stay out of daily analytics. Daily advertising imports require matching source/reporting timezones and currency; LinkedIn uses UTC. Browser OAuth and automatic token refresh are deferred in favour of operator-managed access tokens. Additional providers require named contracts and adapters.
 
+## Campaign connector OAuth extension — 2026-10-18
+
+- The local change adds OAuth authorization and encrypted credential lifecycle support for campaign-level `IntegrationConnection` records. It is separate from the connected-account OAuth flow recorded below. Provider callbacks are state-bound to the initiating active Administrator; the start route remains Administrator-only.
+- Added Google/YouTube and Zoho local credentials only to the ignored API environment file. The active ngrok origin matched the configured allowlist. No secret values are stored in tracked files. Provider-console callback registration and live consent remain pending.
+- Added isolated HTTP journeys for the connected-account YouTube OAuth callback and safe status metadata, alongside the campaign Zoho callback journey. All 100 API unit tests, the 12-case campaign integration file, connected-account Google/Zoho integration, the six Accounts/Integrations browser journeys, lint, typecheck, build, documentation formatting, and application-schema migration preparation passed. Test processes had provider credentials blanked; no live consent or token exchange was attempted.
+
 ## Account-first connected analytics — 2026-10-17
 
 - The stakeholder clarified the product as account-first analytics across Instagram, Facebook Pages, LinkedIn Pages, YouTube, and Zoho Campaigns. The existing campaign-linked paid integrations remain separate; users can connect and review social/email performance without first creating a campaign. Existing CSV imports remain a fallback.

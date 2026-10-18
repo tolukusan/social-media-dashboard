@@ -26,7 +26,33 @@ For the existing local deployment, `pnpm --filter @smd/api integrations:prepare-
 | LinkedIn Ads             | `INTEGRATION_LINKEDIN_ACCESS_TOKEN` | `INTEGRATION_LINKEDIN_API_VERSION`, a supported `YYYYMM` version; `r_ads_reporting` and account/campaign read access |
 | Zoho Campaigns           | `INTEGRATION_ZOHO_ACCESS_TOKEN`     | `ZohoCampaigns.campaign.READ`, token issued for the selected data centre                                             |
 
-These are provider OAuth access tokens, not arbitrary API-key strings. Acquire them through each provider's authorised developer setup. No application OAuth sign-in or automatic refresh is included in this initial operator-managed configuration. Expired or revoked tokens require operator replacement and API restart. Tokens are never entered into the web form; only their configuration names are stored. Separate account-specific references ending in `_ACCESS_TOKEN` can be used.
+These are provider OAuth access tokens, not arbitrary API-key strings. The existing environment-token mode remains available for current connectors. Tokens are never entered into the web form; only their configuration names are stored. Separate account-specific references ending in `_ACCESS_TOKEN` can be used.
+
+## OAuth authorization
+
+For an existing campaign connection, an Administrator can select **Connect with provider** or **Reconnect provider account**. The API requests only the product's configured read scopes, stores authorization state server-side, and saves returned tokens as AES-256-GCM ciphertext. The dashboard never receives access or refresh tokens. Google campaign OAuth uses S256 PKCE. The start route requires an Administrator; the provider callback validates its one-use state and the initiating user's active Administrator role. An expired refresh token or explicit provider rejection (`invalid_grant` for Google and `invalid_code` for Zoho) requires reauthorization. Temporary provider and network failures preserve the connected status and return a retryable safe error.
+
+Configure provider values only in the ignored API `.env`, using the placeholders in [the root environment example](../../.env.example) or [the API environment example](../../apps/api/.env.example). Account-first YouTube/Zoho OAuth and campaign-connection OAuth use separate variable names and callback routes:
+
+- Campaign credentials: `INTEGRATION_GOOGLE_OAUTH_CLIENT_ID` / `INTEGRATION_GOOGLE_OAUTH_CLIENT_SECRET` or `INTEGRATION_ZOHO_OAUTH_CLIENT_ID` / `INTEGRATION_ZOHO_OAUTH_CLIENT_SECRET`; `INTEGRATION_OAUTH_ENCRYPTION_KEY`; and `INTEGRATION_OAUTH_API_ORIGIN` plus its exact entry in `INTEGRATION_OAUTH_ALLOWED_CALLBACK_ORIGINS`.
+- Account-first credentials: `INTEGRATION_GOOGLE_CLIENT_ID` / `INTEGRATION_GOOGLE_CLIENT_SECRET` or `INTEGRATION_ZOHO_CLIENT_ID` / `INTEGRATION_ZOHO_CLIENT_SECRET`; `INTEGRATION_TOKEN_ENCRYPTION_KEY`; and `INTEGRATION_OAUTH_REDIRECT_URI`.
+- Both Zoho paths use `INTEGRATION_ZOHO_REGION` for the registered Zoho data centre. YouTube requests only `youtube.readonly` and `yt-analytics.readonly`; Zoho requests only `ZohoCampaigns.campaign.READ`.
+- Each encryption key must be a stable, random, base64-encoded 32-byte key. Changing one without a migration makes credentials encrypted by that key unreadable.
+
+Register the exact callback URIs on each provider application, using the configured API origin. The current development tunnel is temporary; check that it is active before relying on callback URLs.
+
+| Provider / flow       | Callback path                                  |
+| --------------------- | ---------------------------------------------- |
+| Meta campaign         | `/api/v1/integrations/oauth/meta/callback`     |
+| LinkedIn campaign     | `/api/v1/integrations/oauth/linkedin/callback` |
+| Zoho Campaigns        | `/api/v1/integrations/oauth/zoho/callback`     |
+| Google / YouTube      | `/api/v1/integrations/oauth/google/callback`   |
+| YouTube account       | `/api/v1/accounts/oauth/callback`              |
+| Zoho Campaign account | `/api/v1/accounts/oauth/callback`              |
+
+Campaign OAuth starts from a manually prepared connection. It does not discover provider assets or verify that the authorized account matches the entered external account ID; that work is AAN-03. Local mock flows and isolated migrations passed, but provider-console callback registration and real consent/token exchange still require an account owner. The current Meta app's Marketing API use case has not been checked against this OAuth login flow. LinkedIn programmatic refresh tokens are only available when LinkedIn enables them for the application; if none is issued, that connection requires renewed member authorization. Consult [LinkedIn's OAuth flow](https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow), [LinkedIn's programmatic refresh-token requirements](https://learn.microsoft.com/en-us/linkedin/shared/authentication/programmatic-refresh-tokens), [Google's YouTube OAuth guide](https://developers.google.com/youtube/reporting/guides/authorization), and [Zoho's OAuth overview](https://www.zoho.com/developer/rest-api.html).
+
+**Disconnect** removes the local encrypted OAuth credential and stops local scheduling while preserving analytics history. It may not revoke the application's permission at the provider; use that provider's app/account settings to revoke it when needed. Explicit data-deletion handling and LinkedIn's deletion deadline remain AAN-06 work.
 
 Restart the API after supplying environment configuration. **Server credentials configured** means the values are present; it does not mean the provider accepted them. Verify a short range with **Sync now**, inspect run history, and compare provider totals before enabling routine operation.
 
@@ -44,7 +70,7 @@ Zoho snapshots show cumulative campaign counts as observed at the run time. Repe
 
 LinkedIn advertising-account and Page reporting metrics are provider-specific and are retained for 364 days after retrieval, below LinkedIn's one-year maximum. Future content and member data must follow their shorter or non-storable policy; a provider metric without an explicit LinkedIn retention policy is rejected. Expired metric values are hidden from analytics and removed by the API retention worker. The worker runs on API startup and every minute; expired values remain hidden if a cleanup attempt fails. Keep the API available and investigate the safe `PROVIDER_DATA_RETENTION_SWEEP_FAILED` warning. A data deletion request is distinct from disconnecting an account, which preserves history. Review [LinkedIn's data storage requirements](https://learn.microsoft.com/en-us/linkedin/marketing/data-storage-requirements) and [Marketing API terms](https://www.linkedin.com/legal/l/marketing-api-terms). Older LinkedIn-mapped campaign values without value-level provenance are not automatically purged; audit them before claiming full compliance.
 
-**Disconnect** stops local scheduling and fences pending writes while preserving mappings, runs, and performance history. It does not revoke an environment token shared with other connections. Revoke tokens in the provider's tools when required. **Resume connection** reactivates setup; daily scheduling must be enabled separately.
+**Disconnect** stops local scheduling and fences pending writes while preserving mappings, runs, and performance history. OAuth credentials stored for that connection are removed locally; a shared environment token is not revoked. Provider-side authorization may remain until revoked in provider settings. **Resume connection** reactivates setup; OAuth connections need authorization again, and daily scheduling must be enabled separately.
 
 ## Official references and verification limits
 

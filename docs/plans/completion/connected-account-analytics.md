@@ -36,6 +36,8 @@ Acceptance: mock OAuth flows for state mismatch, replay, denial, expiry, refresh
 
 Status: implemented locally. OAuth credentials are encrypted at rest; account discovery, state consumption, refresh, revocation where supported, and safe reconnect are covered. Disconnect clears credentials and stops sync while retaining permitted analytics. An Administrator can explicitly delete data after disconnect.
 
+A separate OAuth extension for campaign-level `IntegrationConnection` records is implemented locally. Its mock-flow and isolated migration checks passed; provider callback registration and live consent remain pending. See [ADR-013](../../decisions/ADR-013-oauth-credential-lifecycle.md) and [OAuth implementation evidence](../../evidence/oauth-credential-evidence.md).
+
 ### AAN-03 — Provider adapters and metric contracts
 
 Implement the selected provider products individually. For each, record account type, API product/version, scopes, source fields, definitions/units, data grain, timezone/currency, rate limits, history limits, and provider retention. Keep paid, organic, content, and email-campaign scopes distinct. Do not map a provider field to an existing KPI without a documented semantic equivalence and golden case.

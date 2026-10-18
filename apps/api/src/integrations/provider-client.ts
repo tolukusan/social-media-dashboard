@@ -37,7 +37,7 @@ export class ProviderClient {
       if (!response.ok) {
         await response.body?.cancel();
         if (response.status === 401)
-          fail('TOKEN_EXPIRED', 'Replace the server access token and retry.');
+          fail('TOKEN_EXPIRED', 'Reconnect the provider account and retry.');
         if (response.status === 403)
           fail(
             'PROVIDER_ACCESS_DENIED',
@@ -100,7 +100,8 @@ export class ProviderClient {
         config.code!,
         'Configure the server access token and API version before syncing.',
       );
-    const token = process.env[connection.credentialReference]!;
+    const token =
+      connection.accessToken ?? process.env[connection.credentialReference]!;
     if (connection.provider === 'ZOHO_CAMPAIGNS') {
       const url = new URL(
         `https://${zohoHosts[connection.region]}/api/v1.1/campaignreports`,

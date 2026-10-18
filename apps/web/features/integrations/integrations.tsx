@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { apiRequest, invalidateWorkspace } from '../../lib/api-client';
@@ -27,6 +27,7 @@ const statusLabels: Record<string, string> = {
 };
 const errorLabels: Record<string, string> = {
   CREDENTIALS_REQUIRED: 'Awaiting server access token',
+  REAUTHORIZATION_REQUIRED: 'Reconnect this provider account',
   API_VERSION_REQUIRED: 'Awaiting API version',
   CAMPAIGN_MAPPING_REQUIRED: 'Map an external campaign first',
   TOKEN_EXPIRED: 'Access token expired; ask your Administrator to replace it',
@@ -76,6 +77,15 @@ type Connection = {
   externalAccountId: string;
   sourceTimezone: string;
   credentialReference: string;
+  credentialMode: 'SERVER_ENVIRONMENT' | 'OAUTH';
+  oauthCredential: null | {
+    status: 'CONNECTED' | 'REAUTH_REQUIRED';
+    tokenExpiresAt: string | null;
+    connectedAt: string;
+    lastRefreshedAt: string | null;
+    lastErrorCode: string | null;
+    grantedScopes: string;
+  };
   currency: string | null;
   active: boolean;
   autoSync: boolean;
@@ -120,6 +130,21 @@ export function Integrations({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const admin = currentUser.role.code === 'ADMIN';
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const oauth = url.searchParams.get('oauth');
+    if (!oauth) return;
+    if (oauth === 'connected') setMessage('Provider authorization connected.');
+    else if (oauth === 'denied')
+      setError('Provider authorization was cancelled.');
+    else setError('Provider authorization could not be completed. Try again.');
+    url.searchParams.delete('oauth');
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }, []);
   const canSync = admin || currentUser.role.code === 'MARKETING_OFFICER';
   const connections = useQuery({
     queryKey: ['integrations', currentUser.id],
@@ -299,10 +324,14 @@ export function Integrations({
               <p>
                 {!connection.active
                   ? 'Disconnected'
-                  : connection.configuration.ready
-                    ? 'Server credentials configured'
-                    : (errorLabels[connection.configuration.code!] ??
-                      'Awaiting server configuration')}{' '}
+                  : connection.credentialMode === 'OAUTH'
+                    ? connection.oauthCredential?.status === 'CONNECTED'
+                      ? 'Provider account authorized'
+                      : 'Provider authorization required'
+                    : connection.configuration.ready
+                      ? 'Server credentials configured'
+                      : (errorLabels[connection.configuration.code!] ??
+                        'Awaiting server configuration')}{' '}
                 · {connection.mappings.length} campaign mappings
               </p>
               <p>
@@ -446,9 +475,9 @@ export function Integrations({
               />
             </label>
             <p id="token-reference-help">
-              This is a configuration name, such as
-              INTEGRATION_META_ACCESS_TOKEN. Your operator supplies the token on
-              the API server; never paste a token into this form.
+              This is a configuration name for legacy server tokens, not the
+              token itself. After saving, you can authorize through the
+              provider; never paste a token into this form.
             </p>
             <button
               className="primary"
@@ -462,6 +491,50 @@ export function Integrations({
       {selected && (
         <section className="panel page-panel">
           <h2>{selected.displayName}: campaigns and sync</h2>
+          {admin && (
+            <div className="home-actions">
+              <p>
+                {selected.oauthCredential?.status === 'CONNECTED'
+                  ? 'OAuth authorization is stored encrypted on the API server.'
+                  : selected.oauthCredential?.status === 'REAUTH_REQUIRED'
+                    ? 'Provider authorization expired or was revoked. Reconnect to continue syncing.'
+                    : 'Authorize this provider account. The browser will open the provider sign-in page.'}
+              </p>
+              <button
+                className="secondary"
+                disabled={busy}
+                onClick={() =>
+                  void action(async () => {
+                    const result = await apiRequest<{
+                      authorizationUrl: string;
+                    }>(`/integrations/${selected.id}/oauth/start`, {
+                      method: 'POST',
+                    });
+                    const authorizationUrl = new URL(result.authorizationUrl);
+                    const allowedHost =
+                      authorizationUrl.protocol === 'https:' &&
+                      ([
+                        'www.facebook.com',
+                        'www.linkedin.com',
+                        'accounts.google.com',
+                      ].includes(authorizationUrl.hostname) ||
+                        /^accounts\.zoho\.(com|eu|in|com\.au|jp|com\.cn)$/.test(
+                          authorizationUrl.hostname,
+                        ));
+                    if (!allowedHost)
+                      throw new Error(
+                        'The provider authorization URL is invalid.',
+                      );
+                    window.location.assign(authorizationUrl.toString());
+                  }, 'Opening provider authorization…')
+                }
+              >
+                {selected.oauthCredential?.status === 'CONNECTED'
+                  ? 'Reconnect provider account'
+                  : 'Connect with provider'}
+              </button>
+            </div>
+          )}
           {admin && (
             <ConnectionConfiguration
               key={selected.id}
@@ -629,7 +702,7 @@ export function Integrations({
                             `/integrations/${selected.id}/disconnect`,
                             { method: 'POST' },
                           ),
-                        'Connection disconnected. Imported history is retained.',
+                        'Disconnected locally and removed the saved OAuth token. The provider permission may still need to be revoked in its settings. Imported history is retained.',
                       );
                   }}
                 >

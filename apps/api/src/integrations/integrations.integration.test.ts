@@ -1,6 +1,7 @@
 import 'reflect-metadata';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
+  afterEach,
   afterAll,
   beforeAll,
   describe,
@@ -18,6 +19,7 @@ import { AppModule } from '../app.module.js';
 import { ProviderClient } from './provider-client.js';
 import { IntegrationsService } from './integrations.service.js';
 import { AccountAnalyticsService } from '../account-analytics/account-analytics.service.js';
+import { decryptSecret } from './oauth-crypto.js';
 import {
   IntegrationFailure,
   shiftDay,
@@ -41,6 +43,7 @@ let serial = Date.now();
 let app: Awaited<ReturnType<typeof NestFactory.create>>;
 let base: string;
 let provider: MockInstance<ProviderClient['fetchCampaign']>;
+let nativeFetch: typeof fetch;
 let originalSettings: Awaited<
   ReturnType<typeof prisma.reportingSettings.findUnique>
 >;
@@ -73,6 +76,13 @@ function request(
       ...overrides,
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+}
+function providerCallback(path: string) {
+  return fetch(`${base}/api/v1${path}`, {
+    method: 'GET',
+    redirect: 'manual',
+    headers: { Origin: origin },
   });
 }
 async function setupConnection(providerCode: Provider = 'FACEBOOK_ADS') {
@@ -154,8 +164,22 @@ async function records(contextId: string) {
 
 describe('connected-account ingestion and scheduling', () => {
   beforeAll(async () => {
+    nativeFetch = globalThis.fetch;
     vi.stubEnv('REPORTING_TIMEZONE', 'Africa/Lagos');
     vi.stubEnv('INTEGRATION_FIXTURE_ACCESS_TOKEN', '');
+    vi.stubEnv(
+      'INTEGRATION_OAUTH_ENCRYPTION_KEY',
+      Buffer.alloc(32, 7).toString('base64'),
+    );
+    vi.stubEnv('INTEGRATION_OAUTH_API_ORIGIN', origin);
+    vi.stubEnv('INTEGRATION_OAUTH_ALLOWED_CALLBACK_ORIGINS', origin);
+    vi.stubEnv('INTEGRATION_ZOHO_OAUTH_CLIENT_ID', 'fixture-zoho-client');
+    vi.stubEnv('INTEGRATION_ZOHO_OAUTH_CLIENT_SECRET', 'fixture-zoho-secret');
+    vi.stubEnv('INTEGRATION_GOOGLE_OAUTH_CLIENT_ID', 'fixture-google-client');
+    vi.stubEnv(
+      'INTEGRATION_GOOGLE_OAUTH_CLIENT_SECRET',
+      'fixture-google-secret',
+    );
     originalSettings = await prisma.reportingSettings.findUnique({
       where: { id: 'organisation' },
     });
@@ -206,6 +230,9 @@ describe('connected-account ingestion and scheduling', () => {
       actor.cookie = `${csrf.headers.get('set-cookie')!.match(/csrf_token=[^;]+/)![0]}; ${login.headers.get('set-cookie')!.match(/smd_session=[^;]+/)![0]}`;
     }
   });
+  afterEach(() => {
+    globalThis.fetch = nativeFetch;
+  });
   afterAll(async () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
@@ -233,6 +260,12 @@ describe('connected-account ingestion and scheduling', () => {
       where: { connectionId: { in: connectionIds } },
     });
     await prisma.integrationRun.deleteMany({
+      where: { connectionId: { in: connectionIds } },
+    });
+    await prisma.integrationOAuthAttempt.deleteMany({
+      where: { connectionId: { in: connectionIds } },
+    });
+    await prisma.integrationOAuthCredential.deleteMany({
       where: { connectionId: { in: connectionIds } },
     });
     await prisma.integrationConnection.deleteMany({
@@ -282,6 +315,261 @@ describe('connected-account ingestion and scheduling', () => {
       JSON.parse(text).find((item: { id: string }) => item.id === connection.id)
         .configuration.ready,
     ).toBe(false);
+  });
+
+  it('completes Zoho OAuth through a public state-bound callback and exposes status only', async () => {
+    const connection = await setupConnection('ZOHO_CAMPAIGNS');
+    const nonAdminStart = await request(
+      `/integrations/${connection.id}/oauth/start`,
+      'POST',
+      undefined,
+      actors[1],
+    );
+    expect(nonAdminStart.status).toBe(403);
+    const start = await request(
+      `/integrations/${connection.id}/oauth/start`,
+      'POST',
+    );
+    expect(start.status).toBe(201);
+    const authorizationUrl = new URL(
+      ((await start.json()) as { authorizationUrl: string }).authorizationUrl,
+    );
+    expect(authorizationUrl.origin).toBe('https://accounts.zoho.com');
+    expect(authorizationUrl.searchParams.get('redirect_uri')).toBe(
+      `${origin}/api/v1/integrations/oauth/zoho/callback`,
+    );
+    expect(authorizationUrl.searchParams.get('scope')).toBe(
+      'ZohoCampaigns.campaign.READ',
+    );
+    expect(authorizationUrl.searchParams.has('code_challenge')).toBe(false);
+    const state = authorizationUrl.searchParams.get('state');
+    expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+    const originalFetch = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const target =
+        typeof input === 'string'
+          ? new URL(input)
+          : input instanceof URL
+            ? input
+            : new URL(input.url);
+      if (target.hostname === 'accounts.zoho.com')
+        return new Response(
+          JSON.stringify({
+            access_token: 'fixture-access-token-do-not-return',
+            refresh_token: 'fixture-refresh-token-do-not-return',
+            expires_in: 3600,
+            scope: 'ZohoCampaigns.campaign.READ',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      return originalFetch(input, init);
+    });
+
+    const callback = await providerCallback(
+      `/integrations/oauth/zoho/callback?state=${encodeURIComponent(state!)}&code=fixture-code`,
+    );
+    expect(callback.status).toBe(303);
+    expect(callback.headers.get('location')).toBe(
+      `${origin}/integrations?oauth=connected`,
+    );
+
+    const stored = await prisma.integrationOAuthCredential.findUniqueOrThrow({
+      where: { connectionId: connection.id },
+    });
+    expect(stored.status).toBe('CONNECTED');
+    expect(stored.grantedScopes).toBe('ZohoCampaigns.campaign.READ');
+    expect(stored.encryptedTokenBundle).not.toContain(
+      'fixture-access-token-do-not-return',
+    );
+    expect(stored.encryptedTokenBundle).not.toContain(
+      'fixture-refresh-token-do-not-return',
+    );
+
+    const listed = await request('/integrations');
+    const responseText = await listed.text();
+    expect(listed.status).toBe(200);
+    expect(responseText).not.toMatch(
+      /fixture-access-token-do-not-return|fixture-refresh-token-do-not-return|encryptedTokenBundle/,
+    );
+    expect(
+      JSON.parse(responseText).find(
+        (item: { id: string }) => item.id === connection.id,
+      ).oauthCredential,
+    ).toMatchObject({
+      status: 'CONNECTED',
+      grantedScopes: 'ZohoCampaigns.campaign.READ',
+    });
+
+    const replay = await providerCallback(
+      `/integrations/oauth/zoho/callback?state=${encodeURIComponent(state!)}&code=fixture-code`,
+    );
+    expect(replay.status).toBe(303);
+    expect(replay.headers.get('location')).toBe(
+      `${origin}/integrations?oauth=error`,
+    );
+  });
+
+  it('completes Google OAuth through the public callback using the encrypted PKCE verifier', async () => {
+    const platform = await prisma.platform.findFirstOrThrow();
+    const connection = await prisma.integrationConnection.create({
+      data: {
+        provider: 'YOUTUBE_ANALYTICS',
+        platformId: platform.id,
+        displayName: 'YouTube OAuth fixture',
+        externalAccountId: `youtube-oauth-${randomUUID()}`,
+        credentialReference: 'INTEGRATION_YOUTUBE_ACCESS_TOKEN',
+        sourceTimezone: 'UTC',
+        currency: null,
+        configuredByUserId: actors[0].id,
+      },
+      select: { id: true },
+    });
+    connectionIds.push(connection.id);
+
+    const start = await request(
+      `/integrations/${connection.id}/oauth/start`,
+      'POST',
+    );
+    expect(start.status).toBe(201);
+    const authorizationUrl = new URL(
+      ((await start.json()) as { authorizationUrl: string }).authorizationUrl,
+    );
+    expect(authorizationUrl.origin).toBe('https://accounts.google.com');
+    expect(authorizationUrl.searchParams.get('redirect_uri')).toBe(
+      `${origin}/api/v1/integrations/oauth/google/callback`,
+    );
+    expect(
+      authorizationUrl.searchParams.get('scope')?.split(' ').sort(),
+    ).toEqual(
+      [
+        'https://www.googleapis.com/auth/yt-analytics.readonly',
+        'https://www.googleapis.com/auth/youtube.readonly',
+      ].sort(),
+    );
+    expect(authorizationUrl.searchParams.get('code_challenge_method')).toBe(
+      'S256',
+    );
+    const state = authorizationUrl.searchParams.get('state');
+    const attempt = await prisma.integrationOAuthAttempt.findUniqueOrThrow({
+      where: {
+        stateHash: createHash('sha256').update(state!).digest('hex'),
+      },
+    });
+    const verifier = decryptSecret(attempt.encryptedPkceVerifier!);
+    expect(authorizationUrl.searchParams.get('code_challenge')).toBe(
+      createHash('sha256').update(verifier).digest('base64url'),
+    );
+
+    let tokenRequest: URLSearchParams | undefined;
+    const originalFetch = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const target =
+        typeof input === 'string'
+          ? new URL(input)
+          : input instanceof URL
+            ? input
+            : new URL(input.url);
+      if (target.hostname === 'oauth2.googleapis.com') {
+        tokenRequest = new URLSearchParams(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            access_token: 'fixture-google-access-token-do-not-return',
+            refresh_token: 'fixture-google-refresh-token-do-not-return',
+            expires_in: 3600,
+            scope:
+              'https://www.googleapis.com/auth/yt-analytics.readonly https://www.googleapis.com/auth/youtube.readonly',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return originalFetch(input, init);
+    });
+
+    const callback = await providerCallback(
+      `/integrations/oauth/google/callback?state=${encodeURIComponent(state!)}&code=fixture-code`,
+    );
+    expect(callback.status).toBe(303);
+    expect(callback.headers.get('location')).toBe(
+      `${origin}/integrations?oauth=connected`,
+    );
+    expect(tokenRequest?.get('code_verifier')).toBe(verifier);
+    expect(tokenRequest?.get('redirect_uri')).toBe(
+      `${origin}/api/v1/integrations/oauth/google/callback`,
+    );
+
+    const stored = await prisma.integrationOAuthCredential.findUniqueOrThrow({
+      where: { connectionId: connection.id },
+    });
+    expect(stored.status).toBe('CONNECTED');
+    expect(stored.grantedScopes.split(' ').sort()).toEqual(
+      [
+        'https://www.googleapis.com/auth/yt-analytics.readonly',
+        'https://www.googleapis.com/auth/youtube.readonly',
+      ].sort(),
+    );
+    expect(stored.encryptedTokenBundle).not.toContain(
+      'fixture-google-access-token-do-not-return',
+    );
+    expect(stored.encryptedTokenBundle).not.toContain(
+      'fixture-google-refresh-token-do-not-return',
+    );
+    const listed = await request('/integrations');
+    const listText = await listed.text();
+    expect(listed.status).toBe(200);
+    expect(listText).not.toMatch(
+      /fixture-google-access-token-do-not-return|fixture-google-refresh-token-do-not-return|encryptedTokenBundle/,
+    );
+    expect(listText).toContain('CONNECTED');
+    expect(listText).toContain(
+      'https://www.googleapis.com/auth/yt-analytics.readonly',
+    );
+  });
+
+  it('rejects provider grants containing scopes beyond the read-only request', async () => {
+    const connection = await setupConnection('ZOHO_CAMPAIGNS');
+    const start = await request(
+      `/integrations/${connection.id}/oauth/start`,
+      'POST',
+    );
+    expect(start.status).toBe(201);
+    const authorizationUrl = new URL(
+      ((await start.json()) as { authorizationUrl: string }).authorizationUrl,
+    );
+    const state = authorizationUrl.searchParams.get('state');
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const target =
+        typeof input === 'string'
+          ? new URL(input)
+          : input instanceof URL
+            ? input
+            : new URL(input.url);
+      if (target.hostname === 'accounts.zoho.com')
+        return new Response(
+          JSON.stringify({
+            access_token: 'fixture-access-token-do-not-return',
+            refresh_token: 'fixture-refresh-token-do-not-return',
+            expires_in: 3600,
+            scope: 'ZohoCampaigns.campaign.READ ZohoCampaigns.contact.READ',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      return nativeFetch(input, init);
+    });
+
+    const callback = await providerCallback(
+      `/integrations/oauth/zoho/callback?state=${encodeURIComponent(state!)}&code=fixture-code`,
+    );
+    expect(callback.status).toBe(303);
+    expect(callback.headers.get('location')).toBe(
+      `${origin}/integrations?oauth=error`,
+    );
+    await expect(
+      prisma.integrationOAuthCredential.findUnique({
+        where: { connectionId: connection.id },
+      }),
+    ).resolves.toBeNull();
   });
 
   it('enforces anonymous, three-role, Origin, and CSRF boundaries before writes', async () => {

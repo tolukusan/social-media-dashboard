@@ -130,7 +130,11 @@ test('Administrator can prepare a mapped connection without keys, enable schedul
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
   await expect(
-    page.getByRole('status').filter({ hasText: 'Connection disconnected.' }),
+    page
+      .getByRole('status')
+      .filter({
+        hasText: 'Disconnected locally and removed the saved OAuth token.',
+      }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Resume connection', exact: true }),

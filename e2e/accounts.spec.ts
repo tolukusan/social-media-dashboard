@@ -59,8 +59,8 @@ test('Administrator starts in Accounts and sees safe provider setup guidance', a
   ).toBeVisible();
   await expect(page.getByLabel('From')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
   await expect(page.getByLabel('To')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
-  const from = await page.getByLabel('From').inputValue();
-  const to = await page.getByLabel('To').inputValue();
+  const from = await page.getByLabel('From', { exact: true }).inputValue();
+  const to = await page.getByLabel('To', { exact: true }).inputValue();
   expect(from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   expect(to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   expect(Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)).toBe(
@@ -307,13 +307,15 @@ test('compares accounts and keeps provider-specific measures and content separat
   await expect(comparison).toContainText('Lifetime total');
   await expect(comparison).toContainText('YouTube launch video');
   await expect(comparison).toContainText('Selected-period total');
+  const from = await page.getByLabel('From', { exact: true }).inputValue();
+  const to = await page.getByLabel('To', { exact: true }).inputValue();
   const downloadPromise = page.waitForEvent('download');
   await comparison
     .getByRole('button', { name: 'Download comparison CSV' })
     .click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe(
-    'account-comparison-2026-09-18-2026-10-17.csv',
+    `account-comparison-${from}-${to}.csv`,
   );
   const downloadPath = await download.path();
   expect(downloadPath).toBeTruthy();
@@ -336,8 +338,8 @@ test('compares accounts and keeps provider-specific measures and content separat
   expect(instagramFields?.[5]).toBe('');
   expect(instagramFields?.[6]).toBe('');
   expect(youtubeFields?.[4]).toBe('Selected period');
-  expect(youtubeFields?.[5]).toBe('2026-09-18');
-  expect(youtubeFields?.[6]).toBe('2026-10-17');
+  expect(youtubeFields?.[5]).toBe(from);
+  expect(youtubeFields?.[6]).toBe(to);
   await page.getByLabel('Zoho account').selectOption('zoho-account');
   const emailReport = page.locator('.email-report-panel');
   await expect(emailReport).toContainText('17.5%');

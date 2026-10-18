@@ -16,3 +16,5 @@ apps/api/src/generated/
 performance/runtime/
 apps/api/.test-database
 apps/api/.e2e-credentials
+credentials.md
+credentials/
