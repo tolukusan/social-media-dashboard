@@ -2,6 +2,9 @@ import type { DashboardResponse, TrendResponse } from '@smd/shared';
 
 export type View =
   | 'accounts'
+  | 'account-insights'
+  | 'account-comparison'
+  | 'email-reports'
   | 'overview'
   | 'campaigns'
   | 'performance'

@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Line,
   LineChart,
@@ -10,12 +12,24 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiBlob, apiRequest } from '../../lib/api-client';
-import type { CurrentUser } from '../../lib/workspace-types';
+import type { CurrentUser, View } from '../../lib/workspace-types';
+import {
+  DateRangeControls,
+  InfoBanner,
+  MetricTile,
+  PageHeading,
+  ProviderMark,
+  StatusPill,
+  type ProviderCode,
+} from '../../components/account-ui';
 
-type Provider =
-  'INSTAGRAM' | 'FACEBOOK' | 'LINKEDIN' | 'YOUTUBE' | 'ZOHO_CAMPAIGNS';
+type Provider = ProviderCode;
+type AccountView = Extract<
+  View,
+  'accounts' | 'account-insights' | 'account-comparison' | 'email-reports'
+>;
 type SetupProvider = {
   provider: Provider;
   ready: boolean;
@@ -38,6 +52,7 @@ type ConnectedAccount = {
   lastSyncErrorCode: string | null;
   retention: { reportingDays: number | null; postSnapshotDays: number | null };
 };
+const EMPTY_ACCOUNTS: ConnectedAccount[] = [];
 type Metric = {
   code: string;
   label: string;
@@ -89,6 +104,8 @@ type AccountOptions = {
   reportingTimezone: string;
   syncMode: string;
 };
+type SyncTone = 'current' | 'error' | 'pending' | 'stale';
+type SyncHealth = { label: string; detail: string; tone: SyncTone };
 
 const providerNames: Record<Provider, string> = {
   INSTAGRAM: 'Instagram',
@@ -181,7 +198,7 @@ function friendlySyncError(code: string | null) {
   );
 }
 
-function syncHealth(account: ConnectedAccount) {
+function syncHealth(account: ConnectedAccount): SyncHealth {
   if (!account.active)
     return {
       label: 'Disconnected',
@@ -189,7 +206,9 @@ function syncHealth(account: ConnectedAccount) {
       tone: 'stale',
     };
   if (account.lastSyncErrorCode) {
-    const error = friendlySyncError(account.lastSyncErrorCode);
+    const error =
+      friendlySyncError(account.lastSyncErrorCode) ??
+      'The last update did not complete. Try again or reconnect the account.';
     return {
       label: 'Update failed',
       detail: account.lastSyncedAt
@@ -229,7 +248,15 @@ function csvCell(value: string | number) {
   return `"${protectedText.replaceAll('"', '""')}"`;
 }
 
-export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
+export function Accounts({
+  currentUser,
+  view,
+  navigate,
+}: {
+  currentUser: CurrentUser;
+  view: AccountView;
+  navigate: (view: View) => void;
+}) {
   const queryClient = useQueryClient();
   const canConnect = ['ADMIN', 'MARKETING_OFFICER'].includes(
     currentUser.role.code,
@@ -245,6 +272,10 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [preferredProvider, setPreferredProvider] = useState<Provider | ''>('');
+  const [campaignSearch, setCampaignSearch] = useState('');
+  const [providersOpen, setProvidersOpen] = useState(false);
+  const providerPanelInitialized = useRef(false);
+  const connectButtonRef = useRef<HTMLButtonElement>(null);
 
   const optionsQuery = useQuery({
     queryKey: ['account-options'],
@@ -255,17 +286,39 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
     queryFn: () => apiRequest<ConnectedAccount[]>('/accounts'),
     refetchInterval: 30_000,
   });
-  const accounts = accountsQuery.data ?? [];
-  const socialAccounts = accounts.filter(
-    (account) => account.kind === 'SOCIAL',
+  const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
+  const socialAccounts = useMemo(
+    () => accounts.filter((account) => account.kind === 'SOCIAL'),
+    [accounts],
   );
-  const emailAccounts = accounts.filter((account) => account.kind === 'EMAIL');
-  const comparisonAccounts = socialAccounts.filter((account) =>
-    comparisonIds.includes(account.id),
+  const emailAccounts = useMemo(
+    () => accounts.filter((account) => account.kind === 'EMAIL'),
+    [accounts],
   );
-  const selected =
-    accounts.find((account) => account.id === selectedId) ?? null;
+  const comparisonAccounts = useMemo(
+    () =>
+      socialAccounts.filter((account) => comparisonIds.includes(account.id)),
+    [comparisonIds, socialAccounts],
+  );
+  const selected = useMemo(
+    () => accounts.find((account) => account.id === selectedId) ?? null,
+    [accounts, selectedId],
+  );
   const timezone = optionsQuery.data?.reportingTimezone ?? 'UTC';
+
+  const accountSummaryQueries = useQueries({
+    queries: socialAccounts.map((account) => ({
+      queryKey: ['account-analytics', currentUser.id, account.id, from, to],
+      enabled: view === 'accounts' && Boolean(from && to),
+      staleTime: 60_000,
+      queryFn: () => {
+        const params = new URLSearchParams({ from, to });
+        return apiRequest<AccountAnalytics>(
+          `/accounts/${account.id}/analytics?${params}`,
+        );
+      },
+    })),
+  });
 
   useEffect(() => {
     if (!from || !to) {
@@ -274,6 +327,10 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
       setFrom(dayInTimezone(timezone, -29));
     }
   }, [from, to, timezone]);
+
+  useEffect(() => {
+    setMessage('');
+  }, [view]);
 
   useEffect(() => {
     if (selectedId && accounts.some((account) => account.id === selectedId))
@@ -287,6 +344,25 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
       accounts[0];
     if (next) setSelectedId(next.id);
   }, [accounts, selectedId, preferredProvider]);
+
+  useEffect(() => {
+    if (accountsQuery.isLoading || providerPanelInitialized.current) return;
+    providerPanelInitialized.current = true;
+    setProvidersOpen(accounts.length === 0);
+  }, [accounts.length, accountsQuery.isLoading]);
+
+  useEffect(() => {
+    if (view === 'email-reports' && selected?.kind !== 'EMAIL') {
+      const nextEmail = emailAccounts[0];
+      if (nextEmail) setSelectedId(nextEmail.id);
+    } else if (
+      view === 'account-insights' &&
+      selected?.kind !== 'SOCIAL' &&
+      socialAccounts.length
+    ) {
+      setSelectedId(socialAccounts[0].id);
+    }
+  }, [emailAccounts, selected, socialAccounts, view]);
 
   useEffect(() => {
     if (comparisonInitialized || !socialAccounts.length) return;
@@ -326,7 +402,9 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
 
   const analyticsQuery = useQuery({
     queryKey: ['account-analytics', currentUser.id, selectedId, from, to],
-    enabled: Boolean(selected?.kind === 'SOCIAL' && from && to),
+    enabled: Boolean(
+      view === 'account-insights' && selected?.kind === 'SOCIAL' && from && to,
+    ),
     queryFn: () => {
       const params = new URLSearchParams({ from, to });
       return apiRequest<AccountAnalytics>(
@@ -336,7 +414,9 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
   });
   const emailQuery = useQuery({
     queryKey: ['account-email-report', currentUser.id, selectedId, from, to],
-    enabled: Boolean(selected?.kind === 'EMAIL' && from && to),
+    enabled: Boolean(
+      view === 'email-reports' && selected?.kind === 'EMAIL' && from && to,
+    ),
     queryFn: () => {
       const params = new URLSearchParams({ from, to });
       return apiRequest<EmailReport>(
@@ -352,7 +432,10 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
       from,
       to,
     ],
-    enabled: comparisonAccounts.length >= 2 && Boolean(from && to),
+    enabled:
+      view === 'account-comparison' &&
+      comparisonAccounts.length >= 2 &&
+      Boolean(from && to),
     queryFn: async () => {
       const params = new URLSearchParams({ from, to });
       return Promise.all(
@@ -366,6 +449,12 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
   });
   const analytics = analyticsQuery.data;
   const email = emailQuery.data;
+  const visibleEmailCampaigns = useMemo(() => {
+    const term = campaignSearch.trim().toLocaleLowerCase();
+    return (email?.campaigns ?? []).filter((campaign) =>
+      campaign.name.toLocaleLowerCase().includes(term),
+    );
+  }, [campaignSearch, email?.campaigns]);
   const comparisonReports = comparisonQuery.data ?? [];
   const comparisonMetricCodes = [
     ...new Set(
@@ -649,41 +738,115 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
   const selectedError = selected
     ? friendlySyncError(selected.lastSyncErrorCode)
     : null;
+  const screenTitle =
+    view === 'account-insights'
+      ? selected?.kind === 'SOCIAL'
+        ? selected.displayName
+        : 'Account insights'
+      : view === 'account-comparison'
+        ? 'Compare connected accounts'
+        : 'Email performance';
+  const screenDescription =
+    view === 'account-insights'
+      ? 'Provider-specific trends and content for the selected reporting period.'
+      : view === 'account-comparison'
+        ? 'Choose two to four accounts. Each metric keeps its provider meaning and scope.'
+        : 'Zoho campaign results grouped by sent date and kept separate from social analytics.';
 
   return (
-    <div className="accounts-page">
-      <section className="panel accounts-intro">
-        <div>
-          <p className="eyebrow">Independent of campaigns</p>
-          <h2>See how each connected account is performing</h2>
-          <p>
-            Review audience growth, content activity, top posts, and changes
-            against the previous period. Paid campaign results stay in
-            Campaigns.
-          </p>
-        </div>
-        <div className="account-period">
-          <label>
-            From
-            <input
-              type="date"
-              value={from}
-              max={to}
-              onChange={(event) => setFrom(event.target.value)}
-            />
-          </label>
-          <label>
-            To
-            <input
-              type="date"
-              value={to}
-              min={from}
+    <div className="accounts-page" data-screen={view}>
+      {view === 'accounts' ? (
+        <section className="accounts-home-heading">
+          <PageHeading
+            eyebrow="Account-first analytics"
+            title="Your connected accounts"
+            description="Monitor social channels and email reporting from one place. Paid campaign results remain in Campaigns."
+            actions={
+              <button
+                className="primary"
+                type="button"
+                ref={connectButtonRef}
+                id="connect-account-button"
+                aria-expanded={providersOpen}
+                aria-controls="account-provider-options"
+                onClick={() => setProvidersOpen((open) => !open)}
+              >
+                <span aria-hidden="true">＋</span> Connect account
+              </button>
+            }
+          />
+          <div className="account-hero">
+            <div>
+              <span className="account-hero-kicker">Workspace pulse</span>
+              <h2>See the full picture.</h2>
+              <p>Your channels, performance, and reports in one workspace.</p>
+            </div>
+            <div className="account-hero-count">
+              <span>Connected sources</span>
+              <strong>{accounts.length}</strong>
+              <small>
+                {socialAccounts.length} social · {emailAccounts.length} email
+              </small>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className="account-screen-toolbar">
+          <PageHeading
+            eyebrow={
+              view === 'account-insights'
+                ? `${selected ? providerNames[selected.provider] : 'Social'} insights`
+                : view === 'account-comparison'
+                  ? 'Side by side, without misleading totals'
+                  : 'Zoho Campaigns cumulative reporting'
+            }
+            title={screenTitle}
+            description={screenDescription}
+            actions={
+              <>
+                {view === 'account-insights' && (
+                  <label className="account-toolbar-select">
+                    <span className="sr-only">Select a social account</span>
+                    <select
+                      value={selected?.kind === 'SOCIAL' ? selected.id : ''}
+                      onChange={(event) => setSelectedId(event.target.value)}
+                      aria-label="Select a social account"
+                    >
+                      {socialAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.displayName} ·{' '}
+                          {providerNames[account.provider]}
+                        </option>
+                      ))}
+                      {!socialAccounts.length && (
+                        <option value="">No social accounts connected</option>
+                      )}
+                    </select>
+                  </label>
+                )}
+                {view !== 'account-insights' && (
+                  <DateRangeControls
+                    from={from}
+                    to={to}
+                    max={dayInTimezone(timezone)}
+                    onFromChange={setFrom}
+                    onToChange={setTo}
+                  />
+                )}
+              </>
+            }
+          />
+          {view === 'account-insights' && (
+            <DateRangeControls
+              from={from}
+              to={to}
               max={dayInTimezone(timezone)}
-              onChange={(event) => setTo(event.target.value)}
+              onFromChange={setFrom}
+              onToChange={setTo}
             />
-          </label>
-        </div>
-      </section>
+          )}
+        </section>
+      )}
 
       {error && (
         <div className="notice error" role="alert">
@@ -696,175 +859,335 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
         </div>
       )}
 
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Connect accounts</h2>
-            <p>
-              Authorize a social profile or email service. Connection setup is
-              separate from campaign creation.
-            </p>
+      {view === 'accounts' && (
+        <section
+          className="panel provider-options-panel"
+          id="account-provider-options"
+          hidden={!providersOpen}
+        >
+          <div className="panel-heading">
+            <div>
+              <h2>Choose a connection</h2>
+              <p>
+                Authorize a social profile or email service. Connection setup is
+                separate from campaign creation.
+              </p>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => {
+                setProvidersOpen(false);
+                connectButtonRef.current?.focus();
+              }}
+              aria-label="Close connection options"
+            >
+              ×
+            </button>
           </div>
           {!canConnect && (
-            <span className="account-badge">
-              Ask an Administrator or Marketing Officer to connect accounts
-            </span>
+            <div className="notice">
+              Ask an Administrator or Marketing Officer to connect accounts.
+            </div>
           )}
-        </div>
-        <div className="provider-grid">
-          {setupProviders.map((setup) => (
-            <article className="provider-card" key={setup.provider}>
-              <div className="provider-title-row">
-                <span
-                  className={`provider-icon provider-${setup.provider.toLowerCase()}`}
-                  aria-hidden="true"
-                >
-                  {providerNames[setup.provider].slice(0, 1)}
-                </span>
-                <div>
-                  <h3>{providerNames[setup.provider]}</h3>
-                  <span>
-                    {setup.accountKind === 'EMAIL'
-                      ? 'Email reporting'
-                      : 'Social analytics'}
-                  </span>
-                </div>
-              </div>
-              <p>{providerDescriptions[setup.provider]}</p>
-              {setup.notes.map((note) => (
-                <p className="provider-note" key={note}>
-                  {note}
-                </p>
+          {optionsQuery.isError ? (
+            <div className="account-empty" role="alert">
+              <strong>Connection options could not be loaded</strong>
+              <span>
+                {optionsQuery.error instanceof Error
+                  ? optionsQuery.error.message
+                  : 'Try loading the provider setup again.'}
+              </span>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => void optionsQuery.refetch()}
+              >
+                Try again
+              </button>
+            </div>
+          ) : optionsQuery.isLoading ? (
+            <p role="status">Loading provider setup…</p>
+          ) : (
+            <div className="provider-grid">
+              {setupProviders.map((setup) => (
+                <article className="provider-card" key={setup.provider}>
+                  <div className="provider-title-row">
+                    <ProviderMark provider={setup.provider} />
+                    <div>
+                      <h3>{providerNames[setup.provider]}</h3>
+                      <span>
+                        {setup.accountKind === 'EMAIL'
+                          ? 'Email reporting'
+                          : 'Social analytics'}
+                      </span>
+                    </div>
+                  </div>
+                  <p>{providerDescriptions[setup.provider]}</p>
+                  {setup.notes.map((note) => (
+                    <p className="provider-note" key={note}>
+                      {note}
+                    </p>
+                  ))}
+                  <div className="provider-card-footer">
+                    <span
+                      className={`status-pill ${setup.ready ? 'ready' : 'pending'}`}
+                    >
+                      {setup.ready ? 'Ready to connect' : 'API setup needed'}
+                    </span>
+                    <button
+                      className="primary"
+                      type="button"
+                      disabled={!setup.ready || !canConnect || busy}
+                      onClick={() => void connect(setup.provider)}
+                    >
+                      {busy ? 'Working…' : 'Connect'}
+                    </button>
+                  </div>
+                  {!setup.ready && (
+                    <details className="setup-details">
+                      <summary>
+                        What the workspace administrator needs to configure
+                      </summary>
+                      <span>
+                        Required server settings: {setup.missing.join(', ')}.
+                      </span>
+                      <span>
+                        Requested permissions: {setup.scopes.join(', ')}.
+                      </span>
+                    </details>
+                  )}
+                </article>
               ))}
-              <div className="provider-card-footer">
-                <span
-                  className={`status-pill ${setup.ready ? 'ready' : 'pending'}`}
-                >
-                  {setup.ready ? 'Ready to connect' : 'API setup needed'}
-                </span>
+              {!setupProviders.length && (
+                <div className="account-empty">
+                  <strong>No provider connections are configured</strong>
+                  <span>Ask an Administrator to review workspace setup.</span>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {view === 'accounts' && (
+        <section className="panel connected-accounts-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Social accounts</h2>
+              <p>Select a source to explore its own insights.</p>
+            </div>
+            <button
+              className="text-link"
+              type="button"
+              onClick={() => navigate('account-comparison')}
+              disabled={socialAccounts.length < 2}
+            >
+              View comparison <span aria-hidden="true">›</span>
+            </button>
+          </div>
+          {accountsQuery.isLoading ? (
+            <p role="status">Loading connected accounts…</p>
+          ) : accountsQuery.isError ? (
+            <div className="account-empty" role="alert">
+              <strong>Connected accounts could not be loaded</strong>
+              <span>
+                {accountsQuery.error instanceof Error
+                  ? accountsQuery.error.message
+                  : 'Try loading your accounts again.'}
+              </span>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => void accountsQuery.refetch()}
+              >
+                Try again
+              </button>
+            </div>
+          ) : socialAccounts.length ? (
+            <div
+              className="connected-account-list"
+              role="list"
+              aria-label="Connected social accounts"
+            >
+              {socialAccounts.map((account, index) => {
+                const health = syncHealth(account);
+                const summaryQuery = accountSummaryQueries[index];
+                const summaryMetric =
+                  summaryQuery?.data?.metrics.find(
+                    (metric) =>
+                      metric.code === 'AUDIENCE_SIZE' && metric.value !== null,
+                  ) ??
+                  summaryQuery?.data?.metrics.find(
+                    (metric) => metric.value !== null,
+                  );
+                return (
+                  <div
+                    className={`connected-account ${selectedId === account.id ? 'selected' : ''}`}
+                    key={account.id}
+                    role="listitem"
+                  >
+                    <button
+                      className="connected-account-select"
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(account.id);
+                        navigate('account-insights');
+                      }}
+                      aria-pressed={selectedId === account.id}
+                    >
+                      <span className="connected-account-card-top">
+                        <ProviderMark provider={account.provider} />
+                        <StatusPill tone={health.tone}>
+                          {health.label}
+                        </StatusPill>
+                      </span>
+                      <span className="connected-account-name">
+                        <strong>{account.displayName}</strong>
+                        <small>
+                          {providerNames[account.provider]}
+                          {account.handle
+                            ? ` · @${account.handle.replace(/^@/, '')}`
+                            : ''}
+                        </small>
+                      </span>
+                      <span className="account-summary-value">
+                        <small>
+                          {summaryMetric?.label ??
+                            (summaryQuery?.isLoading
+                              ? 'Loading account summary'
+                              : 'Account summary')}
+                        </small>
+                        <strong>
+                          {summaryMetric
+                            ? formatValue(
+                                summaryMetric.value,
+                                summaryMetric.unit,
+                              )
+                            : summaryQuery?.error
+                              ? 'Unavailable'
+                              : 'No recent data'}
+                        </strong>
+                      </span>
+                      <span className="connected-account-sync">
+                        <span className={`sync-dot sync-dot-${health.tone}`} />
+                        <small>{health.detail}</small>
+                      </span>
+                      <span className="connected-account-open">
+                        Open insights <span aria-hidden="true">→</span>
+                      </span>
+                    </button>
+                    {isAdmin && (
+                      <div className="connected-account-management">
+                        {account.active ? (
+                          <button
+                            className="text-button disconnect-button"
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void disconnectAccount(account)}
+                          >
+                            Disconnect
+                          </button>
+                        ) : (
+                          <button
+                            className="text-button disconnect-button"
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void deleteAccountData(account)}
+                          >
+                            Delete stored data
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="account-empty">
+              <strong>No social accounts connected</strong>
+              <span>
+                Connect Instagram, Facebook, LinkedIn, or YouTube to see their
+                independent account results.
+              </span>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => setProvidersOpen(true)}
+              >
+                Choose a social provider
+              </button>
+            </div>
+          )}
+          <section
+            className="email-connections"
+            aria-labelledby="email-connections-title"
+          >
+            <div className="panel-heading">
+              <div>
+                <h2 id="email-connections-title">Email reporting</h2>
+                <p>
+                  Zoho campaign results stay separate from social analytics.
+                </p>
+              </div>
+              <span className="account-badge">
+                {emailAccounts.length} connected
+              </span>
+            </div>
+            {emailAccounts.length ? (
+              <div className="email-connection-list">
+                {emailAccounts.map((account) => {
+                  const health = syncHealth(account);
+                  return (
+                    <article className="email-connection-card" key={account.id}>
+                      <ProviderMark provider={account.provider} />
+                      <div className="email-connection-copy">
+                        <strong>{account.displayName}</strong>
+                        <small>
+                          Zoho Campaigns · cumulative campaign reporting
+                        </small>
+                        <span
+                          className={`connection-health health-${health.tone}`}
+                        >
+                          {health.label} · {health.detail}
+                        </span>
+                      </div>
+                      <button
+                        className="secondary"
+                        type="button"
+                        onClick={() => {
+                          setSelectedId(account.id);
+                          navigate('email-reports');
+                        }}
+                      >
+                        Open report <span aria-hidden="true">→</span>
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="email-connection-empty">
+                <p>No Zoho reporting connection yet.</p>
                 <button
-                  className="primary"
+                  className="text-link"
                   type="button"
-                  disabled={!setup.ready || !canConnect || busy}
-                  onClick={() => void connect(setup.provider)}
+                  onClick={() => setProvidersOpen(true)}
                 >
-                  {busy ? 'Working…' : 'Connect'}
+                  Connect Zoho Campaigns <span aria-hidden="true">→</span>
                 </button>
               </div>
-              {!setup.ready && (
-                <details className="setup-details">
-                  <summary>
-                    What the workspace administrator needs to configure
-                  </summary>
-                  <span>
-                    Required server settings: {setup.missing.join(', ')}.
-                  </span>
-                  <span>Requested permissions: {setup.scopes.join(', ')}.</span>
-                </details>
-              )}
-            </article>
-          ))}
-          {!setupProviders.length && (
-            <p role="status">Loading provider setup…</p>
-          )}
-        </div>
-      </section>
+            )}
+          </section>
+        </section>
+      )}
 
-      <section className="panel connected-accounts-panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Connected social accounts</h2>
-            <p>Select an account to view its performance.</p>
-          </div>
-          <span className="account-badge">
-            {socialAccounts.length} connected
-          </span>
-        </div>
-        {accountsQuery.isLoading ? (
-          <p role="status">Loading connected accounts…</p>
-        ) : socialAccounts.length ? (
-          <div
-            className="connected-account-list"
-            role="list"
-            aria-label="Connected social accounts"
-          >
-            {socialAccounts.map((account) => {
-              const health = syncHealth(account);
-              return (
-                <div
-                  className={`connected-account ${selectedId === account.id ? 'selected' : ''}`}
-                  key={account.id}
-                  role="listitem"
-                >
-                  <button
-                    className="connected-account-select"
-                    type="button"
-                    onClick={() => setSelectedId(account.id)}
-                    aria-pressed={selectedId === account.id}
-                  >
-                    <span
-                      className={`provider-icon provider-${account.provider.toLowerCase()}`}
-                      aria-hidden="true"
-                    >
-                      {providerNames[account.provider].slice(0, 1)}
-                    </span>
-                    <span className="connected-account-name">
-                      <strong>{account.displayName}</strong>
-                      <small>
-                        {providerNames[account.provider]}
-                        {account.handle
-                          ? ` · @${account.handle.replace(/^@/, '')}`
-                          : ''}
-                      </small>
-                    </span>
-                    <span
-                      className={`connected-account-sync account-sync-status sync-${health.tone}`}
-                      aria-label={`${health.label}. ${health.detail}`}
-                    >
-                      <strong>{health.label}</strong>
-                      <small>{health.detail}</small>
-                    </span>
-                  </button>
-                  {isAdmin && account.active && (
-                    <button
-                      className="text-button disconnect-button"
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void disconnectAccount(account)}
-                    >
-                      Disconnect
-                    </button>
-                  )}
-                  {isAdmin && !account.active && (
-                    <button
-                      className="text-button disconnect-button"
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void deleteAccountData(account)}
-                    >
-                      Delete stored data
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="account-empty">
-            <strong>No social accounts connected</strong>
-            <span>
-              Connect Instagram, Facebook, LinkedIn, or YouTube above. Account
-              results are available before campaigns are created.
-            </span>
-          </div>
-        )}
-      </section>
-
-      {socialAccounts.length > 1 && (
+      {view === 'account-comparison' && (
         <section className="panel account-comparison-panel">
           <div className="panel-heading">
             <div>
-              <h2>Compare connected accounts</h2>
+              <h2>Social performance</h2>
               <p>
                 Compare two to four accounts for {from} to {to}. Metrics stay
                 with their provider definitions; values are never added across
@@ -873,7 +1196,7 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
             </div>
             <div className="account-actions">
               <button
-                className="secondary"
+                className="secondary export-button"
                 type="button"
                 disabled={
                   comparisonReports.length < 2 || comparisonQuery.isFetching
@@ -884,6 +1207,10 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
               </button>
             </div>
           </div>
+          <InfoBanner>
+            Comparisons show change within each account. Similar metric names
+            may represent different provider measurements.
+          </InfoBanner>
           <fieldset className="account-comparison-picker">
             <legend>Select accounts</legend>
             {socialAccounts.map((account) => {
@@ -903,7 +1230,25 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
               );
             })}
           </fieldset>
-          {comparisonAccounts.length < 2 ? (
+          {accountsQuery.isLoading ? (
+            <p role="status">Loading connected accounts…</p>
+          ) : accountsQuery.isError ? (
+            <div className="account-empty" role="alert">
+              <strong>Connected accounts could not be loaded</strong>
+              <span>
+                {accountsQuery.error instanceof Error
+                  ? accountsQuery.error.message
+                  : 'Try loading your accounts again.'}
+              </span>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => void accountsQuery.refetch()}
+              >
+                Try again
+              </button>
+            </div>
+          ) : comparisonAccounts.length < 2 ? (
             <p role="status">Select at least two accounts to compare.</p>
           ) : comparisonQuery.isLoading ? (
             <p role="status">Loading account comparison…</p>
@@ -912,127 +1257,213 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
               {comparisonQuery.error.message}
             </div>
           ) : comparisonReports.length ? (
-            <>
-              <div className="account-table-wrap">
-                <table className="account-table account-comparison-table">
-                  <caption>
-                    {from} to {to}. Each value is reported for its connected
-                    account; no cross-platform totals are calculated.
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Measure</th>
-                      {comparisonReports.map((report) => (
-                        <th scope="col" key={report.account.id}>
-                          {report.account.displayName}
-                          <small>
-                            {providerNames[report.account.provider]}
-                          </small>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {comparisonMetricCodes.map((code) => (
-                      <tr key={code}>
-                        <th scope="row">{formatProviderMetric(code)}</th>
-                        {comparisonReports.map((report) => {
-                          const metric = report.metrics.find(
-                            (candidate) => candidate.code === code,
-                          );
-                          return (
-                            <td className="numeric" key={report.account.id}>
-                              <strong>
-                                {formatValue(
-                                  metric?.value ?? null,
-                                  metric?.unit ?? 'COUNT',
-                                )}
-                              </strong>
-                              <small>
-                                {metric?.label ??
-                                  'Not provided by this platform'}
-                              </small>
-                              {metric && metric.difference !== null && (
-                                <small>
-                                  {formatValue(metric.difference, metric.unit)}{' '}
-                                  vs preceding period
-                                  {metric.percentageChange === null
-                                    ? ''
-                                    : ` (${metric.percentageChange > 0 ? '+' : ''}${metric.percentageChange}%)`}
-                                </small>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="account-comparison-content">
-                {comparisonReports.map((report) => (
-                  <article key={report.account.id}>
-                    <h3>Top content · {report.account.displayName}</h3>
-                    <p>
-                      Ranked by{' '}
-                      {formatProviderMetric(
-                        report.topPosts[0]?.metricCode ?? 'top content',
-                      )}
-                      ; each count is labeled as lifetime or selected-period,
-                      and uses this provider’s definition.
-                    </p>
-                    {report.topPosts.length ? (
-                      <ol>
-                        {report.topPosts.slice(0, 3).map((post) => (
-                          <li key={post.externalPostId}>
-                            <span>
-                              {post.title || post.postType || 'Content item'}
-                            </span>
+            <div className="comparison-account-grid">
+              {comparisonReports.map((report) => {
+                const trendMetric = report.metrics.find(
+                  (metric) =>
+                    metric.mode === 'SUM' &&
+                    report.series.some(
+                      (point) => typeof point.values[metric.code] === 'number',
+                    ),
+                );
+                const trend = trendMetric
+                  ? report.series.map((point) => ({
+                      date: point.date.slice(5),
+                      value: point.values[trendMetric.code] ?? null,
+                    }))
+                  : [];
+                return (
+                  <article
+                    className="comparison-account-card"
+                    key={report.account.id}
+                  >
+                    <header className="comparison-account-heading">
+                      <ProviderMark provider={report.account.provider} />
+                      <div>
+                        <h3>{report.account.displayName}</h3>
+                        <p>{providerNames[report.account.provider]}</p>
+                      </div>
+                      <StatusPill
+                        tone={report.account.active ? 'current' : 'stale'}
+                      >
+                        {report.account.active ? 'Connected' : 'Disconnected'}
+                      </StatusPill>
+                    </header>
+                    <dl className="comparison-metric-list">
+                      {report.metrics.map((metric) => (
+                        <div className="comparison-metric" key={metric.code}>
+                          <dt>{metric.label}</dt>
+                          <dd>
                             <strong>
-                              {formatValue(post.metricValue, 'COUNT')}
+                              {formatValue(metric.value, metric.unit)}
                             </strong>
-                            <small>
-                              {post.dataScope === 'LIFETIME'
-                                ? 'Lifetime total'
-                                : 'Selected-period total'}
-                            </small>
-                          </li>
-                        ))}
-                      </ol>
-                    ) : (
-                      <p>No top content is available for this date range.</p>
+                            <span>
+                              {metric.difference === null
+                                ? 'Comparison unavailable'
+                                : `${metric.difference > 0 ? '+' : ''}${formatValue(metric.difference, metric.unit)} vs previous period${metric.percentageChange === null ? '' : ` (${metric.percentageChange > 0 ? '+' : ''}${metric.percentageChange}%)`}`}
+                            </span>
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                    {trendMetric && (
+                      <section className="comparison-trend">
+                        <div className="comparison-trend-heading">
+                          <h4>Daily {trendMetric.label.toLowerCase()}</h4>
+                          <span>
+                            {from} – {to}
+                          </span>
+                        </div>
+                        <div
+                          className="comparison-trend-chart"
+                          role="img"
+                          aria-label={`Daily ${trendMetric.label}; exact values are available in the chart tooltip.`}
+                        >
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={trend} accessibilityLayer>
+                              <CartesianGrid
+                                stroke="#e9eef6"
+                                strokeDasharray="3 3"
+                              />
+                              <XAxis
+                                dataKey="date"
+                                minTickGap={20}
+                                tick={{ fontSize: 8, fill: '#8a9bb1' }}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <YAxis hide />
+                              <Tooltip
+                                formatter={(value) => [
+                                  formatValue(
+                                    typeof value === 'number' ? value : null,
+                                    trendMetric.unit,
+                                  ),
+                                  trendMetric.label,
+                                ]}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="value"
+                                stroke="#3978f6"
+                                strokeWidth={2}
+                                dot={false}
+                                connectNulls={false}
+                                isAnimationActive={false}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </section>
                     )}
+                    <div className="comparison-top-content">
+                      <div className="comparison-content-heading">
+                        <h4>Top content by account</h4>
+                        <p>
+                          {report.topPosts[0]
+                            ? `Ranked by ${formatProviderMetric(report.topPosts[0].metricCode)}`
+                            : 'Provider content measurements'}
+                        </p>
+                      </div>
+                      {report.topPosts.length ? (
+                        <ol>
+                          {report.topPosts.slice(0, 3).map((post, index) => (
+                            <li
+                              key={`${post.externalPostId}-${post.metricCode}`}
+                            >
+                              <span className="content-rank">
+                                {String(index + 1).padStart(2, '0')}
+                              </span>
+                              <span className="comparison-content-name">
+                                {post.permalink ? (
+                                  <a
+                                    href={post.permalink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    {post.title ||
+                                      post.postType ||
+                                      'View content'}
+                                  </a>
+                                ) : (
+                                  post.title || post.postType || 'Content item'
+                                )}
+                                <small>
+                                  {formatValue(post.metricValue, 'COUNT')} ·{' '}
+                                  {post.dataScope === 'LIFETIME'
+                                    ? 'Lifetime'
+                                    : 'Selected period'}
+                                </small>
+                              </span>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <p className="comparison-no-content">
+                          No top content is available for this date range.
+                        </p>
+                      )}
+                    </div>
                   </article>
-                ))}
-              </div>
-            </>
+                );
+              })}
+            </div>
           ) : null}
         </section>
       )}
 
-      {selected?.kind === 'SOCIAL' && (
+      {view === 'account-insights' && selected?.kind === 'SOCIAL' && (
         <section className="panel account-dashboard">
           <div className="panel-heading account-dashboard-heading">
             <div>
-              <p className="eyebrow">
-                {providerNames[selected.provider]} account
-              </p>
-              <h2>{selected.displayName}</h2>
+              <div className="account-insight-source">
+                <ProviderMark provider={selected.provider} />
+                <div>
+                  <p className="eyebrow">
+                    {providerNames[selected.provider]} account
+                  </p>
+                  <h2>{selected.displayName}</h2>
+                </div>
+                <StatusPill
+                  tone={selected.active ? syncHealth(selected).tone : 'stale'}
+                >
+                  {syncHealth(selected).label}
+                </StatusPill>
+              </div>
               <p>
-                {from} to {to} · Compared with the preceding period
+                {from} to {to} · Compared with the preceding period of equal
+                length
               </p>
               {!selected.active && (
-                <p role="status">
+                <p className="disconnected-note" role="status">
                   This account is disconnected. Historical analytics remain
                   available.
                 </p>
               )}
             </div>
             <div className="account-actions">
+              {canConnect &&
+                (selected.lastSyncErrorCode === 'TOKEN_EXPIRED' ||
+                  selected.lastSyncErrorCode ===
+                    'REAUTHENTICATION_REQUIRED') && (
+                  <button
+                    className="secondary"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void connect(selected.provider)}
+                  >
+                    Reconnect account
+                  </button>
+                )}
               <button
-                className="secondary"
+                className="primary"
                 type="button"
-                disabled={!selected.active || busy || analyticsQuery.isFetching}
+                disabled={
+                  !canConnect ||
+                  !selected.active ||
+                  busy ||
+                  analyticsQuery.isFetching
+                }
                 onClick={() => void syncNow()}
               >
                 {busy ? 'Working…' : 'Sync this period'}
@@ -1046,6 +1477,12 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
                 {busy ? 'Preparing…' : 'Download PDF'}
               </button>
             </div>
+            {!canConnect && (
+              <p className="permission-hint" role="status">
+                Management access is view only. An Administrator or Marketing
+                Officer can request a sync.
+              </p>
+            )}
           </div>
           {selectedError && (
             <div className="notice error" role="alert">
@@ -1070,23 +1507,32 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
             <>
               <div className="account-metric-grid">
                 {analytics.metrics.map((metric) => (
-                  <article className="account-metric" key={metric.code}>
-                    <span>{metric.label}</span>
-                    <strong>{formatValue(metric.value, metric.unit)}</strong>
-                    <small
-                      className={
-                        metric.difference === null
-                          ? ''
-                          : metric.difference >= 0
-                            ? 'metric-positive'
-                            : 'metric-negative'
-                      }
-                    >
-                      {metric.difference === null
-                        ? 'Comparison unavailable'
-                        : `${metric.difference > 0 ? '+' : ''}${formatValue(metric.difference, metric.unit)} vs previous period${metric.percentageChange === null ? '' : ` (${metric.percentageChange > 0 ? '+' : ''}${metric.percentageChange}%)`}`}
-                    </small>
-                  </article>
+                  <MetricTile
+                    key={metric.code}
+                    label={metric.label}
+                    value={formatValue(metric.value, metric.unit)}
+                    detail={
+                      metric.difference === null ? (
+                        'Comparison unavailable'
+                      ) : (
+                        <>
+                          <span className="trend-indicator" aria-hidden="true">
+                            {metric.difference > 0
+                              ? '↑'
+                              : metric.difference < 0
+                                ? '↓'
+                                : '→'}
+                          </span>{' '}
+                          {metric.difference > 0 ? '+' : ''}
+                          {formatValue(metric.difference, metric.unit)} vs
+                          previous period
+                          {metric.percentageChange === null
+                            ? ''
+                            : ` (${metric.percentageChange > 0 ? '+' : ''}${metric.percentageChange}%)`}
+                        </>
+                      )
+                    }
+                  />
                 ))}
               </div>
               {analytics.dataAvailableThrough && (
@@ -1331,174 +1777,410 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
         </section>
       )}
 
-      <section className="panel email-report-panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Email reports</h2>
-            <p>
-              Zoho campaign totals are kept separate from social account
-              activity.
-            </p>
-          </div>
-          {emailAccounts.length > 0 && (
-            <span className="account-badge">
-              {emailAccounts.length} connected
-            </span>
+      {view === 'account-insights' && selected?.kind !== 'SOCIAL' && (
+        <section className="panel account-empty account-empty-panel">
+          {accountsQuery.isLoading ? (
+            <p role="status">Loading connected accounts…</p>
+          ) : accountsQuery.isError ? (
+            <>
+              <strong>Connected accounts could not be loaded</strong>
+              <span>
+                {accountsQuery.error instanceof Error
+                  ? accountsQuery.error.message
+                  : 'Try loading your accounts again.'}
+              </span>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => void accountsQuery.refetch()}
+              >
+                Try again
+              </button>
+            </>
+          ) : socialAccounts.length ? (
+            <>
+              <strong>Select a social account to view insights</strong>
+              <span>Choose an account from the selector above.</span>
+            </>
+          ) : (
+            <>
+              <strong>No social accounts connected</strong>
+              <span>
+                Connect an eligible social account to begin reporting.
+              </span>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => navigate('accounts')}
+              >
+                Go to Accounts
+              </button>
+            </>
           )}
-        </div>
-        {emailAccounts.length ? (
-          <>
-            <div className="email-account-select-row">
-              <label>
-                Zoho account
-                <select
-                  value={selected?.kind === 'EMAIL' ? selected.id : ''}
-                  onChange={(event) => setSelectedId(event.target.value)}
-                >
-                  <option value="" disabled>
-                    Choose an email account
-                  </option>
-                  {emailAccounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {selected?.kind === 'EMAIL' && (
-                <div className="account-actions">
-                  <button
-                    className="secondary"
-                    type="button"
-                    disabled={!selected.active || busy}
-                    onClick={() => void syncNow()}
-                  >
-                    {busy ? 'Working…' : 'Refresh email reports'}
-                  </button>
-                  <button
-                    className="secondary"
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void downloadReport(true)}
-                  >
-                    Download PDF
-                  </button>
+        </section>
+      )}
+
+      {view === 'email-reports' && (
+        <section className="panel email-report-panel">
+          <div className="panel-heading">
+            <div>
+              <div className="account-insight-source">
+                <ProviderMark provider="ZOHO_CAMPAIGNS" />
+                <div>
+                  <h2>Email performance</h2>
+                  <p>Zoho Campaigns · reports grouped by campaign send date</p>
                 </div>
-              )}
+              </div>
             </div>
-            {selected?.kind === 'EMAIL' &&
-              (emailQuery.isLoading ? (
-                <p role="status">Loading email campaign reports…</p>
-              ) : emailQuery.error instanceof Error ? (
-                <div className="notice error" role="alert">
-                  {emailQuery.error.message}
-                </div>
-              ) : (
-                email && (
-                  <>
-                    <p className="email-report-context">
-                      {email.campaignCount} campaigns sent between {from} and{' '}
-                      {to}.
-                    </p>
-                    <div className="account-metric-grid email-metric-grid">
-                      {Object.entries(email.totals).map(([code, value]) => (
-                        <article className="account-metric" key={code}>
-                          <span>{formatProviderMetric(code)}</span>
-                          <strong>
-                            {formatValue(
+            {emailAccounts.length > 0 && (
+              <span className="account-badge">
+                {emailAccounts.length} connected
+              </span>
+            )}
+          </div>
+          {accountsQuery.isError ? (
+            <div className="account-empty" role="alert">
+              <strong>Email reporting accounts could not be loaded</strong>
+              <span>
+                {accountsQuery.error instanceof Error
+                  ? accountsQuery.error.message
+                  : 'Try loading your connected accounts again.'}
+              </span>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => void accountsQuery.refetch()}
+              >
+                Try again
+              </button>
+            </div>
+          ) : emailAccounts.length ? (
+            <>
+              <InfoBanner>
+                Zoho reports are cumulative per campaign. Rates are provider
+                reported; they are not daily engagement totals. Search filters
+                the campaign chart and table; summary totals cover the full date
+                range.
+              </InfoBanner>
+              <div className="email-account-select-row">
+                <label>
+                  Zoho account
+                  <select
+                    value={selected?.kind === 'EMAIL' ? selected.id : ''}
+                    onChange={(event) => setSelectedId(event.target.value)}
+                  >
+                    <option value="" disabled>
+                      Choose a Zoho account
+                    </option>
+                    {emailAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {selected?.kind === 'EMAIL' && (
+                  <div className="account-actions">
+                    {canConnect &&
+                      (selected.lastSyncErrorCode === 'TOKEN_EXPIRED' ||
+                        selected.lastSyncErrorCode ===
+                          'REAUTHENTICATION_REQUIRED') && (
+                        <button
+                          className="secondary"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void connect(selected.provider)}
+                        >
+                          Reconnect account
+                        </button>
+                      )}
+                    <button
+                      className="secondary"
+                      type="button"
+                      disabled={!canConnect || !selected.active || busy}
+                      onClick={() => void syncNow()}
+                    >
+                      {busy ? 'Working…' : 'Refresh report data'}
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void downloadReport(true)}
+                    >
+                      Download PDF report
+                    </button>
+                  </div>
+                )}
+              </div>
+              {!canConnect && selected?.kind === 'EMAIL' && (
+                <p className="permission-hint" role="status">
+                  Management access is view only. An Administrator or Marketing
+                  Officer can refresh provider data.
+                </p>
+              )}
+              {selected?.kind === 'EMAIL' &&
+                (emailQuery.isLoading ? (
+                  <p role="status">Loading email campaign reports…</p>
+                ) : emailQuery.error instanceof Error ? (
+                  <div className="notice error" role="alert">
+                    {emailQuery.error.message}
+                  </div>
+                ) : (
+                  email && (
+                    <>
+                      <p className="email-report-context">
+                        {email.campaignCount} campaigns sent between {from} and{' '}
+                        {to}.
+                      </p>
+                      <div className="account-metric-grid email-metric-grid">
+                        {Object.entries(email.totals).map(([code, value]) => (
+                          <MetricTile
+                            key={code}
+                            label={formatProviderMetric(code)}
+                            value={formatValue(
                               value,
                               code === 'OPEN_RATE' ||
                                 code === 'UNIQUE_CLICK_RATE'
                                 ? 'PERCENT'
                                 : 'COUNT',
                             )}
-                          </strong>
-                        </article>
-                      ))}
-                    </div>
-                    {email.campaigns.length ? (
-                      <div className="account-table-wrap">
-                        <table className="account-table">
-                          <thead>
-                            <tr>
-                              <th scope="col">Campaign</th>
-                              <th scope="col">Sent date</th>
-                              <th scope="col">Emails sent</th>
-                              <th scope="col">Opens</th>
-                              <th scope="col">Unique clicks</th>
-                              <th scope="col">Zoho-reported open rate</th>
-                              <th scope="col">
-                                Zoho-reported unique click rate
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {email.campaigns.map((campaign) => (
-                              <tr key={campaign.externalCampaignId}>
-                                <td>{campaign.name}</td>
-                                <td>{formatDate(campaign.sentAt)}</td>
-                                <td className="numeric">
-                                  {formatValue(
-                                    campaign.metricValues.SENT ?? null,
-                                    'COUNT',
-                                  )}
-                                </td>
-                                <td className="numeric">
-                                  {formatValue(
-                                    campaign.metricValues.OPENS ?? null,
-                                    'COUNT',
-                                  )}
-                                </td>
-                                <td className="numeric">
-                                  {formatValue(
-                                    campaign.metricValues.UNIQUE_CLICKS ?? null,
-                                    'COUNT',
-                                  )}
-                                </td>
-                                <td className="numeric">
-                                  {formatValue(
-                                    campaign.metricValues.OPEN_RATE ?? null,
-                                    'PERCENT',
-                                  )}
-                                </td>
-                                <td className="numeric">
-                                  {formatValue(
-                                    campaign.metricValues.UNIQUE_CLICK_RATE ??
-                                      null,
-                                    'PERCENT',
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="account-chart-empty">
-                        No sent campaigns were found in this date range.
-                      </div>
-                    )}
-                    <details className="metric-notes">
-                      <summary>How to read Zoho reports</summary>
-                      <ul>
-                        {email.caveats.map((note) => (
-                          <li key={note}>{note}</li>
+                            detail={
+                              code === 'OPEN_RATE' ||
+                              code === 'UNIQUE_CLICK_RATE'
+                                ? 'Zoho-reported rate'
+                                : 'Cumulative total'
+                            }
+                          />
                         ))}
-                      </ul>
-                    </details>
-                  </>
-                )
-              ))}
-          </>
-        ) : (
-          <div className="account-empty">
-            <strong>No Zoho Campaigns account connected</strong>
-            <span>
-              Connect Zoho above to see email results in this separate report.
-            </span>
-          </div>
-        )}
-      </section>
+                      </div>
+                      <div className="email-campaign-filter">
+                        <label>
+                          <span>Filter campaigns</span>
+                          <input
+                            type="search"
+                            value={campaignSearch}
+                            onChange={(event) =>
+                              setCampaignSearch(event.target.value)
+                            }
+                            placeholder="Search campaign names"
+                          />
+                        </label>
+                        <small>
+                          Showing {visibleEmailCampaigns.length} of{' '}
+                          {email.campaigns.length} campaigns
+                        </small>
+                      </div>
+                      {visibleEmailCampaigns.length ? (
+                        <>
+                          <section className="email-engagement-panel">
+                            <div className="account-chart-heading">
+                              <div>
+                                <h3>Campaign engagement</h3>
+                                <p>
+                                  Zoho-reported open and unique-click rates by
+                                  campaign.
+                                </p>
+                              </div>
+                              <span className="chart-legend">
+                                <span>
+                                  <i className="legend-dot legend-open" />
+                                  Open rate
+                                </span>
+                                <span>
+                                  <i className="legend-dot legend-click" />
+                                  Unique-click rate
+                                </span>
+                              </span>
+                            </div>
+                            {visibleEmailCampaigns.some(
+                              (campaign) =>
+                                typeof campaign.metricValues.OPEN_RATE ===
+                                  'number' ||
+                                typeof campaign.metricValues
+                                  .UNIQUE_CLICK_RATE === 'number',
+                            ) ? (
+                              <div
+                                className="email-engagement-chart"
+                                role="img"
+                                aria-label="Zoho-reported open and unique-click rates by campaign"
+                              >
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart
+                                    data={visibleEmailCampaigns.map(
+                                      (campaign) => ({
+                                        name: campaign.name,
+                                        openRate:
+                                          campaign.metricValues.OPEN_RATE,
+                                        clickRate:
+                                          campaign.metricValues
+                                            .UNIQUE_CLICK_RATE,
+                                      }),
+                                    )}
+                                    layout="vertical"
+                                    margin={{
+                                      left: 4,
+                                      right: 14,
+                                      top: 8,
+                                      bottom: 0,
+                                    }}
+                                  >
+                                    <CartesianGrid
+                                      stroke="#e6ecf5"
+                                      strokeDasharray="3 3"
+                                      vertical
+                                      horizontal={false}
+                                    />
+                                    <XAxis
+                                      type="number"
+                                      domain={[0, 'dataMax']}
+                                      tickFormatter={(value: number) =>
+                                        `${value}%`
+                                      }
+                                      tick={{ fontSize: 11, fill: '#7a8ba5' }}
+                                      axisLine={false}
+                                      tickLine={false}
+                                    />
+                                    <YAxis
+                                      type="category"
+                                      dataKey="name"
+                                      width={140}
+                                      tick={{ fontSize: 11, fill: '#536781' }}
+                                      axisLine={false}
+                                      tickLine={false}
+                                    />
+                                    <Tooltip
+                                      formatter={(value, name) => [
+                                        formatValue(
+                                          typeof value === 'number'
+                                            ? value
+                                            : null,
+                                          'PERCENT',
+                                        ),
+                                        name === 'openRate'
+                                          ? 'Zoho-reported open rate'
+                                          : 'Zoho-reported unique-click rate',
+                                      ]}
+                                    />
+                                    <Bar
+                                      dataKey="openRate"
+                                      name="Open rate"
+                                      fill="#3978f6"
+                                      radius={[0, 4, 4, 0]}
+                                      maxBarSize={12}
+                                    />
+                                    <Bar
+                                      dataKey="clickRate"
+                                      name="Unique-click rate"
+                                      fill="#22aa9b"
+                                      radius={[0, 4, 4, 0]}
+                                      maxBarSize={12}
+                                    />
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            ) : (
+                              <div className="account-chart-empty">
+                                Zoho has not returned campaign rates for this
+                                period.
+                              </div>
+                            )}
+                          </section>
+                          <div className="account-table-wrap">
+                            <table className="account-table">
+                              <thead>
+                                <tr>
+                                  <th scope="col">Campaign</th>
+                                  <th scope="col">Sent date</th>
+                                  <th scope="col">Emails sent</th>
+                                  <th scope="col">Opens</th>
+                                  <th scope="col">Unique clicks</th>
+                                  <th scope="col">Zoho-reported open rate</th>
+                                  <th scope="col">
+                                    Zoho-reported unique click rate
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {visibleEmailCampaigns.map((campaign) => (
+                                  <tr key={campaign.externalCampaignId}>
+                                    <td>{campaign.name}</td>
+                                    <td>{formatDate(campaign.sentAt)}</td>
+                                    <td className="numeric">
+                                      {formatValue(
+                                        campaign.metricValues.SENT ?? null,
+                                        'COUNT',
+                                      )}
+                                    </td>
+                                    <td className="numeric">
+                                      {formatValue(
+                                        campaign.metricValues.OPENS ?? null,
+                                        'COUNT',
+                                      )}
+                                    </td>
+                                    <td className="numeric">
+                                      {formatValue(
+                                        campaign.metricValues.UNIQUE_CLICKS ??
+                                          null,
+                                        'COUNT',
+                                      )}
+                                    </td>
+                                    <td className="numeric">
+                                      {formatValue(
+                                        campaign.metricValues.OPEN_RATE ?? null,
+                                        'PERCENT',
+                                      )}
+                                    </td>
+                                    <td className="numeric">
+                                      {formatValue(
+                                        campaign.metricValues
+                                          .UNIQUE_CLICK_RATE ?? null,
+                                        'PERCENT',
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="account-chart-empty">
+                          {email.campaigns.length
+                            ? 'No campaigns match this search.'
+                            : 'No sent campaigns were found in this date range.'}
+                        </div>
+                      )}
+                      <details className="metric-notes">
+                        <summary>How to read Zoho reports</summary>
+                        <ul>
+                          {email.caveats.map((note) => (
+                            <li key={note}>{note}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    </>
+                  )
+                ))}
+            </>
+          ) : (
+            <div className="account-empty">
+              <strong>No Zoho Campaigns account connected</strong>
+              <span>
+                Connect Zoho Campaigns to see email results in this separate
+                report.
+              </span>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => navigate('accounts')}
+              >
+                Go to Accounts
+              </button>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

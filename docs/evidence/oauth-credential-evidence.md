@@ -35,19 +35,19 @@ These are read-only requests in code, not evidence of app approval or provider a
 
 ## Verification
 
-| Check                                          | Result                                                                                         |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| API unit suite                                 | Passed: 105 tests                                                                             |
+| Check                                          | Result                                                                                                                      |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| API unit suite                                 | Passed: 105 tests                                                                                                           |
 | Campaign OAuth HTTP/PostgreSQL integration     | Passed: 14 tests, including Google PKCE exchange, Zoho callback, replay rejection, extra-scope rejection, and safe metadata |
-| Connected-account Google/Zoho HTTP integration | Passed: YouTube and Zoho mock callbacks, exact scopes/routes, state consumption, safe metadata |
-| Session boundary and OAuth service unit tests  | Passed as part of the API unit suite                                                           |
-| Additive migration                             | Applied to the isolated integration DB and guarded loopback application schema                 |
-| `pnpm lint`                                    | Passed                                                                                         |
-| `pnpm typecheck`                               | Passed for shared, API, and web workspaces                                                     |
-| `pnpm build`                                   | Passed for shared, API, and web workspaces                                                     |
-| Accounts and Integrations browser journeys     | Passed: 6/6 using the isolated E2E database and no provider credentials in test processes      |
-| `pnpm format:docs` and `git diff --check`      | Passed                                                                                         |
-| Provider consent/live token exchange           | Pending callback registration and account-owner approval                                       |
+| Connected-account Google/Zoho HTTP integration | Passed: YouTube and Zoho mock callbacks, exact scopes/routes, state consumption, safe metadata                              |
+| Session boundary and OAuth service unit tests  | Passed as part of the API unit suite                                                                                        |
+| Additive migration                             | Applied to the isolated integration DB and guarded loopback application schema                                              |
+| `pnpm lint`                                    | Passed                                                                                                                      |
+| `pnpm typecheck`                               | Passed for shared, API, and web workspaces                                                                                  |
+| `pnpm build`                                   | Passed for shared, API, and web workspaces                                                                                  |
+| Accounts and Integrations browser journeys     | Passed: 6/6 using the isolated E2E database and no provider credentials in test processes                                   |
+| `pnpm format:docs` and `git diff --check`      | Passed                                                                                                                      |
+| Provider consent/live token exchange           | Pending callback registration and account-owner approval                                                                    |
 
 ## Remaining campaign connector OAuth acceptance
 

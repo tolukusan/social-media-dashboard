@@ -34,6 +34,22 @@ import type {
 } from '../lib/workspace-types';
 import { ApiError, apiRequest, queryKeys } from '../lib/api-client';
 
+type AccountView = Extract<
+  View,
+  'accounts' | 'account-insights' | 'account-comparison' | 'email-reports'
+>;
+
+const accountViews = new Set<AccountView>([
+  'accounts',
+  'account-insights',
+  'account-comparison',
+  'email-reports',
+]);
+
+function isAccountView(view: View): view is AccountView {
+  return accountViews.has(view as AccountView);
+}
+
 export function WorkspaceShell() {
   const queryClient = useQueryClient();
   const sessionQuery = useSession();
@@ -53,6 +69,9 @@ export function WorkspaceShell() {
       const next = window.location.hash.slice(1);
       const allowed = [
         'accounts',
+        'account-insights',
+        'account-comparison',
+        'email-reports',
         'overview',
         'campaigns',
         'performance',
@@ -109,7 +128,7 @@ export function WorkspaceShell() {
       filtersReady &&
       authStatus === 'authenticated' &&
       Boolean(currentUser) &&
-      view !== 'accounts',
+      !isAccountView(view),
     queryFn: async () => {
       const params = new URLSearchParams(
         Object.entries(workspaceFilters).filter(([, value]) => Boolean(value)),
@@ -147,7 +166,7 @@ export function WorkspaceShell() {
       filtersReady &&
       authStatus === 'authenticated' &&
       Boolean(currentUser && from && to) &&
-      view !== 'accounts',
+      !isAccountView(view),
     queryFn: async () => {
       const params = new URLSearchParams(
         Object.entries(workspaceFilters).filter(([, value]) => Boolean(value)),
@@ -179,6 +198,22 @@ export function WorkspaceShell() {
     }
   }, [filtersReady, workspaceQuery.data, records, from, to]);
   const loading = workspaceQuery.isFetching;
+  const viewTitles: Record<View, string> = {
+    accounts: 'Accounts',
+    'account-insights': 'Account insights',
+    'account-comparison': 'Compare accounts',
+    'email-reports': 'Email reports',
+    overview: 'Campaign overview',
+    campaigns: 'Campaigns',
+    performance: 'Performance data',
+    analytics: 'Analytics',
+    targets: 'KPI targets',
+    reports: 'Reports',
+    users: 'Users',
+    settings: 'Settings',
+    integrations: 'Integrations',
+    profile: 'My profile',
+  };
   const error =
     workspaceQuery.error instanceof Error ? workspaceQuery.error.message : '';
 
@@ -260,25 +295,24 @@ export function WorkspaceShell() {
           >
             {navigationOpen ? 'Close menu' : 'Menu'}
           </button>
-          <div>
-            <p className="eyebrow">Digital marketing performance</p>
-            <h1>
-              {view === 'overview'
-                ? 'Campaign overview'
-                : view === 'accounts'
-                  ? 'Accounts'
-                  : view === 'performance'
-                    ? 'Performance data'
-                    : view === 'users'
-                      ? 'Users'
-                      : view === 'targets'
-                        ? 'KPI targets'
-                        : view === 'profile'
-                          ? 'My profile'
-                          : view === 'settings'
-                            ? 'Settings'
-                            : view[0].toUpperCase() + view.slice(1)}
-            </h1>
+          <div className="topbar-title">
+            <div className="breadcrumbs" aria-label="Page location">
+              <span>Workspace</span>
+              <span aria-hidden="true">/</span>
+              <strong>{viewTitles[view]}</strong>
+            </div>
+            <h1>{viewTitles[view]}</h1>
+          </div>
+          <div className="topbar-user" aria-label="Signed in user">
+            <span className="topbar-user-avatar" aria-hidden="true">
+              {currentUser?.name
+                .split(' ')
+                .map((part) => part[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase()}
+            </span>
+            <span>{currentUser?.name}</span>
           </div>
         </header>
         {error && (
@@ -286,8 +320,8 @@ export function WorkspaceShell() {
             {error}
           </div>
         )}
-        {view === 'accounts' && currentUser && (
-          <Accounts currentUser={currentUser} />
+        {isAccountView(view) && currentUser && (
+          <Accounts currentUser={currentUser} view={view} navigate={navigate} />
         )}
         {loading && (
           <div className="notice" role="status">
