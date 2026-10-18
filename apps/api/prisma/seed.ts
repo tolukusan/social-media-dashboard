@@ -376,8 +376,32 @@ type AccountMetricSeed = {
   description: string;
   sourceField: string;
   unit: MetricUnit;
+  aggregationStrategy?: AggregationStrategy;
+  weightingMetricCode?: string;
+  nonNegative?: boolean;
   retentionDays?: number;
 };
+
+function providerMetrics(
+  provider: IntegrationProvider,
+  scope: AccountAnalyticsScope,
+  retentionDays: number | undefined,
+  definitions: Array<[string, string, string, MetricUnit, AggregationStrategy]>,
+): AccountMetricSeed[] {
+  return definitions.map(
+    ([code, name, sourceField, unit, aggregationStrategy]) => ({
+      provider,
+      code,
+      scope,
+      name,
+      description: `${name} reported by ${provider} for ${scope.toLowerCase()} analytics. The source field and aggregation strategy are provider-specific.`,
+      sourceField,
+      unit,
+      aggregationStrategy,
+      retentionDays,
+    }),
+  );
+}
 
 const accountMetricDefinitions: AccountMetricSeed[] = [
   {
@@ -473,6 +497,370 @@ const accountMetricDefinitions: AccountMetricSeed[] = [
     unit: MetricUnit.CURRENCY,
     retentionDays: 364,
   },
+  ...providerMetrics(
+    IntegrationProvider.INSTAGRAM_ORGANIC,
+    AccountAnalyticsScope.ACCOUNT,
+    90,
+    [
+      [
+        'AUDIENCE_SIZE',
+        'Followers',
+        'followers_count',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      [
+        'MEDIA_VIEWS',
+        'Views',
+        'views',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'ACCOUNTS_REACHED',
+        'Accounts reached',
+        'reach',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'CONTENT_INTERACTIONS',
+        'Content interactions',
+        'total_interactions',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+    ],
+  ),
+  ...providerMetrics(
+    IntegrationProvider.INSTAGRAM_ORGANIC,
+    AccountAnalyticsScope.CONTENT,
+    90,
+    [
+      [
+        'VIEWS',
+        'Content views',
+        'views',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      [
+        'REACH',
+        'Content reach',
+        'reach',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      [
+        'INTERACTIONS',
+        'Content interactions',
+        'total_interactions',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+    ],
+  ),
+  ...providerMetrics(
+    IntegrationProvider.FACEBOOK_ORGANIC,
+    AccountAnalyticsScope.ACCOUNT,
+    90,
+    [
+      [
+        'AUDIENCE_SIZE',
+        'Followers',
+        'followers_count',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      [
+        'PAGE_VISITS',
+        'Page visits',
+        'page_views_total',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'ORGANIC_MEDIA_VIEWS',
+        'Organic media views',
+        'page_media_view:is_from_ads=false',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+    ],
+  ),
+  ...providerMetrics(
+    IntegrationProvider.FACEBOOK_ORGANIC,
+    AccountAnalyticsScope.CONTENT,
+    90,
+    [
+      [
+        'ORGANIC_VIEWS',
+        'Organic content views',
+        'post_media_view:is_from_ads=false',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+    ],
+  ),
+  ...providerMetrics(
+    IntegrationProvider.LINKEDIN_ORGANIC,
+    AccountAnalyticsScope.ACCOUNT,
+    364,
+    [
+      [
+        'PAGE_VIEWS',
+        'Page views',
+        'allPageViews.pageViews',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'ORGANIC_NEW_FOLLOWERS',
+        'New organic followers',
+        'followerGains.organicFollowerGain',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'ORGANIC_POST_IMPRESSIONS',
+        'Organic post impressions',
+        'totalShareStatistics.impressionCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'ORGANIC_UNIQUE_IMPRESSIONS',
+        'Organic unique impressions',
+        'totalShareStatistics.uniqueImpressionsCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'ORGANIC_POST_CLICKS',
+        'Organic post clicks',
+        'totalShareStatistics.clickCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'ORGANIC_POST_LIKES',
+        'Organic post likes',
+        'totalShareStatistics.likeCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'ORGANIC_POST_COMMENTS',
+        'Organic post comments',
+        'totalShareStatistics.commentCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'ORGANIC_POST_SHARES',
+        'Organic post shares',
+        'totalShareStatistics.shareCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+    ],
+  ),
+  ...providerMetrics(
+    IntegrationProvider.LINKEDIN_ORGANIC,
+    AccountAnalyticsScope.CONTENT,
+    42,
+    [
+      [
+        'ORGANIC_POST_IMPRESSIONS',
+        'Organic post impressions',
+        'totalShareStatistics.impressionCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      [
+        'ORGANIC_UNIQUE_IMPRESSIONS',
+        'Organic unique impressions',
+        'totalShareStatistics.uniqueImpressionsCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      [
+        'ORGANIC_POST_CLICKS',
+        'Organic post clicks',
+        'totalShareStatistics.clickCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      [
+        'ORGANIC_POST_LIKES',
+        'Organic post likes',
+        'totalShareStatistics.likeCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      [
+        'ORGANIC_POST_COMMENTS',
+        'Organic post comments',
+        'totalShareStatistics.commentCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      [
+        'ORGANIC_POST_SHARES',
+        'Organic post shares',
+        'totalShareStatistics.shareCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+    ],
+  ),
+  ...providerMetrics(
+    IntegrationProvider.YOUTUBE_ANALYTICS,
+    AccountAnalyticsScope.ACCOUNT,
+    undefined,
+    [
+      [
+        'AUDIENCE_SIZE',
+        'Subscribers',
+        'statistics.subscriberCount',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      [
+        'VIEWS',
+        'Video views',
+        'views',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'WATCH_TIME_MINUTES',
+        'Watch time (minutes)',
+        'estimatedMinutesWatched',
+        MetricUnit.DECIMAL,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'SUBSCRIBERS_GAINED',
+        'Subscribers gained',
+        'subscribersGained',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'SUBSCRIBERS_LOST',
+        'Subscribers lost',
+        'subscribersLost',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      ['LIKES', 'Likes', 'likes', MetricUnit.COUNT, AggregationStrategy.SUM],
+      [
+        'COMMENTS',
+        'Comments',
+        'comments',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      ['SHARES', 'Shares', 'shares', MetricUnit.COUNT, AggregationStrategy.SUM],
+    ],
+  ),
+  ...providerMetrics(
+    IntegrationProvider.YOUTUBE_ANALYTICS,
+    AccountAnalyticsScope.CONTENT,
+    undefined,
+    [
+      [
+        'VIEWS',
+        'Video views',
+        'views',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      ['LIKES', 'Likes', 'likes', MetricUnit.COUNT, AggregationStrategy.LAST],
+      [
+        'COMMENTS',
+        'Comments',
+        'comments',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+      [
+        'SHARES',
+        'Shares',
+        'shares',
+        MetricUnit.COUNT,
+        AggregationStrategy.LAST,
+      ],
+    ],
+  ),
+  ...providerMetrics(
+    IntegrationProvider.ZOHO_CAMPAIGNS,
+    AccountAnalyticsScope.EMAIL_CAMPAIGN,
+    undefined,
+    [
+      [
+        'SENT',
+        'Emails sent',
+        'emails_sent_count',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'DELIVERED',
+        'Emails delivered',
+        'delivered_count',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'OPENS',
+        'Email opens',
+        'opens_count',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'UNIQUE_CLICKS',
+        'Unique email clicks',
+        'unique_clicks_count',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'OPEN_RATE',
+        'Zoho-reported open rate',
+        'open_percent',
+        MetricUnit.PERCENT,
+        AggregationStrategy.WEIGHTED_AVERAGE,
+      ],
+      [
+        'UNIQUE_CLICK_RATE',
+        'Zoho-reported unique click rate',
+        'unique_clicked_percent',
+        MetricUnit.PERCENT,
+        AggregationStrategy.WEIGHTED_AVERAGE,
+      ],
+      [
+        'BOUNCES',
+        'Bounced emails',
+        'bounces_count',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+      [
+        'UNSUBSCRIBES',
+        'Unsubscribes',
+        'unsub_count',
+        MetricUnit.COUNT,
+        AggregationStrategy.SUM,
+      ],
+    ],
+  ).map((definition) =>
+    definition.aggregationStrategy === AggregationStrategy.WEIGHTED_AVERAGE
+      ? { ...definition, weightingMetricCode: 'DELIVERED' }
+      : definition,
+  ),
 ] as const;
 
 async function main() {
@@ -575,14 +963,18 @@ async function main() {
         sourceField: definition.sourceField,
         scope: definition.scope,
         unit: definition.unit,
-        aggregationStrategy: AggregationStrategy.SUM,
+        aggregationStrategy:
+          definition.aggregationStrategy ?? AggregationStrategy.SUM,
+        weightingMetricCode: definition.weightingMetricCode ?? null,
+        nonNegative: definition.nonNegative ?? true,
         retentionDays: definition.retentionDays ?? null,
         active: true,
       },
       create: {
         ...definition,
         definitionVersion: 1,
-        aggregationStrategy: AggregationStrategy.SUM,
+        aggregationStrategy:
+          definition.aggregationStrategy ?? AggregationStrategy.SUM,
       },
     });
   if (process.env.SEED_ADMIN_EMAIL && process.env.SEED_ADMIN_PASSWORD) {

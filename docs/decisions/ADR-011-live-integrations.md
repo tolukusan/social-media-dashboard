@@ -4,11 +4,11 @@ Date: 2026-10-08. Status: implemented locally under the stakeholder's explicit i
 
 ## Decision
 
-Build Facebook Ads and Instagram Ads using Meta advertising insights, LinkedIn Ads using advertising reporting, and Zoho Campaigns using campaign-report snapshots. The stakeholder's clarification selects campaign/advertising/performance ingestion; Zoho Campaigns is the stated implementation assumption. Unnamed providers and organic social-account connectors are not claimed supported.
+This ADR governs the existing paid-campaign and email-campaign integrations: Facebook Ads and Instagram Ads use Meta advertising insights, LinkedIn Ads uses advertising reporting, and Zoho Campaigns uses campaign-report snapshots. The stakeholder's clarification selects campaign/advertising/performance ingestion; Zoho Campaigns is the stated implementation assumption. Account-level social analytics and its OAuth flow are specified separately in [Account-first connected analytics](../product/account-first-connected-analytics.md); they do not change the campaign data model or metric boundaries in this ADR.
 
 Keep the NestJS modular monolith and PostgreSQL. `IntegrationConnection` belongs to `Platform`; `IntegrationMapping` identifies one external campaign and one local `CampaignPlatform`; `IntegrationRun` records a bounded sync attempt. A campaign-platform has at most one integration mapping so automatic imports cannot combine overlapping external campaign scopes accidentally. Mappings are retained as provenance. Deactivation/disconnection preserves imported history.
 
-Read-only access tokens are managed by the operator in ignored server environment configuration. Connections store only an allowlisted `INTEGRATION_*_ACCESS_TOKEN` reference, with provider API versions set separately. The UI accepts no token values. This initial implementation does not add browser OAuth redirects or token refresh; the operator obtains and replaces OAuth access tokens through the provider's approved developer setup. Missing credentials block provider calls, not connection setup.
+For the campaign integrations governed by this ADR, read-only access tokens are managed by the operator in ignored server environment configuration. Connections store only an allowlisted `INTEGRATION_*_ACCESS_TOKEN` reference, with provider API versions set separately. The UI accepts no token values. This campaign integration flow does not add browser OAuth redirects or token refresh; the operator obtains and replaces OAuth access tokens through the provider's approved developer setup. Missing credentials block provider calls, not connection setup.
 
 ## Data and scheduling
 

@@ -1,0 +1,42 @@
+{
+  "accountInsights": {
+    "data": [
+      {
+        "name": "views",
+        "values": [{ "value": 142, "end_time": "2026-10-14T07:00:00+0000" }]
+      },
+      {
+        "name": "reach",
+        "values": [{ "value": 93, "end_time": "2026-10-14T07:00:00+0000" }]
+      },
+      {
+        "name": "total_interactions",
+        "values": [{ "value": 17, "end_time": "2026-10-14T07:00:00+0000" }]
+      }
+    ]
+  },
+  "profile": {
+    "id": "17841400000000001",
+    "username": "fixture_creator",
+    "name": "Fixture Creator",
+    "followers_count": "812"
+  },
+  "media": {
+    "data": [
+      {
+        "id": "17900000000000001",
+        "caption": "A useful fixture caption",
+        "media_type": "IMAGE",
+        "permalink": "https://www.instagram.com/p/fixture-post/",
+        "timestamp": "2026-10-14T10:00:00+0000"
+      }
+    ]
+  },
+  "mediaInsights": {
+    "data": [
+      { "name": "views", "values": [{ "value": 38 }] },
+      { "name": "reach", "values": [{ "value": 25 }] },
+      { "name": "total_interactions", "values": [{ "value": 7 }] }
+    ]
+  }
+}

@@ -28,6 +28,25 @@ const apiPort = 4201;
 const webPort = 3101;
 const apiUrl = `http://localhost:${apiPort}/api/v1`;
 const webUrl = `http://localhost:${webPort}`;
+const providerEnvironment = {
+  INTEGRATION_OAUTH_REDIRECT_URI: '',
+  INTEGRATION_TOKEN_ENCRYPTION_KEY: '',
+  INTEGRATION_META_APP_ID: '',
+  INTEGRATION_META_APP_SECRET: '',
+  INTEGRATION_META_API_VERSION: '',
+  INTEGRATION_META_ACCESS_TOKEN: '',
+  INTEGRATION_LINKEDIN_CLIENT_ID: '',
+  INTEGRATION_LINKEDIN_CLIENT_SECRET: '',
+  INTEGRATION_LINKEDIN_API_VERSION: '',
+  INTEGRATION_LINKEDIN_ACCESS_TOKEN: '',
+  INTEGRATION_GOOGLE_CLIENT_ID: '',
+  INTEGRATION_GOOGLE_CLIENT_SECRET: '',
+  INTEGRATION_ZOHO_CLIENT_ID: '',
+  INTEGRATION_ZOHO_CLIENT_SECRET: '',
+  INTEGRATION_ZOHO_REGION: 'US',
+  INTEGRATION_ZOHO_ACCESS_TOKEN: '',
+  INTEGRATIONS_SCHEDULER_ENABLED: 'false',
+};
 
 async function assertPortAvailable(port: number) {
   await new Promise<void>((resolve, reject) => {
@@ -56,7 +75,7 @@ function runNode(args: string[], cwd: string, env: NodeJS.ProcessEnv) {
 }
 
 async function waitFor(url: string, children: ChildProcess[]) {
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     if (children.some((child) => child.exitCode !== null))
       throw new Error('A local E2E server exited during startup.');
@@ -68,7 +87,7 @@ async function waitFor(url: string, children: ChildProcess[]) {
     }
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
-  throw new Error('A local E2E server did not become ready within 30 seconds.');
+  throw new Error('A local E2E server did not become ready within 90 seconds.');
 }
 
 await assertPortAvailable(apiPort);
@@ -76,6 +95,7 @@ await assertPortAvailable(webPort);
 
 const env: NodeJS.ProcessEnv = {
   ...process.env,
+  ...providerEnvironment,
   DATABASE_URL: databaseUrl,
   TEST_DATABASE_URL: databaseUrl,
   API_PORT: String(apiPort),
