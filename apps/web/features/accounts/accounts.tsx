@@ -182,6 +182,12 @@ function friendlySyncError(code: string | null) {
 }
 
 function syncHealth(account: ConnectedAccount) {
+  if (!account.active)
+    return {
+      label: 'Disconnected',
+      detail: 'Syncing has stopped. Historical analytics are retained.',
+      tone: 'stale',
+    };
   if (account.lastSyncErrorCode) {
     const error = friendlySyncError(account.lastSyncErrorCode);
     return {
@@ -538,7 +544,7 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
   async function disconnectAccount(account: ConnectedAccount) {
     if (
       !window.confirm(
-        `Disconnect ${account.displayName} and delete its stored provider data?`,
+        `Disconnect ${account.displayName}? Syncing will stop and its permitted historical analytics will remain available.`,
       )
     )
       return;
@@ -557,7 +563,6 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
       await queryClient.invalidateQueries({
         queryKey: ['connected-accounts', currentUser.id],
       });
-      setSelectedId('');
       const revocationMessage = {
         revoked: 'Provider access was revoked.',
         already_inactive: 'The provider grant was already inactive.',
@@ -569,13 +574,43 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
           'Provider access could not be confirmed as revoked; review the provider connected app settings.',
       }[result.providerAccessRevocation];
       setMessage(
-        `${account.displayName} was disconnected and its stored provider data was deleted. ${revocationMessage}`,
+        `${account.displayName} was disconnected. Historical analytics were retained. ${revocationMessage}`,
       );
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
           : 'Could not disconnect this account.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteAccountData(account: ConnectedAccount) {
+    if (
+      !window.confirm(
+        `Permanently delete ${account.displayName} and all retained analytics history? This cannot be undone.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await apiRequest(`/accounts/${account.id}/data`, { method: 'DELETE' });
+      await queryClient.invalidateQueries({
+        queryKey: ['connected-accounts', currentUser.id],
+      });
+      if (selectedId === account.id) setSelectedId('');
+      setMessage(
+        `${account.displayName} and its retained analytics history were deleted.`,
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Could not delete this account’s stored data.',
       );
     } finally {
       setBusy(false);
@@ -790,7 +825,7 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
                       <small>{health.detail}</small>
                     </span>
                   </button>
-                  {isAdmin && (
+                  {isAdmin && account.active && (
                     <button
                       className="text-button disconnect-button"
                       type="button"
@@ -798,6 +833,16 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
                       onClick={() => void disconnectAccount(account)}
                     >
                       Disconnect
+                    </button>
+                  )}
+                  {isAdmin && !account.active && (
+                    <button
+                      className="text-button disconnect-button"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void deleteAccountData(account)}
+                    >
+                      Delete stored data
                     </button>
                   )}
                 </div>
@@ -976,12 +1021,18 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
               <p>
                 {from} to {to} · Compared with the preceding period
               </p>
+              {!selected.active && (
+                <p role="status">
+                  This account is disconnected. Historical analytics remain
+                  available.
+                </p>
+              )}
             </div>
             <div className="account-actions">
               <button
                 className="secondary"
                 type="button"
-                disabled={busy || analyticsQuery.isFetching}
+                disabled={!selected.active || busy || analyticsQuery.isFetching}
                 onClick={() => void syncNow()}
               >
                 {busy ? 'Working…' : 'Sync this period'}
@@ -1319,7 +1370,7 @@ export function Accounts({ currentUser }: { currentUser: CurrentUser }) {
                   <button
                     className="secondary"
                     type="button"
-                    disabled={busy}
+                    disabled={!selected.active || busy}
                     onClick={() => void syncNow()}
                   >
                     {busy ? 'Working…' : 'Refresh email reports'}

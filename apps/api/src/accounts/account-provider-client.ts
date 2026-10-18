@@ -80,6 +80,18 @@ function providerDate(value: unknown): string | null {
 
 @Injectable()
 export class AccountProviderClient {
+  sourceApiVersion(provider: ConnectedAccountProvider) {
+    if (provider === 'INSTAGRAM' || provider === 'FACEBOOK')
+      return `Meta Graph ${process.env.INTEGRATION_META_API_VERSION ?? 'configured-version'}`;
+    if (provider === 'LINKEDIN')
+      return (
+        process.env.INTEGRATION_LINKEDIN_API_VERSION ??
+        'LinkedIn API version configured by app'
+      );
+    if (provider === 'YOUTUBE') return 'YouTube Data API v3 / Analytics API v2';
+    return 'Zoho Campaigns API v1.1';
+  }
+
   private timeoutMs = 12_000;
 
   authorizationUrl(
@@ -556,7 +568,7 @@ export class AccountProviderClient {
     account: {
       provider: ConnectedAccountProvider;
       externalAccountId: string;
-      credentialCiphertext: string;
+      credentialCiphertext?: string | null;
     },
     credentials: OAuthCredentials,
     from: string,

@@ -337,13 +337,6 @@ enum ConnectedAccountKind {
   @@schema("social_media_dashboard")
 }
 
-enum AccountMetricScope {
-  DAILY
-  SNAPSHOT
-
-  @@schema("social_media_dashboard")
-}
-
 model AccountOAuthState {
   id         String                   @id @default(uuid()) @db.Uuid
   provider   ConnectedAccountProvider
@@ -359,87 +352,28 @@ model AccountOAuthState {
 }
 
 model ConnectedAccount {
-  id                       String                   @id @default(uuid()) @db.Uuid
+  id                       String                            @id @default(uuid()) @db.Uuid
   provider                 ConnectedAccountProvider
   kind                     ConnectedAccountKind
-  externalAccountId        String                   @db.VarChar(180)
-  displayName              String                   @db.VarChar(160)
-  handle                   String?                  @db.VarChar(160)
-  profileUrl               String?                  @db.VarChar(500)
+  externalAccountId        String                            @db.VarChar(180)
+  displayName              String                            @db.VarChar(160)
+  handle                   String?                           @db.VarChar(160)
+  profileUrl               String?                           @db.VarChar(500)
   profileMetadataExpiresAt DateTime?
-  credentialCiphertext     String                   @db.Text
+  credentialCiphertext     String?                           @db.Text
   tokenExpiresAt           DateTime?
-  connectedByUserId        String                   @db.Uuid
-  connectedByUser          User                     @relation(fields: [connectedByUserId], references: [id], onDelete: Restrict)
-  active                   Boolean                  @default(true)
-  connectedAt              DateTime                 @default(now())
+  connectedByUserId        String                            @db.Uuid
+  connectedByUser          User                              @relation(fields: [connectedByUserId], references: [id], onDelete: Restrict)
+  active                   Boolean                           @default(true)
+  connectedAt              DateTime                          @default(now())
   lastSyncedAt             DateTime?
-  lastSyncErrorCode        String?                  @db.VarChar(60)
-  dailyMetrics             AccountDailyMetric[]
-  posts                    AccountPostSnapshot[]
-  emailCampaigns           EmailCampaignSnapshot[]
-  createdAt                DateTime                 @default(now())
-  updatedAt                DateTime                 @updatedAt
+  lastSyncErrorCode        String?                           @db.VarChar(60)
+  accountAnalyticsRecords  ConnectedAccountAnalyticsRecord[]
+  createdAt                DateTime                          @default(now())
+  updatedAt                DateTime                          @updatedAt
 
   @@unique([provider, externalAccountId])
   @@index([kind, active, provider])
-  @@schema("social_media_dashboard")
-}
-
-model AccountDailyMetric {
-  id           String             @id @default(uuid()) @db.Uuid
-  accountId    String             @db.Uuid
-  account      ConnectedAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  metricCode   String             @db.VarChar(64)
-  sourceMetric String             @db.VarChar(100)
-  metricDate   DateTime           @db.Date
-  scope        AccountMetricScope @default(DAILY)
-  value        Decimal            @db.Decimal(24, 6)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-
-  @@unique([accountId, metricCode, metricDate, scope])
-  @@index([accountId, metricDate])
-  @@schema("social_media_dashboard")
-}
-
-model AccountPostSnapshot {
-  id             String           @id @default(uuid()) @db.Uuid
-  accountId      String           @db.Uuid
-  account        ConnectedAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  externalPostId String           @db.VarChar(180)
-  title          String?          @db.VarChar(500)
-  postType       String?          @db.VarChar(80)
-  permalink      String?          @db.VarChar(1000)
-  publishedAt    DateTime?
-  periodFrom     DateTime         @db.Date
-  periodTo       DateTime         @db.Date
-  dataScope      String           @default("LIFETIME") @db.VarChar(20)
-  metricValues   Json
-  observedAt     DateTime         @default(now())
-  expiresAt      DateTime?
-  createdAt      DateTime         @default(now())
-
-  @@unique([accountId, externalPostId, periodFrom, periodTo])
-  @@index([accountId, publishedAt])
-  @@index([expiresAt])
-  @@schema("social_media_dashboard")
-}
-
-model EmailCampaignSnapshot {
-  id                 String           @id @default(uuid()) @db.Uuid
-  accountId          String           @db.Uuid
-  account            ConnectedAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  externalCampaignId String           @db.VarChar(180)
-  campaignName       String           @db.VarChar(300)
-  sentAt             DateTime?
-  observedAt         DateTime         @default(now())
-  metricValues       Json
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-
-  @@unique([accountId, externalCampaignId])
-  @@index([accountId, sentAt])
   @@schema("social_media_dashboard")
 }
 
@@ -511,6 +445,15 @@ model IntegrationRun {
 enum AccountAnalyticsScope {
   ACCOUNT
   CONTENT
+  EMAIL_CAMPAIGN
+
+  @@schema("social_media_dashboard")
+}
+
+enum AccountAnalyticsDataScope {
+  LIFETIME
+  DATE_RANGE
+  CUMULATIVE
 
   @@schema("social_media_dashboard")
 }
@@ -540,20 +483,33 @@ model IntegrationMetricDefinition {
 }
 
 model ConnectedAccountAnalyticsRecord {
-  id               String                        @id @default(uuid()) @db.Uuid
-  connectionId     String                        @db.Uuid
-  connection       IntegrationConnection         @relation(fields: [connectionId], references: [id], onDelete: Restrict)
-  recordDate       DateTime                      @db.Date
-  scope            AccountAnalyticsScope         @default(ACCOUNT)
-  sourceObjectId   String                        @default("ACCOUNT") @db.VarChar(160)
-  sourceApiVersion String?                       @db.VarChar(40)
-  retrievedAt      DateTime                      @default(now())
-  metricValues     ConnectedAccountMetricValue[]
-  createdAt        DateTime                      @default(now())
-  updatedAt        DateTime                      @updatedAt
+  id                   String                        @id @default(uuid()) @db.Uuid
+  connectionId         String?                       @db.Uuid
+  connection           IntegrationConnection?        @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  connectedAccountId   String?                       @db.Uuid
+  connectedAccount     ConnectedAccount?             @relation(fields: [connectedAccountId], references: [id], onDelete: Restrict)
+  sourceObservationKey String?                       @db.VarChar(512)
+  recordDate           DateTime                      @db.Date
+  scope                AccountAnalyticsScope         @default(ACCOUNT)
+  sourceObjectId       String                        @default("ACCOUNT") @db.VarChar(180)
+  objectTitle          String?                       @db.VarChar(500)
+  objectType           String?                       @db.VarChar(80)
+  objectUrl            String?                       @db.VarChar(1000)
+  objectOccurredAt     DateTime?
+  periodFrom           DateTime?                     @db.Date
+  periodTo             DateTime?                     @db.Date
+  dataScope            AccountAnalyticsDataScope?
+  sourceApiVersion     String?                       @db.VarChar(80)
+  retrievedAt          DateTime                      @default(now())
+  metricValues         ConnectedAccountMetricValue[]
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
 
   @@unique([connectionId, recordDate, scope, sourceObjectId])
+  @@unique([connectedAccountId, sourceObservationKey])
   @@index([connectionId, recordDate])
+  @@index([connectedAccountId, scope, recordDate])
+  @@index([connectedAccountId, scope, objectOccurredAt])
   @@schema("social_media_dashboard")
 }
 

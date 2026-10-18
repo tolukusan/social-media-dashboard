@@ -130,4 +130,13 @@ export class ConnectedAccountsController {
   ) {
     return this.accounts.disconnect(id, user.id);
   }
+
+  @Delete(':id/data')
+  @Roles('ADMIN')
+  deleteData(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.accounts.deleteData(id, user.id);
+  }
 }

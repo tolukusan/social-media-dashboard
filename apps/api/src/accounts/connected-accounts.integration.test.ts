@@ -264,10 +264,24 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
   afterAll(async () => {
     vi.restoreAllMocks();
     await app?.close();
-    if (accountIds.length)
+    if (accountIds.length) {
+      const analyticsRecords =
+        await prisma.connectedAccountAnalyticsRecord.findMany({
+          where: { connectedAccountId: { in: accountIds } },
+          select: { id: true },
+        });
+      const recordIds = analyticsRecords.map((record) => record.id);
+      if (recordIds.length)
+        await prisma.connectedAccountMetricValue.deleteMany({
+          where: { recordId: { in: recordIds } },
+        });
+      await prisma.connectedAccountAnalyticsRecord.deleteMany({
+        where: { connectedAccountId: { in: accountIds } },
+      });
       await prisma.connectedAccount.deleteMany({
         where: { id: { in: accountIds } },
       });
+    }
     if (userIds.length) {
       await prisma.connectedAccount.deleteMany({
         where: { connectedByUserId: { in: userIds } },
@@ -285,7 +299,7 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
     vi.unstubAllEnvs();
   });
 
-  it('connects, syncs, reports, and deletes account data through the real HTTP and database path', async () => {
+  it('connects, syncs, reports, disconnects with retained history, then deletes data explicitly', async () => {
     const socialAccount = await connect('FACEBOOK');
     expect(exchangeCode).toHaveBeenCalledWith(
       'FACEBOOK',
@@ -412,12 +426,15 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
       Buffer.from(await emailPdf.arrayBuffer()).toString('ascii', 0, 5),
     ).toBe('%PDF-');
 
-    const deleted = await request(`/accounts/${emailAccount.id}`, 'DELETE');
-    expect(deleted.status).toBe(200);
-    expect(await deleted.json()).toMatchObject({
+    const disconnected = await request(
+      `/accounts/${emailAccount.id}`,
+      'DELETE',
+    );
+    expect(disconnected.status).toBe(200);
+    expect(await disconnected.json()).toMatchObject({
       id: emailAccount.id,
       disconnected: true,
-      providerDataDeleted: true,
+      historicalAnalyticsRetained: true,
       providerAccessRevocation: 'revoked',
     });
     expect(revokeCredentials).toHaveBeenCalledWith(
@@ -428,11 +445,37 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
       await prisma.connectedAccount.findUnique({
         where: { id: emailAccount.id },
       }),
+    ).toMatchObject({ active: false, credentialCiphertext: null });
+    expect(
+      await prisma.connectedAccountAnalyticsRecord.count({
+        where: { connectedAccountId: emailAccount.id, scope: 'EMAIL_CAMPAIGN' },
+      }),
+    ).toBeGreaterThan(0);
+    const retainedReport = await request(
+      `/accounts/${emailAccount.id}/email-report?from=${from}&to=${to}`,
+    );
+    expect(retainedReport.status).toBe(200);
+    expect((await retainedReport.json()).campaignCount).toBe(1);
+
+    const deleted = await request(
+      `/accounts/${emailAccount.id}/data`,
+      'DELETE',
+    );
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toMatchObject({
+      id: emailAccount.id,
+      deleted: true,
+      historicalAnalyticsDeleted: true,
+    });
+    expect(
+      await prisma.connectedAccount.findUnique({
+        where: { id: emailAccount.id },
+      }),
     ).toBeNull();
     expect(
-      await prisma.emailCampaignSnapshot.findMany({
-        where: { accountId: emailAccount.id },
+      await prisma.connectedAccountAnalyticsRecord.count({
+        where: { connectedAccountId: emailAccount.id },
       }),
-    ).toEqual([]);
+    ).toBe(0);
   });
 });

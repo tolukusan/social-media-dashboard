@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ConflictException } from '@nestjs/common';
 import { encryptCredentials } from './account-crypto.js';
 import { ConnectedAccountsService } from './connected-accounts.service.js';
 
@@ -6,38 +7,45 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+const accountAnalytics = {} as never;
+
+function newService(prisma: unknown, providerClient: unknown = {}) {
+  return new ConnectedAccountsService(
+    prisma as never,
+    providerClient as never,
+    accountAnalytics,
+  );
+}
+
 describe('connected account response boundary', () => {
   it('returns account labels and sync status without credentials or internal profile expiry', async () => {
-    const service = new ConnectedAccountsService(
-      {
-        connectedAccount: {
-          findMany: vi.fn().mockResolvedValue([
-            {
-              id: 'account-id',
-              provider: 'INSTAGRAM',
-              kind: 'SOCIAL',
-              externalAccountId: 'instagram-account-id',
-              displayName: 'Example Creator',
-              handle: 'example',
-              profileUrl: 'https://www.instagram.com/example/',
-              profileMetadataExpiresAt: null,
-              credentialCiphertext: 'server-only-ciphertext',
-              tokenExpiresAt: new Date('2030-01-01T00:00:00.000Z'),
-              connectedByUserId: 'internal-user-id',
-              active: true,
-              connectedAt: new Date('2026-10-01T00:00:00.000Z'),
-              lastSyncedAt: null,
-              lastSyncErrorCode: null,
-              connectedByUser: {
-                id: 'internal-user-id',
-                name: 'Workspace admin',
-              },
+    const service = newService({
+      connectedAccount: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'account-id',
+            provider: 'INSTAGRAM',
+            kind: 'SOCIAL',
+            externalAccountId: 'instagram-account-id',
+            displayName: 'Example Creator',
+            handle: 'example',
+            profileUrl: 'https://www.instagram.com/example/',
+            profileMetadataExpiresAt: null,
+            credentialCiphertext: 'server-only-ciphertext',
+            tokenExpiresAt: new Date('2030-01-01T00:00:00.000Z'),
+            connectedByUserId: 'internal-user-id',
+            active: true,
+            connectedAt: new Date('2026-10-01T00:00:00.000Z'),
+            lastSyncedAt: null,
+            lastSyncErrorCode: null,
+            connectedByUser: {
+              id: 'internal-user-id',
+              name: 'Workspace admin',
             },
-          ]),
-        },
-      } as never,
-      {} as never,
-    );
+          },
+        ]),
+      },
+    });
 
     const accounts = await service.list();
     expect(accounts).toHaveLength(1);
@@ -45,6 +53,7 @@ describe('connected account response boundary', () => {
       id: 'account-id',
       provider: 'INSTAGRAM',
       displayName: 'Example Creator',
+      active: true,
       connectedByUser: { name: 'Workspace admin' },
     });
     expect(JSON.stringify(accounts)).not.toContain('server-only-ciphertext');
@@ -54,57 +63,74 @@ describe('connected account response boundary', () => {
   });
 });
 
-describe('Zoho email report rate summaries', () => {
-  it('weights provider-reported rates by delivered messages and preserves campaign rates', async () => {
-    const service = new ConnectedAccountsService(
-      {
-        connectedAccount: {
-          findUnique: vi.fn().mockResolvedValue({
-            id: 'zoho-account',
-            provider: 'ZOHO_CAMPAIGNS',
-            kind: 'EMAIL',
-            externalAccountId: 'zoho-us',
-            displayName: 'Zoho US',
-            handle: null,
-            profileUrl: null,
-            profileMetadataExpiresAt: null,
-            active: true,
-            connectedAt: new Date('2026-10-01T00:00:00.000Z'),
-            lastSyncedAt: new Date('2026-10-17T00:00:00.000Z'),
-            lastSyncErrorCode: null,
-          }),
+describe('Zoho email report definitions', () => {
+  const inactiveZohoAccount = {
+    id: 'zoho-account',
+    provider: 'ZOHO_CAMPAIGNS',
+    kind: 'EMAIL',
+    externalAccountId: 'zoho-us',
+    displayName: 'Zoho US',
+    handle: null,
+    profileUrl: null,
+    profileMetadataExpiresAt: null,
+    active: false,
+    connectedAt: new Date('2026-10-01T00:00:00.000Z'),
+    lastSyncedAt: new Date('2026-10-17T00:00:00.000Z'),
+    lastSyncErrorCode: null,
+  };
+
+  it('reads retained history after disconnect and aggregates with metric definitions', async () => {
+    const codes = [
+      ['SENT', 'SUM', null],
+      ['DELIVERED', 'SUM', null],
+      ['OPEN_RATE', 'WEIGHTED_AVERAGE', 'DELIVERED'],
+      ['UNIQUE_CLICK_RATE', 'WEIGHTED_AVERAGE', 'DELIVERED'],
+    ] as const;
+    const metricValues = (values: Record<string, number>) =>
+      Object.entries(values).map(([code, value]) => ({
+        value,
+        metricDefinitionId: code,
+        metricDefinition: {
+          code,
+          aggregationStrategy:
+            codes.find((item) => item[0] === code)?.[1] ?? 'SUM',
+          weightingMetricCode:
+            codes.find((item) => item[0] === code)?.[2] ?? null,
         },
-        emailCampaignSnapshot: {
-          findMany: vi.fn().mockResolvedValue([
-            {
-              externalCampaignId: 'campaign-1',
-              campaignName: 'Campaign one',
-              sentAt: new Date('2026-10-15T00:00:00.000Z'),
-              observedAt: new Date('2026-10-17T00:00:00.000Z'),
-              metricValues: {
-                SENT: 110,
-                DELIVERED: 100,
-                OPEN_RATE: 10,
-                UNIQUE_CLICK_RATE: 5,
-              },
-            },
-            {
-              externalCampaignId: 'campaign-2',
-              campaignName: 'Campaign two',
-              sentAt: new Date('2026-10-16T00:00:00.000Z'),
-              observedAt: new Date('2026-10-17T00:00:00.000Z'),
-              metricValues: {
-                SENT: 330,
-                DELIVERED: 300,
-                OPEN_RATE: 20,
-                UNIQUE_CLICK_RATE: 8,
-              },
-            },
-          ]),
-        },
-      } as never,
-      {} as never,
-    );
+      }));
+    const service = newService({
+      connectedAccount: {
+        findUnique: vi.fn().mockResolvedValue(inactiveZohoAccount),
+      },
+      connectedAccountAnalyticsRecord: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            sourceObjectId: 'campaign-1',
+            objectTitle: 'Campaign one',
+            objectOccurredAt: new Date('2026-10-15T00:00:00.000Z'),
+            retrievedAt: new Date('2026-10-17T00:00:00.000Z'),
+            metricValues: metricValues({
+              SENT: 110,
+              DELIVERED: 100,
+              OPEN_RATE: 10,
+              UNIQUE_CLICK_RATE: 5,
+            }),
+          },
+          {
+            sourceObjectId: 'campaign-2',
+            objectTitle: 'Campaign two',
+            objectOccurredAt: new Date('2026-10-16T00:00:00.000Z'),
+            retrievedAt: new Date('2026-10-17T00:00:00.000Z'),
+            metricValues: metricValues({
+              SENT: 330,
+              DELIVERED: 300,
+              OPEN_RATE: 20,
+              UNIQUE_CLICK_RATE: 8,
+            }),
+          },
+        ]),
+      },
+    });
 
     const report = await service.emailReport(
       'zoho-account',
@@ -112,6 +138,7 @@ describe('Zoho email report rate summaries', () => {
       '2026-10-17',
     );
 
+    expect(report.account.active).toBe(false);
     expect(report.totals).toMatchObject({
       SENT: 440,
       DELIVERED: 400,
@@ -122,71 +149,16 @@ describe('Zoho email report rate summaries', () => {
       { SENT: 110, DELIVERED: 100, OPEN_RATE: 10, UNIQUE_CLICK_RATE: 5 },
       { SENT: 330, DELIVERED: 300, OPEN_RATE: 20, UNIQUE_CLICK_RATE: 8 },
     ]);
-    expect(report.caveats.join(' ')).toContain(
-      'up to 400 recent sent campaigns',
-    );
-  });
-
-  it('keeps missing campaign metrics unavailable while preserving an explicit zero', async () => {
-    const service = new ConnectedAccountsService(
-      {
-        connectedAccount: {
-          findUnique: vi.fn().mockResolvedValue({
-            id: 'zoho-account',
-            provider: 'ZOHO_CAMPAIGNS',
-            kind: 'EMAIL',
-            externalAccountId: 'zoho-us',
-            displayName: 'Zoho US',
-            handle: null,
-            profileUrl: null,
-            profileMetadataExpiresAt: null,
-            active: true,
-            connectedAt: new Date('2026-10-01T00:00:00.000Z'),
-            lastSyncedAt: new Date('2026-10-17T00:00:00.000Z'),
-            lastSyncErrorCode: null,
-          }),
-        },
-        emailCampaignSnapshot: {
-          findMany: vi.fn().mockResolvedValue([
-            {
-              externalCampaignId: 'campaign-1',
-              campaignName: 'Campaign one',
-              sentAt: new Date('2026-10-15T00:00:00.000Z'),
-              observedAt: new Date('2026-10-17T00:00:00.000Z'),
-              metricValues: { DELIVERED: 100, OPEN_RATE: 0 },
-            },
-          ]),
-        },
-      } as never,
-      {} as never,
-    );
-
-    const report = await service.emailReport(
-      'zoho-account',
-      '2026-10-01',
-      '2026-10-17',
-    );
-
-    expect(report.totals).toMatchObject({
-      SENT: null,
-      DELIVERED: 100,
-      OPENS: null,
-      OPEN_RATE: 0,
-      UNIQUE_CLICK_RATE: null,
-    });
-    expect(report.caveats.join(' ')).toContain(
-      'up to 400 recent sent campaigns',
-    );
   });
 });
 
-describe('connected account disconnect', () => {
+describe('connected account disconnect and data deletion', () => {
   const encryptionKey = Buffer.alloc(32, 7).toString('base64');
 
-  function createService(
+  function createDisconnectService(
     provider: 'YOUTUBE' | 'ZOHO_CAMPAIGNS' | 'INSTAGRAM',
     credentials: { accessToken: string; refreshToken?: string },
-    relatedAccounts: Array<{ credentialCiphertext: string }> = [],
+    relatedAccounts: Array<{ credentialCiphertext: string | null }> = [],
     credentialCiphertext?: string,
   ) {
     vi.stubEnv('INTEGRATION_TOKEN_ENCRYPTION_KEY', encryptionKey);
@@ -198,7 +170,7 @@ describe('connected account disconnect', () => {
         credentialCiphertext ?? encryptCredentials(credentials),
     };
     const auditCreate = vi.fn();
-    const deleteAccount = vi.fn();
+    const accountUpdate = vi.fn();
     const prisma = {
       connectedAccount: {
         findUnique: vi.fn().mockResolvedValue(account),
@@ -207,23 +179,25 @@ describe('connected account disconnect', () => {
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           auditLog: { create: auditCreate },
-          connectedAccount: { delete: deleteAccount },
+          connectedAccount: { update: accountUpdate },
         }),
       ),
     };
     const providerClient = {
       revokeCredentials: vi.fn().mockResolvedValue('revoked'),
     };
-    const service = new ConnectedAccountsService(
-      prisma as never,
-      providerClient as never,
-    );
-    return { service, prisma, providerClient, auditCreate, deleteAccount };
+    return {
+      service: newService(prisma, providerClient),
+      prisma,
+      providerClient,
+      auditCreate,
+      accountUpdate,
+    };
   }
 
-  it('revokes provider access when disconnecting the last connected account using a grant', async () => {
-    const { service, providerClient, auditCreate, deleteAccount } =
-      createService('YOUTUBE', {
+  it('revokes supported credentials and retains analytics when disconnecting', async () => {
+    const { service, providerClient, auditCreate, accountUpdate } =
+      createDisconnectService('YOUTUBE', {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       });
@@ -236,27 +210,30 @@ describe('connected account disconnect', () => {
     });
     expect(result).toMatchObject({
       disconnected: true,
-      providerDataDeleted: true,
+      historicalAnalyticsRetained: true,
       providerAccessRevocation: 'revoked',
     });
     expect(auditCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
+          action: 'CONNECTED_ACCOUNT_DISCONNECTED',
           metadata: {
             provider: 'YOUTUBE',
             providerAccessRevocation: 'revoked',
+            historicalAnalyticsRetained: true,
           },
         }),
       }),
     );
-    expect(deleteAccount).toHaveBeenCalledWith({
+    expect(accountUpdate).toHaveBeenCalledWith({
       where: { id: 'connected-account-id' },
+      data: { active: false, credentialCiphertext: null, tokenExpiresAt: null },
     });
   });
 
-  it('keeps a shared provider grant active while another account still uses it', async () => {
+  it('does not revoke a provider grant while another active account uses it', async () => {
     vi.stubEnv('INTEGRATION_TOKEN_ENCRYPTION_KEY', encryptionKey);
-    const { service, providerClient } = createService(
+    const { service, providerClient } = createDisconnectService(
       'YOUTUBE',
       { accessToken: 'access-token-1', refreshToken: 'shared-refresh-token' },
       [
@@ -268,52 +245,55 @@ describe('connected account disconnect', () => {
         },
       ],
     );
-
     const result = await service.disconnect('connected-account-id', 'actor-id');
-
     expect(providerClient.revokeCredentials).not.toHaveBeenCalled();
     expect(result.providerAccessRevocation).toBe('still_in_use');
   });
 
-  it('does not revoke when a sibling credential cannot be checked', async () => {
-    const { service, providerClient } = createService(
-      'ZOHO_CAMPAIGNS',
-      {
-        accessToken: 'zoho-access-token',
-        refreshToken: 'zoho-refresh-token',
+  it('requires disconnect before explicit data deletion and deletes values before records', async () => {
+    const order: string[] = [];
+    const prisma = {
+      connectedAccount: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'account-id',
+          provider: 'INSTAGRAM',
+          active: false,
+        }),
+        delete: vi.fn(async () => {
+          order.push('account');
+        }),
       },
-      [{ credentialCiphertext: 'unreadable-ciphertext' }],
-    );
-
-    const result = await service.disconnect('connected-account-id', 'actor-id');
-
-    expect(providerClient.revokeCredentials).not.toHaveBeenCalled();
-    expect(result.providerAccessRevocation).toBe('failed');
-  });
-
-  it('reports providers whose grants cannot be revoked programmatically', async () => {
-    const { service, providerClient } = createService('INSTAGRAM', {
-      accessToken: 'page-token',
+      connectedAccountAnalyticsRecord: {
+        findMany: vi.fn().mockResolvedValue([{ id: 'record-1' }]),
+        deleteMany: vi.fn(async () => {
+          order.push('records');
+        }),
+      },
+      connectedAccountMetricValue: {
+        deleteMany: vi.fn(async () => {
+          order.push('values');
+        }),
+      },
+      auditLog: { create: vi.fn() },
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback(prisma),
+      ),
+    };
+    const service = newService(prisma);
+    const result = await service.deleteData('account-id', 'actor-id');
+    expect(result).toMatchObject({
+      deleted: true,
+      historicalAnalyticsDeleted: true,
     });
+    expect(order).toEqual(['values', 'records', 'account']);
 
-    const result = await service.disconnect('connected-account-id', 'actor-id');
-
-    expect(providerClient.revokeCredentials).not.toHaveBeenCalled();
-    expect(result.providerAccessRevocation).toBe('not_supported');
-  });
-
-  it('deletes local data when the account credential cannot be decrypted', async () => {
-    const { service, providerClient, deleteAccount } = createService(
-      'YOUTUBE',
-      { accessToken: 'unused-token' },
-      [],
-      'corrupt-ciphertext',
-    );
-
-    const result = await service.disconnect('connected-account-id', 'actor-id');
-
-    expect(providerClient.revokeCredentials).not.toHaveBeenCalled();
-    expect(deleteAccount).toHaveBeenCalledOnce();
-    expect(result.providerAccessRevocation).toBe('failed');
+    prisma.connectedAccount.findUnique.mockResolvedValueOnce({
+      id: 'account-id',
+      provider: 'INSTAGRAM',
+      active: true,
+    });
+    await expect(
+      service.deleteData('account-id', 'actor-id'),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });

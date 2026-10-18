@@ -30,6 +30,7 @@ import {
 } from './account-crypto.js';
 import { AccountProviderClient } from './account-provider-client.js';
 import { renderAccountReportPdf } from './account-report-pdf.js';
+import { AccountAnalyticsService } from '../account-analytics/account-analytics.service.js';
 
 const accountPublicSelect = {
   id: true,
@@ -70,9 +71,11 @@ type PublicAccountInput = Pick<
 };
 
 const numberValue = (value: Prisma.Decimal | number | string) => Number(value);
+const unexpiredMetricValue = (at = new Date()) => ({
+  OR: [{ sourceDataExpiresAt: null }, { sourceDataExpiresAt: { gt: at } }],
+});
 const dateValue = (value: string) =>
   new Date(`${validDay(value)}T00:00:00.000Z`);
-const jsonValue = (value: unknown) => value as Prisma.InputJsonValue;
 
 const metricCatalog: Record<
   Exclude<ConnectedAccountProvider, 'ZOHO_CAMPAIGNS'>,
@@ -182,6 +185,13 @@ const metricCatalog: Record<
   ],
 };
 
+type AccountMetricRow = {
+  metricCode: string;
+  scope: 'DAILY' | 'SNAPSHOT';
+  metricDate: Date;
+  value: Prisma.Decimal;
+};
+
 const topPostMetric: Partial<Record<ConnectedAccountProvider, string>> = {
   INSTAGRAM: 'VIEWS',
   FACEBOOK: 'ORGANIC_VIEWS',
@@ -239,6 +249,8 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AccountProviderClient)
     private readonly providerClient: AccountProviderClient,
+    @Inject(AccountAnalyticsService)
+    private readonly accountAnalytics: AccountAnalyticsService,
   ) {}
 
   onModuleInit() {
@@ -521,7 +533,11 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
           code: 'ACCOUNT_NOT_FOUND',
           message: 'Connected account not found or disconnected.',
         });
-      await this.enforceRetention(account.provider, id);
+      if (!account.credentialCiphertext)
+        throw new AccountProviderFailure(
+          'ACCOUNT_CREDENTIALS_MISSING',
+          'Reconnect this account before syncing.',
+        );
       let credentials = decryptCredentials(account.credentialCiphertext);
       if (
         credentials.expiresAt &&
@@ -583,110 +599,64 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
     from: string,
     to: string,
   ) {
-    await this.prisma.$transaction(async (tx) => {
-      for (const metric of result.metrics)
-        await tx.accountDailyMetric.upsert({
-          where: {
-            accountId_metricCode_metricDate_scope: {
-              accountId,
-              metricCode: metric.code,
-              metricDate: dateValue(metric.date),
-              scope: metric.scope,
-            },
-          },
-          create: {
-            id: randomUUID(),
-            accountId,
-            metricCode: metric.code,
-            sourceMetric: metric.sourceMetric,
-            metricDate: dateValue(metric.date),
-            scope: metric.scope,
-            value: metric.value,
-          },
-          update: {
-            sourceMetric: metric.sourceMetric,
-            value: metric.value,
-          },
-        });
-      const fromDate = dateValue(from);
-      const toDate = dateValue(to);
-      for (const post of result.posts)
-        await tx.accountPostSnapshot.upsert({
-          where: {
-            accountId_externalPostId_periodFrom_periodTo: {
-              accountId,
-              externalPostId: post.externalPostId,
-              periodFrom: fromDate,
-              periodTo: toDate,
-            },
-          },
-          create: {
-            id: randomUUID(),
-            accountId,
-            externalPostId: post.externalPostId,
-            title: post.title,
-            postType: post.postType,
-            permalink: post.permalink,
-            publishedAt: post.publishedAt ? new Date(post.publishedAt) : null,
-            periodFrom: fromDate,
-            periodTo: toDate,
-            dataScope: post.dataScope,
-            metricValues: jsonValue(post.metricValues),
-            expiresAt: post.expiresAt
-              ? new Date(post.expiresAt)
-              : provider === 'LINKEDIN'
-                ? new Date(Date.now() + 42 * 24 * 60 * 60 * 1000)
-                : provider === 'INSTAGRAM' || provider === 'FACEBOOK'
-                  ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
-                  : null,
-          },
-          update: {
-            title: post.title,
-            postType: post.postType,
-            permalink: post.permalink,
-            publishedAt: post.publishedAt ? new Date(post.publishedAt) : null,
-            dataScope: post.dataScope,
-            metricValues: jsonValue(post.metricValues),
-            observedAt: new Date(),
-            expiresAt: post.expiresAt
-              ? new Date(post.expiresAt)
-              : provider === 'LINKEDIN'
-                ? new Date(Date.now() + 42 * 24 * 60 * 60 * 1000)
-                : provider === 'INSTAGRAM' || provider === 'FACEBOOK'
-                  ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
-                  : null,
-          },
-        });
-      for (const campaign of result.emailCampaigns)
-        await tx.emailCampaignSnapshot.upsert({
-          where: {
-            accountId_externalCampaignId: {
-              accountId,
-              externalCampaignId: campaign.externalCampaignId,
-            },
-          },
-          create: {
-            id: randomUUID(),
-            accountId,
-            externalCampaignId: campaign.externalCampaignId,
-            campaignName: campaign.campaignName,
-            sentAt: campaign.sentAt ? new Date(campaign.sentAt) : null,
-            metricValues: jsonValue(campaign.metricValues),
-          },
-          update: {
-            campaignName: campaign.campaignName,
-            sentAt: campaign.sentAt ? new Date(campaign.sentAt) : null,
-            metricValues: jsonValue(campaign.metricValues),
-            observedAt: new Date(),
-          },
-        });
-    });
-    await this.enforceRetention(provider, accountId);
+    const observations = new Map<
+      string,
+      {
+        date: string;
+        scope: 'ACCOUNT';
+        sourceObjectId: 'ACCOUNT';
+        sourceObservationKey: string;
+        values: Record<string, number>;
+      }
+    >();
+    for (const metric of result.metrics) {
+      const observation = observations.get(metric.date) ?? {
+        date: metric.date,
+        scope: 'ACCOUNT' as const,
+        sourceObjectId: 'ACCOUNT' as const,
+        sourceObservationKey: `account:${metric.date}`,
+        values: {},
+      };
+      observation.values[metric.code] = metric.value;
+      observations.set(metric.date, observation);
+    }
+    const accountObservations = [...observations.values()];
+    const contentObservations = result.posts.map((post) => ({
+      date: to,
+      scope: 'CONTENT' as const,
+      sourceObjectId: post.externalPostId,
+      sourceObservationKey: `content:${post.externalPostId}:${from}:${to}`,
+      objectTitle: post.title,
+      objectType: post.postType,
+      objectUrl: post.permalink,
+      objectOccurredAt: post.publishedAt ? new Date(post.publishedAt) : null,
+      periodFrom: from,
+      periodTo: to,
+      dataScope: post.dataScope,
+      values: post.metricValues,
+    }));
+    const campaignObservations = result.emailCampaigns.map((campaign) => ({
+      date: campaign.sentAt ? campaign.sentAt.slice(0, 10) : to,
+      scope: 'EMAIL_CAMPAIGN' as const,
+      sourceObjectId: campaign.externalCampaignId,
+      sourceObservationKey: `email:${campaign.externalCampaignId}`,
+      objectTitle: campaign.campaignName,
+      objectType: 'EMAIL CAMPAIGN',
+      objectOccurredAt: campaign.sentAt ? new Date(campaign.sentAt) : null,
+      dataScope: 'CUMULATIVE' as const,
+      values: campaign.metricValues,
+    }));
+    await this.accountAnalytics.ingestConnectedAccount(
+      accountId,
+      provider,
+      [...accountObservations, ...contentObservations, ...campaignObservations],
+      this.providerClient.sourceApiVersion(provider),
+    );
   }
 
   async analytics(id: string, from: string, to: string) {
     this.validateRange(from, to);
-    const account = await this.getActiveAccount(id);
+    const account = await this.getAccount(id);
     if (account.kind !== 'SOCIAL')
       throw new BadRequestException({
         code: 'SOCIAL_ANALYTICS_NOT_AVAILABLE',
@@ -694,60 +664,19 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
           'Choose a social account to view this dashboard. Zoho data is in Email reports.',
       });
     this.validateProviderRange(account.provider, from, to);
-    await this.enforceRetention(account.provider, account.id);
     const previous = previousRange(from, to);
-    const [rows, previousRows, posts] = await Promise.all([
-      this.prisma.accountDailyMetric.findMany({
-        where: {
-          accountId: id,
-          metricDate: { gte: dateValue(from), lte: dateValue(to) },
-        },
-        orderBy: { metricDate: 'asc' },
-      }),
-      this.prisma.accountDailyMetric.findMany({
-        where: {
-          accountId: id,
-          metricDate: {
-            gte: dateValue(previous.from),
-            lte: dateValue(previous.to),
-          },
-        },
-        orderBy: { metricDate: 'asc' },
-      }),
-      this.prisma.accountPostSnapshot.findMany({
-        where: {
-          accountId: id,
-          periodFrom: dateValue(from),
-          periodTo: dateValue(to),
-          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-        },
-        orderBy: { observedAt: 'desc' },
-      }),
-    ]);
+    const [rows, previousRows, posts, previousSnapshotRow, startSnapshot] =
+      await Promise.all([
+        this.accountMetricRows(id, from, to),
+        this.accountMetricRows(id, previous.from, previous.to),
+        this.contentObservations(id, from, to),
+        this.latestAudienceSnapshot(id, this.shiftDay(previous.to, 1)),
+        this.latestAudienceSnapshot(id, from),
+      ]);
     const currentSnapshot = this.latestSnapshot(rows, 'AUDIENCE_SIZE', to);
-    const previousSnapshot = this.latestSnapshot(
-      await this.prisma.accountDailyMetric.findMany({
-        where: {
-          accountId: id,
-          scope: 'SNAPSHOT',
-          metricCode: 'AUDIENCE_SIZE',
-          metricDate: { lte: dateValue(previous.to) },
-        },
-        orderBy: { metricDate: 'desc' },
-        take: 1,
-      }),
-      'AUDIENCE_SIZE',
-      previous.to,
-    );
-    const startSnapshot = await this.prisma.accountDailyMetric.findFirst({
-      where: {
-        accountId: id,
-        scope: 'SNAPSHOT',
-        metricCode: 'AUDIENCE_SIZE',
-        metricDate: { lt: dateValue(from) },
-      },
-      orderBy: { metricDate: 'desc' },
-    });
+    const previousSnapshot = previousSnapshotRow
+      ? numberValue(previousSnapshotRow.value)
+      : null;
     const catalog =
       metricCatalog[
         account.provider as Exclude<ConnectedAccountProvider, 'ZOHO_CAMPAIGNS'>
@@ -861,12 +790,12 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
             const metrics = post.metricValues as Record<string, unknown>;
             const value = metrics[postMetric];
             return {
-              externalPostId: post.externalPostId,
-              title: post.title,
-              postType: post.postType,
-              permalink: post.permalink,
-              publishedAt: post.publishedAt,
-              dataScope: post.dataScope,
+              externalPostId: post.sourceObjectId,
+              title: post.objectTitle,
+              postType: post.objectType,
+              permalink: post.objectUrl,
+              publishedAt: post.objectOccurredAt,
+              dataScope: post.dataScope ?? 'LIFETIME',
               metricCode: postMetric,
               metricValue:
                 typeof value === 'number' && Number.isFinite(value)
@@ -894,19 +823,48 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
 
   async emailReport(id: string, from: string, to: string) {
     this.validateRange(from, to);
-    const account = await this.getActiveAccount(id);
+    const account = await this.getAccount(id);
     if (account.provider !== 'ZOHO_CAMPAIGNS' || account.kind !== 'EMAIL')
       throw new BadRequestException({
         code: 'EMAIL_REPORT_NOT_AVAILABLE',
         message: 'Choose the Zoho Campaigns account to view email reports.',
       });
-    const campaigns = await this.prisma.emailCampaignSnapshot.findMany({
+    const records = await this.prisma.connectedAccountAnalyticsRecord.findMany({
       where: {
-        accountId: id,
-        sentAt: { gte: dateValue(from), lt: this.nextDayDate(to) },
+        connectedAccountId: id,
+        scope: 'EMAIL_CAMPAIGN',
+        objectOccurredAt: { gte: dateValue(from), lt: this.nextDayDate(to) },
+        metricValues: { some: unexpiredMetricValue() },
       },
-      orderBy: [{ sentAt: 'desc' }, { campaignName: 'asc' }],
+      include: {
+        metricValues: {
+          where: unexpiredMetricValue(),
+          include: { metricDefinition: true },
+        },
+      },
+      orderBy: [{ objectOccurredAt: 'desc' }, { objectTitle: 'asc' }],
     });
+    const campaigns = records.map((record) => ({
+      externalCampaignId: record.sourceObjectId,
+      campaignName: record.objectTitle ?? record.sourceObjectId,
+      sentAt: record.objectOccurredAt,
+      observedAt: record.retrievedAt,
+      metricValues: Object.fromEntries(
+        record.metricValues.map((value) => [
+          value.metricDefinition.code,
+          Number(value.value),
+        ]),
+      ),
+      metricDefinitions: Object.fromEntries(
+        record.metricValues.map((value) => [
+          value.metricDefinition.code,
+          {
+            aggregationStrategy: value.metricDefinition.aggregationStrategy,
+            weightingMetricCode: value.metricDefinition.weightingMetricCode,
+          },
+        ]),
+      ),
+    }));
     const totalCodes = [
       'SENT',
       'DELIVERED',
@@ -914,39 +872,58 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       'UNIQUE_CLICKS',
       'BOUNCES',
       'UNSUBSCRIBES',
+      'OPEN_RATE',
+      'UNIQUE_CLICK_RATE',
     ];
     const totals: Record<string, number | null> = Object.fromEntries(
       totalCodes.map((code) => [code, null]),
     );
-    for (const campaign of campaigns) {
-      const values = campaign.metricValues as Record<string, unknown>;
-      for (const code of totalCodes) {
-        const value = values[code];
-        if (typeof value === 'number' && Number.isFinite(value))
-          totals[code] = (totals[code] ?? 0) + value;
-      }
-    }
-    for (const code of ['OPEN_RATE', 'UNIQUE_CLICK_RATE']) {
-      totals[code] = null;
-      let weightedRate = 0;
-      let deliveredWeight = 0;
-      for (const campaign of campaigns) {
-        const values = campaign.metricValues as Record<string, unknown>;
-        const rate = values[code];
-        const delivered = values.DELIVERED;
-        if (
-          typeof rate === 'number' &&
-          Number.isFinite(rate) &&
-          typeof delivered === 'number' &&
-          Number.isFinite(delivered) &&
-          delivered > 0
-        ) {
-          weightedRate += rate * delivered;
-          deliveredWeight += delivered;
+    for (const code of totalCodes) {
+      const strategy = campaigns
+        .map(
+          (campaign) => campaign.metricDefinitions[code]?.aggregationStrategy,
+        )
+        .find(Boolean);
+      if (strategy === 'SUM') {
+        let sum = 0;
+        let found = false;
+        for (const campaign of campaigns) {
+          const value = campaign.metricValues[code];
+          if (typeof value === 'number' && Number.isFinite(value)) {
+            sum += value;
+            found = true;
+          }
         }
+        totals[code] = found ? sum : null;
+      } else if (strategy === 'WEIGHTED_AVERAGE') {
+        const weightingMetricCode = campaigns
+          .map(
+            (campaign) => campaign.metricDefinitions[code]?.weightingMetricCode,
+          )
+          .find(Boolean);
+        let weightedRate = 0;
+        let totalWeight = 0;
+        for (const campaign of campaigns) {
+          const value = campaign.metricValues[code];
+          const weight = weightingMetricCode
+            ? campaign.metricValues[weightingMetricCode]
+            : null;
+          if (
+            typeof value === 'number' &&
+            Number.isFinite(value) &&
+            typeof weight === 'number' &&
+            Number.isFinite(weight) &&
+            weight > 0
+          ) {
+            weightedRate += value * weight;
+            totalWeight += weight;
+          }
+        }
+        totals[code] =
+          totalWeight > 0
+            ? Number((weightedRate / totalWeight).toFixed(2))
+            : null;
       }
-      if (deliveredWeight > 0)
-        totals[code] = Number((weightedRate / deliveredWeight).toFixed(2));
     }
     return {
       account: this.publicAccount(account),
@@ -1030,14 +1007,17 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       account.provider === 'ZOHO_CAMPAIGNS'
     ) {
       try {
+        if (!account.credentialCiphertext)
+          throw new Error('No credential remains for revocation.');
         const credentials = decryptCredentials(account.credentialCiphertext);
         const grantToken = credentials.refreshToken ?? credentials.accessToken;
         const relatedAccounts = await this.prisma.connectedAccount.findMany({
-          where: { provider: account.provider, id: { not: id } },
+          where: { provider: account.provider, active: true, id: { not: id } },
           select: { credentialCiphertext: true },
         });
         let couldNotCheckAllCredentials = false;
         const grantIsStillUsed = relatedAccounts.some((related) => {
+          if (!related.credentialCiphertext) return false;
           try {
             const relatedCredentials = decryptCredentials(
               related.credentialCiphertext,
@@ -1064,8 +1044,7 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
             );
         }
       } catch {
-        // A provider outage, unreadable credential, or missing OAuth config
-        // must not prevent deletion of this account's local data.
+        // A provider outage or missing OAuth config must not prevent a local disconnect.
         providerAccessRevocation = 'failed';
       }
     }
@@ -1076,21 +1055,74 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
           actorUserId: actorId,
           entityType: 'ConnectedAccount',
           entityId: id,
-          action: 'CONNECTED_ACCOUNT_DISCONNECTED_AND_DATA_DELETED',
+          action: 'CONNECTED_ACCOUNT_DISCONNECTED',
           metadata: {
             provider: account.provider,
             providerAccessRevocation,
+            historicalAnalyticsRetained: true,
+          },
+        },
+      });
+      await tx.connectedAccount.update({
+        where: { id },
+        data: {
+          active: false,
+          credentialCiphertext: null,
+          tokenExpiresAt: null,
+        },
+      });
+    });
+    return {
+      id,
+      disconnected: true,
+      historicalAnalyticsRetained: true,
+      providerAccessRevocation,
+    };
+  }
+
+  async deleteData(id: string, actorId: string) {
+    const account = await this.prisma.connectedAccount.findUnique({
+      where: { id },
+      select: { id: true, provider: true, active: true },
+    });
+    if (!account)
+      throw new NotFoundException({
+        code: 'ACCOUNT_NOT_FOUND',
+        message: 'Connected account not found.',
+      });
+    if (account.active)
+      throw new ConflictException({
+        code: 'ACCOUNT_MUST_BE_DISCONNECTED',
+        message: 'Disconnect the account before deleting its stored data.',
+      });
+    await this.prisma.$transaction(async (tx) => {
+      const records = await tx.connectedAccountAnalyticsRecord.findMany({
+        where: { connectedAccountId: id },
+        select: { id: true },
+      });
+      const recordIds = records.map((record) => record.id);
+      if (recordIds.length)
+        await tx.connectedAccountMetricValue.deleteMany({
+          where: { recordId: { in: recordIds } },
+        });
+      await tx.connectedAccountAnalyticsRecord.deleteMany({
+        where: { connectedAccountId: id },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actorId,
+          entityType: 'ConnectedAccount',
+          entityId: id,
+          action: 'CONNECTED_ACCOUNT_DATA_DELETED',
+          metadata: {
+            provider: account.provider,
+            analyticsRecordsDeleted: recordIds.length,
           },
         },
       });
       await tx.connectedAccount.delete({ where: { id } });
     });
-    return {
-      id,
-      disconnected: true,
-      providerDataDeleted: true,
-      providerAccessRevocation,
-    };
+    return { id, deleted: true, historicalAnalyticsDeleted: true };
   }
 
   async runsNotApplicable() {
@@ -1107,9 +1139,7 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
         ],
       },
     });
-    await this.prisma.accountPostSnapshot.deleteMany({
-      where: { expiresAt: { lt: now } },
-    });
+    await this.accountAnalytics.purgeExpired(now);
     const expiredProfiles = await this.prisma.connectedAccount.findMany({
       where: { provider: 'LINKEDIN', profileMetadataExpiresAt: { lt: now } },
       select: { id: true, externalAccountId: true },
@@ -1124,58 +1154,6 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
           profileMetadataExpiresAt: null,
         },
       });
-    const accounts = await this.prisma.connectedAccount.findMany({
-      where: { provider: { in: ['INSTAGRAM', 'FACEBOOK', 'LINKEDIN'] } },
-      select: { id: true, provider: true },
-    });
-    for (const account of accounts)
-      await this.enforceRetention(account.provider, account.id);
-  }
-
-  private async enforceRetention(
-    provider: ConnectedAccountProvider,
-    accountId: string,
-  ) {
-    const days =
-      provider === 'INSTAGRAM' || provider === 'FACEBOOK'
-        ? 90
-        : provider === 'LINKEDIN'
-          ? 365
-          : null;
-    if (!days) return;
-    const cutoff = new Date();
-    cutoff.setUTCDate(cutoff.getUTCDate() - days);
-    await this.prisma.accountDailyMetric.deleteMany({
-      where: {
-        accountId,
-        metricDate: { lt: dateValue(cutoff.toISOString().slice(0, 10)) },
-      },
-    });
-    await this.prisma.accountPostSnapshot.deleteMany({
-      where: { accountId, expiresAt: { lt: new Date() } },
-    });
-    if (provider === 'LINKEDIN') {
-      const account = await this.prisma.connectedAccount.findUnique({
-        where: { id: accountId },
-        select: {
-          externalAccountId: true,
-          profileMetadataExpiresAt: true,
-        },
-      });
-      if (
-        account?.profileMetadataExpiresAt &&
-        account.profileMetadataExpiresAt < new Date()
-      )
-        await this.prisma.connectedAccount.update({
-          where: { id: accountId },
-          data: {
-            displayName: `LinkedIn organization ${account.externalAccountId}`,
-            handle: null,
-            profileUrl: null,
-            profileMetadataExpiresAt: null,
-          },
-        });
-    }
   }
 
   private async dailyRefresh() {
@@ -1205,27 +1183,123 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
     await this.cleanupExpiredData();
   }
 
+  private async accountMetricRows(
+    accountId: string,
+    from: string,
+    to: string,
+  ): Promise<AccountMetricRow[]> {
+    const now = new Date();
+    const records = await this.prisma.connectedAccountAnalyticsRecord.findMany({
+      where: {
+        connectedAccountId: accountId,
+        scope: 'ACCOUNT',
+        recordDate: { gte: dateValue(from), lte: dateValue(to) },
+        metricValues: { some: unexpiredMetricValue(now) },
+      },
+      include: {
+        metricValues: {
+          where: unexpiredMetricValue(now),
+          include: { metricDefinition: true },
+        },
+      },
+      orderBy: { recordDate: 'asc' },
+    });
+    return records.flatMap((record) =>
+      record.metricValues.map((item) => ({
+        metricCode: item.metricDefinition.code,
+        scope:
+          item.metricDefinition.aggregationStrategy === 'LAST'
+            ? ('SNAPSHOT' as const)
+            : ('DAILY' as const),
+        metricDate: record.recordDate,
+        value: item.value,
+      })),
+    );
+  }
+
+  private async latestAudienceSnapshot(
+    accountId: string,
+    before: string,
+  ): Promise<AccountMetricRow | null> {
+    const now = new Date();
+    const metricFilter = {
+      ...unexpiredMetricValue(now),
+      metricDefinition: { code: 'AUDIENCE_SIZE' },
+    };
+    const record = await this.prisma.connectedAccountAnalyticsRecord.findFirst({
+      where: {
+        connectedAccountId: accountId,
+        scope: 'ACCOUNT',
+        recordDate: { lt: dateValue(before) },
+        metricValues: { some: metricFilter },
+      },
+      include: {
+        metricValues: {
+          where: metricFilter,
+          include: { metricDefinition: true },
+          take: 1,
+        },
+      },
+      orderBy: { recordDate: 'desc' },
+    });
+    const item = record?.metricValues[0];
+    return record && item
+      ? {
+          metricCode: item.metricDefinition.code,
+          scope: 'SNAPSHOT',
+          metricDate: record.recordDate,
+          value: item.value,
+        }
+      : null;
+  }
+
+  private async contentObservations(
+    accountId: string,
+    from: string,
+    to: string,
+  ) {
+    const now = new Date();
+    const records = await this.prisma.connectedAccountAnalyticsRecord.findMany({
+      where: {
+        connectedAccountId: accountId,
+        scope: 'CONTENT',
+        periodFrom: dateValue(from),
+        periodTo: dateValue(to),
+        metricValues: { some: unexpiredMetricValue(now) },
+      },
+      include: {
+        metricValues: {
+          where: unexpiredMetricValue(now),
+          include: { metricDefinition: true },
+        },
+      },
+      orderBy: { retrievedAt: 'desc' },
+    });
+    return records.map((record) => ({
+      sourceObjectId: record.sourceObjectId,
+      objectTitle: record.objectTitle,
+      objectType: record.objectType,
+      objectUrl: record.objectUrl,
+      objectOccurredAt: record.objectOccurredAt,
+      dataScope: record.dataScope,
+      metricValues: Object.fromEntries(
+        record.metricValues.map((item) => [
+          item.metricDefinition.code,
+          Number(item.value),
+        ]),
+      ),
+    }));
+  }
+
   private async previousAudienceDelta(
     provider: ConnectedAccountProvider,
     accountId: string,
     range: { from: string; to: string },
   ) {
-    const rows = await this.prisma.accountDailyMetric.findMany({
-      where: {
-        accountId,
-        metricDate: { gte: dateValue(range.from), lte: dateValue(range.to) },
-      },
-      orderBy: { metricDate: 'asc' },
-    });
-    const before = await this.prisma.accountDailyMetric.findFirst({
-      where: {
-        accountId,
-        metricCode: 'AUDIENCE_SIZE',
-        scope: 'SNAPSHOT',
-        metricDate: { lt: dateValue(range.from) },
-      },
-      orderBy: { metricDate: 'desc' },
-    });
+    const [rows, before] = await Promise.all([
+      this.accountMetricRows(accountId, range.from, range.to),
+      this.latestAudienceSnapshot(accountId, range.from),
+    ]);
     const last = this.latestSnapshot(rows, 'AUDIENCE_SIZE', range.to);
     return this.audienceDelta(
       provider,
@@ -1317,13 +1391,23 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async getActiveAccount(id: string) {
-    const account = await this.prisma.connectedAccount.findUnique({
-      where: { id },
-    });
-    if (!account || !account.active)
+    const account = await this.getAccount(id);
+    if (!account.active)
       throw new NotFoundException({
         code: 'ACCOUNT_NOT_FOUND',
         message: 'Connected account not found or disconnected.',
+      });
+    return account;
+  }
+
+  private async getAccount(id: string) {
+    const account = await this.prisma.connectedAccount.findUnique({
+      where: { id },
+    });
+    if (!account)
+      throw new NotFoundException({
+        code: 'ACCOUNT_NOT_FOUND',
+        message: 'Connected account not found.',
       });
     return account;
   }
@@ -1332,7 +1416,7 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
     if (provider === 'INSTAGRAM' || provider === 'FACEBOOK')
       return { reportingDays: 90, postSnapshotDays: 90 };
     if (provider === 'LINKEDIN')
-      return { reportingDays: 365, postSnapshotDays: 42 };
+      return { reportingDays: 364, postSnapshotDays: 42 };
     return { reportingDays: null, postSnapshotDays: null };
   }
 

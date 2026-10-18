@@ -50,6 +50,12 @@ Zoho appears in a separate email reporting section. The date filter selects camp
 
 The existing Overview is renamed Campaign overview and remains in navigation. Existing paid integrations and campaign reports are preserved in Integrations/Campaigns; account OAuth does not create or require a campaign.
 
+### 7. Disconnect and explicit deletion
+
+- Disconnect stops scheduled and manual sync, revokes the provider grant when supported and not shared, clears local credentials, and retains analytics that remain within provider-specific retention.
+- Disconnected accounts remain available for historical reports and comparisons while their metric values are retained.
+- An Administrator can separately delete a disconnected account and its retained analytics after an irreversible confirmation. Data deletion is audited.
+
 ## Metric boundaries
 
 | Provider       | Account-level metrics                                                                                       | Top content                                           | Scope and user-facing caveat                                                                                                                                                                                                                                                                                                                                  |
@@ -71,5 +77,6 @@ Metrics are not combined across providers because similar names can represent di
 - Users can compare two to four connected social accounts over a shared date range, see changes and separate top-content lists, and export that comparison to CSV without cross-platform aggregation.
 - Top-content comparison values and CSV rows distinguish lifetime totals from measurements for the selected period.
 - Zoho email reports show provider-reported rates with their definitions and keep those results separate from social-account analytics.
+- Disconnect stops synchronization and preserves permitted historical analytics; explicit deletion is available only as a separate operation after disconnect.
 - The PDF uses the same account scope and period as the on-screen dashboard.
 - Management can view data but cannot initiate OAuth, sync, or disconnect accounts.
