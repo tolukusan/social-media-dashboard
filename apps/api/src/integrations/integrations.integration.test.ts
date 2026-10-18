@@ -17,6 +17,7 @@ import { PrismaClient } from '../generated/prisma/client.js';
 import { AppModule } from '../app.module.js';
 import { ProviderClient } from './provider-client.js';
 import { IntegrationsService } from './integrations.service.js';
+import { AccountAnalyticsService } from '../account-analytics/account-analytics.service.js';
 import {
   IntegrationFailure,
   shiftDay,
@@ -219,6 +220,12 @@ describe('connected-account ingestion and scheduling', () => {
     await prisma.performanceMetricValue.deleteMany({
       where: { performanceRecordId: { in: rows.map((row) => row.id) } },
     });
+    await prisma.connectedAccountMetricValue.deleteMany({
+      where: { record: { connectionId: { in: connectionIds } } },
+    });
+    await prisma.connectedAccountAnalyticsRecord.deleteMany({
+      where: { connectionId: { in: connectionIds } },
+    });
     await prisma.performanceRecord.deleteMany({
       where: { id: { in: rows.map((row) => row.id) } },
     });
@@ -239,6 +246,12 @@ describe('connected-account ingestion and scheduling', () => {
     });
     await prisma.campaign.deleteMany({ where: { id: { in: campaignIds } } });
     const ids = actors.map((actor) => actor.id);
+    await prisma.importRow.deleteMany({
+      where: { importBatch: { importedByUserId: { in: ids } } },
+    });
+    await prisma.importBatch.deleteMany({
+      where: { importedByUserId: { in: ids } },
+    });
     await prisma.auditLog.deleteMany({ where: { actorUserId: { in: ids } } });
     await prisma.session.deleteMany({ where: { userId: { in: ids } } });
     await prisma.user.deleteMany({ where: { id: { in: ids } } });
@@ -594,12 +607,18 @@ describe('connected-account ingestion and scheduling', () => {
     configured();
     const connection = await setupConnection();
     await sync(connection.id);
+    const importedReach =
+      Number.parseInt(randomUUID().replaceAll('-', '').slice(0, 6), 16) %
+      1_000_000;
     const form = new FormData();
     form.set(
       'file',
-      new Blob([JSON.stringify([{ date: '2024-05-01', reach: 50 }])], {
-        type: 'application/json',
-      }),
+      new Blob(
+        [JSON.stringify([{ date: '2024-05-01', reach: importedReach }])],
+        {
+          type: 'application/json',
+        },
+      ),
       `integration-merge-${randomUUID()}.json`,
     );
     const preview = await fetch(`${base}/api/v1/imports/preview`, {
@@ -630,7 +649,7 @@ describe('connected-account ingestion and scheduling', () => {
       before[0].metricValues
         .find((value) => value.metricDefinition.code === 'ADS_REACH')
         ?.value.toNumber(),
-    ).toBe(50);
+    ).toBe(importedReach);
     expect(await sync(connection.id)).toMatchObject({
       conflicts: 1,
       updatedRecords: 0,
@@ -770,5 +789,195 @@ describe('connected-account ingestion and scheduling', () => {
     });
     expect(await records(connection.contextId)).toHaveLength(0);
     expect(JSON.stringify(run)).not.toContain('fixture-token');
+  });
+
+  it('keeps provider account analytics separate, preserves missing versus zero, and expires LinkedIn values', async () => {
+    const linkedIn = await setupConnection('LINKEDIN_ADS');
+    const facebook = await setupConnection('FACEBOOK_ADS');
+    const analytics = app.get(AccountAnalyticsService);
+    const retrievedAt = new Date();
+    const sampleObservation = {
+      date: '2024-05-01',
+      values: { ADS_IMPRESSIONS: 0, ADS_CLICKS: 8 },
+    };
+    expect(
+      await analytics.ingest(
+        linkedIn.id,
+        [sampleObservation],
+        'mock-2026',
+        retrievedAt,
+      ),
+    ).toEqual({ created: 1, updated: 0, unchanged: 0 });
+    expect(
+      await analytics.ingest(
+        linkedIn.id,
+        [sampleObservation],
+        'mock-2026',
+        retrievedAt,
+      ),
+    ).toEqual({ created: 0, updated: 0, unchanged: 1 });
+    expect(
+      await analytics.ingest(
+        linkedIn.id,
+        [{ date: '2024-05-01', values: { ADS_IMPRESSIONS: 3, ADS_CLICKS: 8 } }],
+        'mock-2026',
+        retrievedAt,
+      ),
+    ).toEqual({ created: 0, updated: 1, unchanged: 0 });
+    await analytics.ingest(
+      linkedIn.id,
+      [sampleObservation],
+      'mock-2026',
+      retrievedAt,
+    );
+    expect(
+      await analytics.ingest(facebook.id, [
+        { date: '2024-05-01', values: { ADS_IMPRESSIONS: 120 } },
+      ]),
+    ).toEqual({ created: 1, updated: 0, unchanged: 0 });
+
+    const expiry = new Date(retrievedAt.getTime() + 364 * 24 * 60 * 60 * 1000);
+    const stored = await prisma.connectedAccountMetricValue.findMany({
+      where: { record: { connectionId: linkedIn.id } },
+    });
+    expect(stored).toHaveLength(2);
+    expect(
+      stored.every(
+        (item) => item.sourceDataExpiresAt?.getTime() === expiry.getTime(),
+      ),
+    ).toBe(true);
+    const linkedInRecord =
+      await prisma.connectedAccountAnalyticsRecord.findFirstOrThrow({
+        where: { connectionId: linkedIn.id },
+      });
+    await expect(
+      prisma.connectedAccountAnalyticsRecord.create({
+        data: {
+          connectionId: linkedIn.id,
+          recordDate: new Date('2024-05-01T00:00:00.000Z'),
+          scope: 'ACCOUNT',
+          sourceObjectId: 'ACCOUNT',
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'P2002' });
+    await expect(
+      prisma.connectedAccountMetricValue.create({
+        data: {
+          recordId: linkedInRecord.id,
+          metricDefinitionId: stored[0]!.metricDefinitionId,
+          value: 1,
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'P2002' });
+    expect(
+      await prisma.connectedAccountMetricValue.findMany({
+        where: { record: { connectionId: facebook.id } },
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceDataExpiresAt: null }),
+      ]),
+    );
+
+    for (const actor of actors) {
+      const response = await request(
+        `/integrations/${linkedIn.id}/analytics?from=2024-05-01&to=2024-05-01&scope=ACCOUNT`,
+        'GET',
+        undefined,
+        actor,
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        connection: { id: string; provider: string };
+        records: Array<{
+          date: string;
+          metrics: Array<{ code: string; value: number }>;
+        }>;
+      };
+      expect(body).toMatchObject({
+        connection: { id: linkedIn.id, provider: 'LINKEDIN_ADS' },
+        records: [
+          {
+            date: '2024-05-01',
+            metrics: [
+              expect.objectContaining({ code: 'ADS_CLICKS', value: 8 }),
+              expect.objectContaining({ code: 'ADS_IMPRESSIONS', value: 0 }),
+            ],
+          },
+        ],
+      });
+      expect(
+        body.records[0]!.metrics.map((metric) => metric.code),
+      ).not.toContain('ADS_SPEND');
+    }
+    const campaignDashboard = await request(
+      `/analytics/dashboard?from=2024-05-01&to=2024-05-02&campaignId=${linkedIn.campaignId}`,
+    );
+    expect(campaignDashboard.status).toBe(200);
+    expect((await campaignDashboard.json()).recordCount).toBe(0);
+    const facebookView = await request(
+      `/integrations/${facebook.id}/analytics?from=2024-05-01&to=2024-05-01`,
+    );
+    expect(await facebookView.json()).toMatchObject({
+      connection: { provider: 'FACEBOOK_ADS' },
+      records: [
+        {
+          metrics: [
+            expect.objectContaining({
+              code: 'ADS_IMPRESSIONS',
+              name: 'Facebook ad impressions',
+              value: 120,
+            }),
+          ],
+        },
+      ],
+    });
+
+    configured();
+    vi.stubEnv('REPORTING_TIMEZONE', 'UTC');
+    expect(await sync(linkedIn.id)).toMatchObject({ status: 'SUCCEEDED' });
+    const campaignValues = await prisma.performanceMetricValue.findMany({
+      where: {
+        performanceRecord: {
+          campaignPlatformId: linkedIn.contextId,
+        },
+      },
+    });
+    expect(campaignValues).toHaveLength(6);
+    expect(
+      campaignValues.every((item) => item.sourceConnectionId === linkedIn.id),
+    ).toBe(true);
+    expect(
+      campaignValues.every(
+        (item) =>
+          item.sourceDataExpiresAt !== null &&
+          item.sourceDataExpiresAt.getTime() > Date.now() &&
+          item.sourceDataExpiresAt.getTime() <=
+            Date.now() + 364 * 24 * 60 * 60 * 1000,
+      ),
+    ).toBe(true);
+
+    await prisma.connectedAccountMetricValue.updateMany({
+      where: { record: { connectionId: linkedIn.id } },
+      data: { sourceDataExpiresAt: new Date(Date.now() - 1000) },
+    });
+    const expiredView = await request(
+      `/integrations/${linkedIn.id}/analytics?from=2024-05-01&to=2024-05-01`,
+    );
+    expect(await expiredView.json()).toMatchObject({ records: [] });
+    await prisma.performanceMetricValue.updateMany({
+      where: { sourceConnectionId: linkedIn.id },
+      data: { sourceDataExpiresAt: new Date(Date.now() - 1000) },
+    });
+    const campaignView = await request(
+      `/analytics/dashboard?from=2024-05-01&to=2024-05-02&campaignId=${linkedIn.campaignId}`,
+    );
+    expect((await campaignView.json()).rawTotals.ADS_IMPRESSIONS).toBeNull();
+    expect(await analytics.purgeExpired()).toMatchObject({
+      campaignValues: 6,
+      accountValues: 2,
+      emptyRecords: 1,
+    });
+    vi.stubEnv('REPORTING_TIMEZONE', 'Africa/Lagos');
   });
 });

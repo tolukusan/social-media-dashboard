@@ -1,3 +1,5 @@
+import type { IntegrationProvider } from '../generated/prisma/client.js';
+
 export const providers = [
   'FACEBOOK_ADS',
   'INSTAGRAM_ADS',
@@ -15,7 +17,7 @@ export const zohoHosts: Record<string, string> = {
   CN: 'campaigns.zoho.com.cn',
 };
 export type SourceConnection = {
-  provider: Provider;
+  provider: IntegrationProvider;
   externalAccountId: string;
   credentialReference: string;
   sourceTimezone: string;

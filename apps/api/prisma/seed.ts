@@ -4,6 +4,8 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import {
   PrismaClient,
   AggregationStrategy,
+  AccountAnalyticsScope,
+  IntegrationProvider,
   MetricKind,
   MetricUnit,
 } from '../src/generated/prisma/client.js';
@@ -366,6 +368,113 @@ const metrics: Array<
   ],
 ];
 
+type AccountMetricSeed = {
+  provider: IntegrationProvider;
+  code: string;
+  scope: AccountAnalyticsScope;
+  name: string;
+  description: string;
+  sourceField: string;
+  unit: MetricUnit;
+  retentionDays?: number;
+};
+
+const accountMetricDefinitions: AccountMetricSeed[] = [
+  {
+    provider: IntegrationProvider.FACEBOOK_ADS,
+    code: 'ADS_IMPRESSIONS',
+    scope: AccountAnalyticsScope.ACCOUNT,
+    name: 'Facebook ad impressions',
+    description:
+      'Paid Facebook ad impressions reported by the Meta advertising API. This is not organic Page reach or impressions.',
+    sourceField: 'impressions',
+    unit: MetricUnit.COUNT,
+  },
+  {
+    provider: IntegrationProvider.FACEBOOK_ADS,
+    code: 'ADS_CLICKS',
+    scope: AccountAnalyticsScope.ACCOUNT,
+    name: 'Facebook ad clicks',
+    description:
+      'Paid Facebook ad clicks reported by the Meta advertising API. Click subtype semantics are provider-defined.',
+    sourceField: 'clicks',
+    unit: MetricUnit.COUNT,
+  },
+  {
+    provider: IntegrationProvider.FACEBOOK_ADS,
+    code: 'ADS_SPEND',
+    scope: AccountAnalyticsScope.ACCOUNT,
+    name: 'Facebook ad spend',
+    description:
+      'Paid Facebook ad spend reported in the connected ad account currency.',
+    sourceField: 'spend',
+    unit: MetricUnit.CURRENCY,
+  },
+  {
+    provider: IntegrationProvider.INSTAGRAM_ADS,
+    code: 'ADS_IMPRESSIONS',
+    scope: AccountAnalyticsScope.ACCOUNT,
+    name: 'Instagram ad impressions',
+    description:
+      'Paid Instagram ad impressions reported by the Meta advertising API. This is not organic Instagram reach or views.',
+    sourceField: 'impressions',
+    unit: MetricUnit.COUNT,
+  },
+  {
+    provider: IntegrationProvider.INSTAGRAM_ADS,
+    code: 'ADS_CLICKS',
+    scope: AccountAnalyticsScope.ACCOUNT,
+    name: 'Instagram ad clicks',
+    description:
+      'Paid Instagram ad clicks reported by the Meta advertising API. Click subtype semantics are provider-defined.',
+    sourceField: 'clicks',
+    unit: MetricUnit.COUNT,
+  },
+  {
+    provider: IntegrationProvider.INSTAGRAM_ADS,
+    code: 'ADS_SPEND',
+    scope: AccountAnalyticsScope.ACCOUNT,
+    name: 'Instagram ad spend',
+    description:
+      'Paid Instagram ad spend reported in the connected ad account currency.',
+    sourceField: 'spend',
+    unit: MetricUnit.CURRENCY,
+  },
+  {
+    provider: IntegrationProvider.LINKEDIN_ADS,
+    code: 'ADS_IMPRESSIONS',
+    scope: AccountAnalyticsScope.ACCOUNT,
+    name: 'LinkedIn ad impressions',
+    description:
+      'Paid LinkedIn ad impressions reported by the LinkedIn advertising API.',
+    sourceField: 'impressions',
+    unit: MetricUnit.COUNT,
+    retentionDays: 364,
+  },
+  {
+    provider: IntegrationProvider.LINKEDIN_ADS,
+    code: 'ADS_CLICKS',
+    scope: AccountAnalyticsScope.ACCOUNT,
+    name: 'LinkedIn ad clicks',
+    description:
+      'Paid LinkedIn ad clicks reported by the LinkedIn advertising API.',
+    sourceField: 'clicks',
+    unit: MetricUnit.COUNT,
+    retentionDays: 364,
+  },
+  {
+    provider: IntegrationProvider.LINKEDIN_ADS,
+    code: 'ADS_SPEND',
+    scope: AccountAnalyticsScope.ACCOUNT,
+    name: 'LinkedIn ad spend',
+    description:
+      'Paid LinkedIn ad spend reported in the connected ad account currency.',
+    sourceField: 'costInLocalCurrency',
+    unit: MetricUnit.CURRENCY,
+    retentionDays: 364,
+  },
+] as const;
+
 async function main() {
   for (const [code, name] of [
     ['ADMIN', 'Administrator'],
@@ -450,6 +559,32 @@ async function main() {
       },
     });
   }
+  for (const definition of accountMetricDefinitions)
+    await prisma.integrationMetricDefinition.upsert({
+      where: {
+        provider_code_scope_definitionVersion: {
+          provider: definition.provider,
+          code: definition.code,
+          scope: definition.scope,
+          definitionVersion: 1,
+        },
+      },
+      update: {
+        name: definition.name,
+        description: definition.description,
+        sourceField: definition.sourceField,
+        scope: definition.scope,
+        unit: definition.unit,
+        aggregationStrategy: AggregationStrategy.SUM,
+        retentionDays: definition.retentionDays ?? null,
+        active: true,
+      },
+      create: {
+        ...definition,
+        definitionVersion: 1,
+        aggregationStrategy: AggregationStrategy.SUM,
+      },
+    });
   if (process.env.SEED_ADMIN_EMAIL && process.env.SEED_ADMIN_PASSWORD) {
     const role = await prisma.role.findUniqueOrThrow({
       where: { code: 'ADMIN' },

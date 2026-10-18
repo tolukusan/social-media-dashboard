@@ -270,3 +270,49 @@ The following are intentionally deferred:
 - third-party integrations
 - persistent generated reports
 - notifications
+
+## 5. Connected-account analytics extension (2026-10-14)
+
+The following additive relationships support data whose source grain is a connected account or content object. They remain separate from `PerformanceRecord` and campaign KPI calculations.
+
+```mermaid
+erDiagram
+    INTEGRATION_CONNECTION ||--o{ CONNECTED_ACCOUNT_ANALYTICS_RECORD : retrieves
+    CONNECTED_ACCOUNT_ANALYTICS_RECORD ||--o{ CONNECTED_ACCOUNT_METRIC_VALUE : contains
+    INTEGRATION_METRIC_DEFINITION ||--o{ CONNECTED_ACCOUNT_METRIC_VALUE : defines
+    INTEGRATION_CONNECTION ||--o{ PERFORMANCE_METRIC_VALUE : sourced_by
+
+    INTEGRATION_METRIC_DEFINITION {
+        uuid id PK
+        enum provider
+        string code
+        int definition_version
+        string source_field
+        string description
+        enum unit
+        enum aggregation_strategy
+        string weighting_metric_code
+        boolean non_negative
+        int retention_days
+    }
+
+    CONNECTED_ACCOUNT_ANALYTICS_RECORD {
+        uuid id PK
+        uuid connection_id FK
+        date record_date
+        enum scope
+        string source_object_id
+        string source_api_version
+        datetime retrieved_at
+    }
+
+    CONNECTED_ACCOUNT_METRIC_VALUE {
+        uuid id PK
+        uuid record_id FK
+        uuid metric_definition_id FK
+        decimal value
+        datetime source_data_expires_at
+    }
+```
+
+Unique keys are `(provider, code, definition_version)` for provider metrics, `(connection_id, record_date, scope, source_object_id)` for observations, and `(record_id, metric_definition_id)` for values. LinkedIn reporting values carry a source expiry; the API excludes expired values and deletes them through the provider-specific retention worker. Details: [ADR-012](../decisions/ADR-012-connected-account-analytics.md).
