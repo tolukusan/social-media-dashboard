@@ -4,6 +4,8 @@ Date: 2026-10-05. Status: local execution authorised 2026-10-05; see the executi
 
 ## Start here
 
+Next implementation task (2026-10-18): [Usability, registration, and administrator archive lifecycle](usability-archive-registration.md). Planning is complete; implementation has not started. Codex Cloud should follow its backend-first sequence: archive/restore correctness, safe permanent deletion, consolidated UX/reporting, then registration/approval/invitations. The plan records the stakeholder-authorised archive-policy exception and Cloud prerequisites; this handoff does not implement it or change existing data. Continue on `feat/usability-archive-registration` and do not merge unfinished work into main.
+
 Connected-account redesign (2026-10-14, updated 2026-10-18): [AAN-01 and the OAuth/provider/dashboard extension](../../evidence/account-first-analytics-verification.md) use the approved single analytics store. Disconnect retains permitted history; explicit deletion is separate. Existing campaign workflows and CSV imports remain available. [ADR-012](../../decisions/ADR-012-connected-account-analytics.md) records the data boundary and provider retention. Live provider acceptance and the audit of older unmanaged LinkedIn-mapped values remain conditional.
 
 A separate OAuth extension for campaign-level `IntegrationConnection` records is implemented locally. Its mock-flow and isolated migration checks passed; provider callback registration and live consent remain pending. See [ADR-013](../../decisions/ADR-013-oauth-credential-lifecycle.md) and [OAuth evidence](../../evidence/oauth-credential-evidence.md).
