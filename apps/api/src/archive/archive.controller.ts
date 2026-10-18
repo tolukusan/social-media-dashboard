@@ -12,11 +12,13 @@ import {
   Param,
   ParseUUIDPipe,
   Inject,
+  Query,
 } from '@nestjs/common';
 import { Roles } from '../common/roles.decorator.js';
 import { CurrentUser } from '../common/auth.decorator.js';
 import type { AuthenticatedUser } from '../common/auth.types.js';
 import { ArchiveService } from './archive.service.js';
+import { ArchiveQueryDto } from './archive-query.dto.js';
 @Controller('archive')
 @Roles('ADMIN')
 export class ArchiveController {
@@ -24,11 +26,15 @@ export class ArchiveController {
     @Inject(ArchiveService) private readonly archive: ArchiveService,
     @Inject(DeletionService) private readonly deletion: DeletionService,
   ) {}
-  @Get('campaigns') campaigns() {
-    return this.archive.campaigns();
+  @Get('campaigns') @Header('Cache-Control', 'no-store') campaigns(
+    @Query() query: ArchiveQueryDto,
+  ) {
+    return this.archive.campaigns(query);
   }
-  @Get('records') records() {
-    return this.archive.records();
+  @Get('records') @Header('Cache-Control', 'no-store') records(
+    @Query() query: ArchiveQueryDto,
+  ) {
+    return this.archive.records(query);
   }
   @Post('campaigns/:id/restore') restoreCampaign(
     @Param('id', ParseUUIDPipe) id: string,

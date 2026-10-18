@@ -103,6 +103,82 @@ test('campaign archival excludes active children; child restore requires restore
   expect(await count()).toBe(1);
 });
 
+test('archive lists search and paginate on the server with deterministic ordering', async () => {
+  const archive = app.get(ArchiveService);
+  const platform = await db.platform.findFirstOrThrow({
+    where: { active: true },
+  });
+  const marker = `Archive pagination ${randomUUID()}`;
+  const fixtures = [];
+  for (const suffix of ['A', 'B']) {
+    const campaign = await db.campaign.create({
+      data: {
+        name: `${marker} ${suffix}`,
+        startDate: new Date('2024-01-01'),
+        responsibleUserId: actorId,
+        createdByUserId: actorId,
+        updatedByUserId: actorId,
+        campaignChannels: {
+          create: {
+            channelId: platform.channelId,
+            campaignPlatforms: { create: { platformId: platform.id } },
+          },
+        },
+      },
+      include: { campaignChannels: { include: { campaignPlatforms: true } } },
+    });
+    const record = await db.performanceRecord.create({
+      data: {
+        campaignPlatformId:
+          campaign.campaignChannels[0].campaignPlatforms[0].id,
+        recordDate: new Date('2024-02-01'),
+        status: 'ARCHIVED',
+        archivedAt: new Date(),
+        createdByUserId: actorId,
+        updatedByUserId: actorId,
+      },
+    });
+    await app.get(CampaignsService).archive(campaign.id, actorId);
+    fixtures.push({ campaign, record });
+  }
+  const campaignPage1 = await archive.campaigns({
+    page: 1,
+    pageSize: 1,
+    search: marker,
+  });
+  const campaignPage2 = await archive.campaigns({
+    page: 2,
+    pageSize: 1,
+    search: marker,
+  });
+  expect(campaignPage1.total).toBe(2);
+  expect(campaignPage1.pages).toBe(2);
+  expect(campaignPage1.items).toHaveLength(1);
+  expect(campaignPage2.items).toHaveLength(1);
+  expect(campaignPage1.items[0].id).not.toBe(campaignPage2.items[0].id);
+  expect(
+    (await archive.campaigns({ page: 1, pageSize: 1, search: marker })).items[0]
+      .id,
+  ).toBe(campaignPage1.items[0].id);
+  const recordPage1 = await archive.records({
+    page: 1,
+    pageSize: 1,
+    search: marker,
+  });
+  const recordPage2 = await archive.records({
+    page: 2,
+    pageSize: 1,
+    search: marker,
+  });
+  expect(recordPage1.total).toBe(2);
+  expect(recordPage1.pages).toBe(2);
+  expect(recordPage1.items[0].id).not.toBe(recordPage2.items[0].id);
+  expect(
+    recordPage1.items[0].campaignPlatform.campaignChannel.campaign.name,
+  ).toContain(marker);
+  expect(fixtures).toHaveLength(2);
+});
+
 test('deletion confirms identity, rejects stale/expired/replayed previews, preserves import provenance and audits', async () => {
   const { DeletionService } = await import('./deletion.service.js');
   const deletion = app.get(DeletionService);

@@ -21,51 +21,46 @@ export function WorkspaceNavigation({
 }) {
   const [error, setError] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
-  const groups: Array<{
-    name: string;
-    items: Array<[View | 'imports', string]>;
-  }> = [
-    { name: 'Overview', items: [['overview', 'Overview']] },
-    {
-      name: 'Accounts',
-      items: [
-        ['accounts', 'Accounts'],
-        ['account-comparison', 'Compare'],
-        ['email-reports', 'Email reports'],
-        ['integrations', 'Connections'],
-      ],
-    },
-    {
-      name: 'Campaigns',
-      items: [
-        ['campaigns', 'Campaigns'],
-        ['analytics', 'Campaign analytics'],
-        ['targets', 'KPI targets'],
-      ],
-    },
-    {
-      name: 'Data',
-      items: [
-        ...(currentUser?.role.code !== 'MANAGEMENT'
-          ? [['imports', 'Imports'] as [View | 'imports', string]]
-          : []),
-        ['performance', 'Performance data'],
-      ],
-    },
-    { name: 'Reports', items: [['reports', 'Reports']] },
-    ...(currentUser?.role.code === 'ADMIN'
-      ? [
-          {
-            name: 'Administration',
-            items: [
-              ['settings', 'Settings'],
-              ['users', 'Users'],
-              ['archive', 'Archive'],
-            ] as Array<[View, string]>,
-          },
-        ]
-      : []),
+  const isAdmin = currentUser?.role.code === 'ADMIN';
+  const activeSection = sectionForView(view);
+  const sections: Array<{ id: View; label: string }> = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'accounts', label: 'Accounts' },
+    { id: 'campaigns', label: 'Campaigns' },
+    { id: 'performance', label: 'Data' },
+    { id: 'reports', label: 'Reports' },
+    { id: 'settings', label: 'Administration' },
   ];
+  const internalItems: Partial<
+    Record<Section, Array<[View | 'imports', string]>>
+  > = {
+    accounts: [
+      ['account-comparison', 'Compare'],
+      ['email-reports', 'Email reports'],
+      ['integrations', 'Connections'],
+    ],
+    campaigns: [
+      ['analytics', 'Campaign analytics'],
+      ['targets', 'KPI targets'],
+    ],
+    performance: [
+      ...(currentUser?.role.code !== 'MANAGEMENT'
+        ? [['imports', 'Imports'] as [View | 'imports', string]]
+        : []),
+      ['performance', 'Performance data'],
+    ],
+    settings: isAdmin
+      ? [
+          ['archive', 'Archive'],
+          ['users', 'Users'],
+          ['settings', 'Settings'],
+        ]
+      : [],
+  };
+  const sectionItems = internalItems[activeSection] ?? [];
+  const sectionTitle = sections.find(
+    (section) => section.id === activeSection,
+  )?.label;
   return (
     <aside
       id="workspace-navigation"
@@ -80,16 +75,57 @@ export function WorkspaceNavigation({
         <span>Marketwise</span>
       </div>
       <nav aria-label="Primary navigation">
-        {groups.map((group, index) => (
-          <div className="nav-group" key={group.name || index}>
-            {group.name && <p className="nav-group-label">{group.name}</p>}
-            {group.items.map(([id, label]) =>
-              id === 'imports' || !navigate ? (
+        {sections.map((section) => {
+          const selected = activeSection === section.id;
+          const disabled = section.id === 'settings' && !isAdmin;
+          const content = (
+            <>
+              <NavIcon view={section.id} />
+              {section.label}
+            </>
+          );
+          return navigate ? (
+            <button
+              key={section.id}
+              className={selected ? 'active' : ''}
+              aria-current={selected ? 'page' : undefined}
+              aria-disabled={disabled || undefined}
+              title={disabled ? 'Administrator access required' : undefined}
+              onClick={() => {
+                if (!disabled && canLeave()) navigate(section.id);
+              }}
+            >
+              {content}
+            </button>
+          ) : (
+            <Link
+              key={section.id}
+              href={`/#${section.id}`}
+              className={selected ? 'active' : ''}
+              aria-current={selected ? 'page' : undefined}
+              aria-disabled={disabled || undefined}
+              title={disabled ? 'Administrator access required' : undefined}
+              onClick={(event) => {
+                if (disabled || !canLeave()) event.preventDefault();
+              }}
+            >
+              {content}
+            </Link>
+          );
+        })}
+        {sectionItems.length > 0 && (
+          <div
+            className="nav-section"
+            role="group"
+            aria-label={`${sectionTitle} section navigation`}
+          >
+            <p className="nav-section-label">{sectionTitle}</p>
+            {sectionItems.map(([id, label]) =>
+              id === 'imports' ? (
                 <Link
                   key={id}
-                  href={id === 'imports' ? '/imports' : `/#${id}`}
+                  href="/imports"
                   className={navIsActive(view, id) ? 'active' : ''}
-                  aria-current={navIsActive(view, id) ? 'page' : undefined}
                   onClick={(event) => {
                     if (!canLeave()) event.preventDefault();
                   }}
@@ -97,7 +133,7 @@ export function WorkspaceNavigation({
                   <NavIcon view={id} />
                   {label}
                 </Link>
-              ) : (
+              ) : navigate ? (
                 <button
                   key={id}
                   className={navIsActive(view, id) ? 'active' : ''}
@@ -109,10 +145,23 @@ export function WorkspaceNavigation({
                   <NavIcon view={id} />
                   {label}
                 </button>
+              ) : (
+                <Link
+                  key={id}
+                  href={`/#${id}`}
+                  className={navIsActive(view, id) ? 'active' : ''}
+                  aria-current={navIsActive(view, id) ? 'page' : undefined}
+                  onClick={(event) => {
+                    if (!canLeave()) event.preventDefault();
+                  }}
+                >
+                  <NavIcon view={id} />
+                  {label}
+                </Link>
               ),
             )}
           </div>
-        ))}
+        )}
       </nav>
       <div className="sidebar-footer">
         <span className="avatar">
@@ -166,6 +215,32 @@ export function WorkspaceNavigation({
       </div>
     </aside>
   );
+}
+
+type Section =
+  | 'overview'
+  | 'accounts'
+  | 'campaigns'
+  | 'performance'
+  | 'reports'
+  | 'settings';
+
+function sectionForView(view: View | 'imports'): Section {
+  if (
+    view === 'accounts' ||
+    view === 'account-insights' ||
+    view === 'account-comparison' ||
+    view === 'email-reports' ||
+    view === 'integrations'
+  )
+    return 'accounts';
+  if (view === 'campaigns' || view === 'analytics' || view === 'targets')
+    return 'campaigns';
+  if (view === 'performance' || view === 'imports') return 'performance';
+  if (view === 'reports') return 'reports';
+  if (view === 'settings' || view === 'users' || view === 'archive')
+    return 'settings';
+  return 'overview';
 }
 
 function navIsActive(view: View | 'imports', item: View | 'imports') {

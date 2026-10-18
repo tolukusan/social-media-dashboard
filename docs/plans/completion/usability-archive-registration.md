@@ -67,16 +67,16 @@ Policy: only administrators may permanently delete already archived campaigns or
 
 ## 3. Usability, navigation, dates, and reports
 
-- Six primary sections: Overview, Accounts, Campaigns, Data, Reports, Administration. Put account insights/comparison/email reporting/connection administration within Accounts; imports/performance entry within Data; campaign analytics/KPI targets within Campaigns; settings/users/admin-only Archive within Administration.
+- Exactly six primary navigation items: Overview, Accounts, Campaigns, Data, Reports, Administration. Put account insights/comparison/email reporting/connection administration in Accounts internal navigation; imports/performance entry in Data; campaign analytics/KPI targets in Campaigns; settings/users/admin-only Archive in Administration internal navigation. Preserve existing URL/hash destinations, Back/Forward, and role access.
 - Preserve existing URL/hash destinations with aliases, Back/Forward behaviour, and role restrictions. Keep the established blue-accent visual direction and existing domain workflows.
 - Land on campaign Overview. Clearly distinguish imported/manual campaign data from connected-account analytics, especially when zero accounts are connected but imported records exist.
 - Default campaign range ends on the most recent eligible record from an unarchived campaign and includes the preceding 29 calendar days. Use configured reporting-timezone calendar arithmetic and date-only semantics: latest October 10 means September 11–October 10, even on October 18.
 - Never overwrite explicitly selected dates, including partially specified ranges. With no eligible records, use today in the reporting timezone and its preceding 29 days with a clear empty state. Connected social and Zoho reporting retain their separate date semantics.
-- Prioritise available headline metrics grouped by channel. Add an obvious trend selector; default to Engagements for available social data, otherwise Opens for available email data, otherwise the first available metric in existing configured order. Explain missing data; retain valid zeros.
+- Show no more than four available headline metrics in each Social or Email group. Put Engagements first for Social and Opens first for Email, then use the existing configured metric order. Keep missing metrics unavailable, preserve valid zeros, and retain the explicit trend selector.
 - Simplify provider cards to provider, eligibility, readiness, and one action; reveal technical setup details on demand. Compare with fewer than two eligible accounts explains the requirement and offers Connect accounts.
 - Reports exposes campaign/date/channel/platform/metric filters directly and preserves them across preview/download.
 - Add includeUnavailableMetrics, default false, to report requests. Backend report assembly applies it consistently to preview and PDF; presentation filtering does not change calculations. Do not implement this only in React.
-- Archive has Campaigns and Performance records tabs, search, archive dates, restore, and authoritative deletion previews. Distinguish individual archival from being hidden by parent archival.
+- Archive has server-paginated Campaigns and Performance records tabs with server-side search, deterministic ordering, page controls, archive dates, restore, and authoritative deletion previews. Distinguish individual archival from being hidden by parent archival.
 
 ## 4. Registration and access requests
 
@@ -87,7 +87,7 @@ Policy: only administrators may permanently delete already archived campaigns or
 - Recipients set their name/password. Bind acceptance to invited email and prevent existing-account takeover; direct existing users to login/recovery. Pending requests require explicit admin resolution rather than silently replacing credentials.
 - Store invitation-token hashes only. The initial authorised administrator response may supply the copyable link; never log it. Prevent URL tokens entering referrers/analytics.
 - Reuse password validation, Argon2id, session creation, CSRF/origin protection, and backend authorization. Rate-limit public signup/acceptance. Pending/rejected applicants receive no session and cannot read workspace data.
-- Public submissions use generic acknowledgements and pending-approval guidance without leaking other account states. Preserve administrator user creation. Do not introduce a superadministrator role or multi-tenancy.
+- Public submissions use generic acknowledgements and pending-approval guidance without leaking other account states. Tell Administrators that public registration does not verify email ownership; approval does not establish mailbox control. Preserve administrator user creation. Do not introduce a superadministrator role or multi-tenancy.
 
 ## Verification and completion
 

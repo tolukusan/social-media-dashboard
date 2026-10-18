@@ -3298,3 +3298,56 @@ summary:focus-visible {
 .archive-dialog {
   overflow-wrap: anywhere;
 }
+
+.sidebar .nav-section {
+  display: grid;
+  gap: 3px;
+  margin: 1px 0 4px 12px;
+  padding-left: 9px;
+  border-left: 1px solid #344966;
+}
+.sidebar .nav-section-label {
+  margin: 2px 8px 4px;
+  color: #8395ae;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.sidebar .nav-section a,
+.sidebar .nav-section button {
+  min-height: 32px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.sidebar nav button[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+.nav-lock {
+  margin-left: auto;
+  color: #aab8ca;
+  font-size: 9px;
+}
+
+.archive-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+.archive-pagination > span:first-child {
+  margin-right: auto;
+  color: #667085;
+}
+@media (max-width: 520px) {
+  .archive-pagination {
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .archive-pagination > span:first-child {
+    flex-basis: 100%;
+  }
+}

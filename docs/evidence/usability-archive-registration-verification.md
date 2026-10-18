@@ -13,6 +13,13 @@ The [approved plan](../plans/completion/usability-archive-registration.md) was c
 
 Policies: [ADR-014](../decisions/ADR-014-archive-lifecycle.md), [ADR-015](../decisions/ADR-015-registration-approval.md). Operations: [deployment instructions](../guides/deployment-runbook.md), [user guide](../guides/user-guide.md).
 
+## PR #5 completion follow-up (2026-10-18)
+
+- The sidebar now exposes exactly six primary destinations. Each section's remaining destinations appear only in its section navigation. Existing `#` destinations, Imports routing, role restrictions, and hash-driven browser Back/Forward are retained.
+- Overview headline cards show at most four available metrics per social/email group. Engagements/Opens lead their respective group, followed by the existing configured order. Missing values stay unavailable and zero remains valid; the trend selector remains explicit.
+- Archive list endpoints accept bounded page/search query parameters and return page metadata. Both tabs use database filtering, count, stable date/ID ordering, and `skip`/`take`; the browser displays debounced search and previous/next controls.
+- Administrator access management states that public registration does not verify mailbox ownership; explicit approval and the seeded Administrator remain unchanged.
+
 ## Migration safety
 
 Three additive migrations were deployed through the isolated PostgreSQL 18 test runner (14 total committed migrations). No database reset was performed.
@@ -32,7 +39,7 @@ Environment: Node 24.19.0, Corepack pnpm 11.8.0, PostgreSQL 18 isolated test dat
 - `corepack pnpm typecheck`: passed.
 - `corepack pnpm build`: passed API and optimized Next.js builds, including public access routes.
 - `corepack pnpm test:unit`: 107 passed across 25 files.
-- `corepack pnpm test:integration`: 76 passed across 10 files after final lifecycle changes.
+- `corepack pnpm test:integration`: 77 passed across 10 files after final lifecycle and Archive pagination changes.
 - `corepack pnpm format:docs`, changed-source lint, `corepack pnpm exec prettier --check e2e`, and `git diff --check`: passed.
 - Complete Playwright suite: all 23 journeys passed with system Chromium (`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium corepack pnpm exec tsx scripts/run-e2e.ts` from `apps/api`). Includes all existing OAuth, import, comparison, synchronization, PDF, session, responsive, keyboard, and role journeys, plus application approval, invitation acceptance, defaults/report scope, and Archive restore/delete at 390px.
 

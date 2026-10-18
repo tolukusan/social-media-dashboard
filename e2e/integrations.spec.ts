@@ -1,3 +1,4 @@
+import { openSectionItem } from './navigation-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -51,7 +52,7 @@ test('Administrator can prepare a mapped connection without keys, enable schedul
   const campaign = await campaignResponse.json();
   await page.reload();
   await expect(page.locator('h1')).toHaveText('Campaign overview');
-  await page.getByRole('button', { name: 'Connections', exact: true }).click();
+  await openSectionItem(page, 'Accounts', 'Connections');
   await expect(page.locator('h1')).toHaveText('Connections');
   const name = `Pending provider ${randomUUID()}`;
   await page
@@ -144,9 +145,7 @@ for (const role of ['marketingOfficer', 'management']) {
     page,
   }) => {
     await signIn(page, role);
-    await page
-      .getByRole('button', { name: 'Connections', exact: true })
-      .click();
+    await openSectionItem(page, 'Accounts', 'Connections');
     await expect(
       page.getByRole('heading', { name: 'Automatic imports' }),
     ).toBeVisible();

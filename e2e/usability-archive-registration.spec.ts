@@ -1,3 +1,4 @@
+import { openSectionItem } from './navigation-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -52,7 +53,10 @@ test('public request waits for Administrator approval and receives the selected 
     page.getByRole('alert').filter({ hasText: 'Invalid email or password' }),
   ).toContainText('Invalid email or password');
   await login(page);
-  await expect(page.locator('.nav-group-label')).toHaveText([
+  const navigation = page.getByRole('navigation', {
+    name: 'Primary navigation',
+  });
+  await expect(navigation.locator(':scope > button')).toHaveText([
     'Overview',
     'Accounts',
     'Campaigns',
@@ -60,10 +64,10 @@ test('public request waits for Administrator approval and receives the selected 
     'Reports',
     'Administration',
   ]);
-  await page
-    .getByRole('navigation')
-    .getByRole('button', { name: 'Users', exact: true })
-    .click();
+  await openSectionItem(page, 'Administration', 'Users');
+  await expect(page.getByRole('note')).toContainText(
+    'does not verify email ownership',
+  );
   await page
     .getByLabel('Role for approval or invitation')
     .selectOption({ label: 'Management' });
@@ -78,12 +82,17 @@ test('public request waits for Administrator approval and receives the selected 
     .getByRole('row')
     .filter({ hasText: email });
   await row.getByRole('button', { name: 'Approve', exact: true }).click();
-  await expect(row).toContainText('APPROVED');
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: email })
+      .filter({ hasText: 'APPROVED' }),
+  ).toHaveCount(1);
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
   await login(page, email, password);
   await expect(
     page
-      .getByRole('navigation')
+      .getByRole('navigation', { name: 'Primary navigation' })
       .getByRole('button', { name: 'Archive', exact: true }),
   ).toHaveCount(0);
 });
@@ -92,10 +101,7 @@ test('Administrator invitation is accepted with its bound email and removed from
   browser,
 }) => {
   await login(page);
-  await page
-    .getByRole('navigation')
-    .getByRole('button', { name: 'Users', exact: true })
-    .click();
+  await openSectionItem(page, 'Administration', 'Users');
   const email = `invite-${randomUUID()}@example.invalid`;
   await page
     .getByLabel('Role for approval or invitation')
@@ -118,7 +124,7 @@ test('Administrator invitation is accepted with its bound email and removed from
   await login(recipient, email, password);
   await expect(
     recipient
-      .getByRole('navigation')
+      .getByRole('navigation', { name: 'Primary navigation' })
       .getByRole('button', { name: 'Users', exact: true }),
   ).toHaveCount(0);
   await context.close();
@@ -157,9 +163,69 @@ test('campaign defaults, report scope and Archive restore/delete work on desktop
   const record = await mutate(page, '/performance-records', 'POST', {
     campaignPlatformId: context.id,
     recordDate: '2024-01-02',
-    values: { SM_ENGAGEMENTS: 0 },
+    values: {
+      SM_ENGAGEMENTS: 0,
+      SM_REACH: 1,
+      SM_IMPRESSIONS: 2,
+      SM_LINK_CLICKS: 3,
+      SM_FOLLOWERS_GAINED: 4,
+    },
   });
   expect(record.status()).toBe(201);
+  await page.goto(
+    `/?from=2024-01-01&to=2024-01-30&campaignId=${campaign.id}#overview`,
+  );
+  const socialHeadlines = page.getByRole('region', {
+    name: 'Social Media Marketing headline metrics',
+  });
+  await expect(socialHeadlines.locator('.kpi')).toHaveCount(4);
+  await expect(socialHeadlines.locator('.kpi span')).toHaveText([
+    'Engagements',
+    'Aggregated daily reach',
+    'Impressions',
+    'Link Clicks',
+  ]);
+  await expect(page.getByLabel('Trend metric')).toBeVisible();
+  const emailChannel = channels.find(
+    (item: { code: string }) => item.code === 'EMAIL',
+  );
+  const emailPlatform = emailChannel.platforms.find(
+    (item: { active: boolean }) => item.active,
+  );
+  const emailCampaignResponse = await mutate(page, '/campaigns', 'POST', {
+    name: `Email headline journey ${randomUUID()}`,
+    startDate: '2024-01-01',
+    responsibleUserId: me.id,
+    channels: [{ channelId: emailChannel.id, platformIds: [emailPlatform.id] }],
+  });
+  expect(emailCampaignResponse.status()).toBe(201);
+  const emailCampaign = await emailCampaignResponse.json();
+  const emailContext = emailCampaign.campaignChannels[0].campaignPlatforms[0];
+  const emailRecord = await mutate(page, '/performance-records', 'POST', {
+    campaignPlatformId: emailContext.id,
+    recordDate: '2024-01-02',
+    values: {
+      EMAIL_OPENS: 0,
+      EMAIL_SENT: 2,
+      EMAIL_DELIVERED: 1,
+      EMAIL_CLICKS: 3,
+      EMAIL_UNSUBSCRIBES: 4,
+    },
+  });
+  expect(emailRecord.status()).toBe(201);
+  await page.goto(
+    `/?from=2024-01-01&to=2024-01-30&channelId=${emailChannel.id}#overview`,
+  );
+  const emailHeadlines = page.getByRole('region', {
+    name: `${emailChannel.name} headline metrics`,
+  });
+  await expect(emailHeadlines.locator('.kpi')).toHaveCount(4);
+  await expect(emailHeadlines.locator('.kpi span')).toHaveText([
+    'Opens',
+    'Emails Sent',
+    'Emails Delivered',
+    'Email Clicks',
+  ]);
   await page.goto(
     `/?from=2024-01-01&to=2024-01-30&campaignId=${campaign.id}#reports`,
   );
@@ -199,7 +265,15 @@ test('campaign defaults, report scope and Archive restore/delete work on desktop
     (await mutate(page, `/campaigns/${campaign.id}`, 'DELETE')).status(),
   ).toBe(200);
   await page.reload();
+  await expect(
+    page.getByRole('group', { name: 'Archive pages' }),
+  ).toBeVisible();
+  await page.getByLabel('Search Archive').fill(name);
   row = page.getByRole('row').filter({ hasText: name });
+  await expect(row).toHaveCount(1);
+  await expect(
+    page.getByRole('group', { name: 'Archive pages' }),
+  ).toContainText('of');
   await row.getByRole('button', { name: 'Review deletion' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');

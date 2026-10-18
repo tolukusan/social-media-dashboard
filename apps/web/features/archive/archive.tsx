@@ -1,6 +1,10 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { apiRequest, invalidateWorkspace } from '../../lib/api-client';
 type Item = {
   id: string;
@@ -12,6 +16,13 @@ type Item = {
     platform: { name: string };
     campaignChannel: { campaign: { name: string; archivedAt: string | null } };
   };
+};
+type Page<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
 };
 type Preview = {
   identity: { id: string; name: string };
@@ -28,7 +39,9 @@ type Preview = {
 };
 export function Archive() {
   const [kind, setKind] = useState<'campaigns' | 'records'>('campaigns');
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
@@ -36,10 +49,31 @@ export function Archive() {
   const [error, setError] = useState('');
   const dialog = useRef<HTMLDialogElement>(null);
   const queryClient = useQueryClient();
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setSearch(searchInput.trim());
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
   const query = useQuery({
-    queryKey: ['archive', kind],
-    queryFn: () => apiRequest<Item[]>(`/archive/${kind}`),
+    queryKey: ['archive', kind, page, search],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: '25',
+      });
+      if (search) params.set('search', search);
+      return apiRequest<Page<Item>>(`/archive/${kind}?${params}`);
+    },
+    placeholderData: keepPreviousData,
   });
+  useEffect(() => {
+    if (query.isPlaceholderData || !query.data) return;
+    if (query.data.pages > 0 && page > query.data.pages)
+      setPage(query.data.pages);
+    else if (query.data.pages === 0 && page !== 1) setPage(1);
+  }, [page, query.data, query.isPlaceholderData]);
   useEffect(() => {
     if (preview) dialog.current?.showModal();
   }, [preview]);
@@ -77,6 +111,8 @@ export function Archive() {
             aria-pressed={kind === value}
             onClick={() => {
               setKind(value);
+              setPage(1);
+              setSearchInput('');
               setSearch('');
             }}
           >
@@ -88,8 +124,8 @@ export function Archive() {
         Search Archive
         <input
           type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
         />
       </label>
       {error && !preview && (
@@ -99,6 +135,9 @@ export function Archive() {
       )}
       {message && <p role="status">{message}</p>}
       {query.isPending && <p role="status">Loading Archive…</p>}
+      {query.isFetching && !query.isPending && (
+        <p role="status">Updating results…</p>
+      )}
       {query.error && (
         <p role="alert">
           Could not load Archive.{' '}
@@ -116,87 +155,113 @@ export function Archive() {
             </tr>
           </thead>
           <tbody>
-            {(query.data ?? [])
-              .filter((item) =>
-                JSON.stringify([item.name, item.id, item.campaignPlatform])
-                  .toLowerCase()
-                  .includes(search.toLowerCase()),
-              )
-              .map((item) => {
-                const parent = item.campaignPlatform?.campaignChannel.campaign;
-                const individuallyArchived =
-                  kind === 'campaigns' || item.status === 'ARCHIVED';
-                return (
-                  <tr key={item.id}>
-                    <th scope="row">
-                      {item.name ??
-                        `${parent?.name} · ${item.recordDate?.slice(0, 10)} · ${item.campaignPlatform?.platform.name}`}
-                      <small className="archive-id">{item.id}</small>
-                    </th>
-                    <td>
-                      {individuallyArchived
-                        ? 'Individually archived'
-                        : 'Hidden by archived campaign'}
-                      {parent?.archivedAt && (
-                        <small>Restore the campaign first.</small>
-                      )}
-                    </td>
-                    <td>
-                      {item.archivedAt
-                        ? new Date(item.archivedAt).toLocaleString()
-                        : 'Archive date unavailable'}
-                    </td>
-                    <td>
-                      <div className="account-actions">
-                        <button
-                          className="secondary"
-                          disabled={
-                            busy ||
-                            !individuallyArchived ||
-                            Boolean(parent?.archivedAt)
-                          }
-                          onClick={() =>
-                            void act(
-                              () =>
-                                apiRequest(
-                                  `/archive/${kind}/${item.id}/restore`,
-                                  { method: 'POST' },
-                                ),
-                              'Item restored.',
-                            )
-                          }
-                        >
-                          Restore
-                        </button>
-                        <button
-                          className="secondary"
-                          disabled={busy || !individuallyArchived}
-                          onClick={() =>
-                            void act(async () => {
-                              const result = await apiRequest<Preview>(
-                                `/archive/${kind}/${item.id}/deletion-preview`,
+            {(query.data?.items ?? []).map((item) => {
+              const parent = item.campaignPlatform?.campaignChannel.campaign;
+              const individuallyArchived =
+                kind === 'campaigns' || item.status === 'ARCHIVED';
+              return (
+                <tr key={item.id}>
+                  <th scope="row">
+                    {item.name ??
+                      `${parent?.name} · ${item.recordDate?.slice(0, 10)} · ${item.campaignPlatform?.platform.name}`}
+                    <small className="archive-id">{item.id}</small>
+                  </th>
+                  <td>
+                    {individuallyArchived
+                      ? 'Individually archived'
+                      : 'Hidden by archived campaign'}
+                    {parent?.archivedAt && (
+                      <small>Restore the campaign first.</small>
+                    )}
+                  </td>
+                  <td>
+                    {item.archivedAt
+                      ? new Date(item.archivedAt).toLocaleString()
+                      : 'Archive date unavailable'}
+                  </td>
+                  <td>
+                    <div className="account-actions">
+                      <button
+                        className="secondary"
+                        disabled={
+                          busy ||
+                          !individuallyArchived ||
+                          Boolean(parent?.archivedAt)
+                        }
+                        onClick={() =>
+                          void act(
+                            () =>
+                              apiRequest(
+                                `/archive/${kind}/${item.id}/restore`,
                                 { method: 'POST' },
-                              );
-                              setTyped('');
-                              setPreview(result);
-                            }, 'Deletion preview prepared.')
-                          }
-                        >
-                          Review deletion
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                              ),
+                            'Item restored.',
+                          )
+                        }
+                      >
+                        Restore
+                      </button>
+                      <button
+                        className="secondary"
+                        disabled={busy || !individuallyArchived}
+                        onClick={() =>
+                          void act(async () => {
+                            const result = await apiRequest<Preview>(
+                              `/archive/${kind}/${item.id}/deletion-preview`,
+                              { method: 'POST' },
+                            );
+                            setTyped('');
+                            setPreview(result);
+                          }, 'Deletion preview prepared.')
+                        }
+                      >
+                        Review deletion
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-      {query.data?.length === 0 && (
+      {query.data?.total === 0 && (
         <p>
-          No archived{' '}
-          {kind === 'campaigns' ? 'campaigns' : 'performance records'}.
+          {search
+            ? 'No archived items match your search.'
+            : `No archived ${kind === 'campaigns' ? 'campaigns' : 'performance records'}.`}
         </p>
+      )}
+      {query.data && (
+        <div
+          className="archive-pagination"
+          role="group"
+          aria-label="Archive pages"
+        >
+          <span>
+            {query.data.total === 0
+              ? '0 items'
+              : `Showing ${(query.data.page - 1) * query.data.pageSize + 1}–${Math.min(query.data.page * query.data.pageSize, query.data.total)} of ${query.data.total}`}
+          </span>
+          <button
+            className="secondary"
+            disabled={page <= 1 || query.isFetching}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            Previous
+          </button>
+          <span aria-live="polite">
+            Page {query.data.pages === 0 ? 0 : query.data.page} of{' '}
+            {query.data.pages}
+          </span>
+          <button
+            className="secondary"
+            disabled={page >= query.data.pages || query.isFetching}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            Next
+          </button>
+        </div>
       )}
       {preview && (
         <dialog

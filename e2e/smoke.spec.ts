@@ -1,3 +1,4 @@
+import { openSectionItem } from './navigation-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 async function showMoreFilters(page: Page) {
@@ -88,14 +89,14 @@ test('screen navigation preserves the session while rechecking it and rejects an
         Reflect.set(window, '__sessionLoaderSeen', true);
     }).observe(document, { childList: true, subtree: true });
   });
-  for (const name of [
-    'Campaigns',
-    'Performance data',
-    'Campaign analytics',
-    'Reports',
-    'Settings',
+  for (const [section, name] of [
+    ['Campaigns', 'Campaigns'],
+    ['Data', 'Performance data'],
+    ['Campaigns', 'Campaign analytics'],
+    ['Reports', 'Reports'],
+    ['Administration', 'Settings'],
   ]) {
-    await page.getByRole('button', { name, exact: true }).click();
+    await openSectionItem(page, section, name);
     await expect(page.locator('h1')).toHaveText(name);
   }
   await page.goBack();
@@ -143,6 +144,7 @@ test('screen navigation preserves the session while rechecking it and rejects an
       response.url().endsWith('/api/v1/auth/me') && response.status() === 200,
   );
   try {
+    await openSectionItem(page, 'Data');
     await page.getByRole('link', { name: 'Imports', exact: true }).click();
     await requested;
     await expect(
@@ -183,6 +185,7 @@ test('screen navigation preserves the session while rechecking it and rejects an
       body: JSON.stringify({ message: 'Session expired' }),
     }),
   );
+  await openSectionItem(page, 'Data');
   await page.getByRole('link', { name: 'Imports', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Sign in required', exact: true }),
@@ -233,9 +236,7 @@ test('performance record pages keep filtering across the full list', async ({
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.locator('h1')).toHaveText('Campaign overview');
-  await page
-    .getByRole('button', { name: 'Performance data', exact: true })
-    .click();
+  await openSectionItem(page, 'Data', 'Performance data');
   const table = page.getByRole('table', { name: 'Performance record list' });
   await expect(table.getByRole('row')).toHaveCount(51);
   await expect(page.getByText('Showing 1–50 of 105 records')).toBeVisible();
@@ -291,7 +292,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await expect(page.locator('.sidebar-footer')).toContainText(
     'E2E Profile Updated',
   );
-  await page.getByRole('button', { name: 'KPI targets' }).click();
+  await openSectionItem(page, 'Campaigns', 'KPI targets');
   await expect(
     page.getByRole('heading', { name: 'Create KPI target' }),
   ).toBeVisible();
@@ -338,7 +339,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await expect(page.getByRole('button', { name: updatedName })).toBeVisible();
   await page.getByRole('button', { name: updatedName }).click();
   await page.getByRole('button', { name: 'Back to campaigns' }).click();
-  await page.getByRole('button', { name: 'Performance' }).click();
+  await openSectionItem(page, 'Data', 'Performance data');
   await page.getByRole('button', { name: '+ Add record' }).click();
   const context = page.getByLabel('Campaign · channel · platform');
   const campaignOption = context
@@ -378,7 +379,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
   await expect(page.locator('span.filter.muted')).toHaveText('1 records');
   await expect(page.getByRole('table').first()).toContainText(recordDate);
 
-  await page.getByRole('button', { name: 'KPI targets' }).click();
+  await openSectionItem(page, 'Campaigns', 'KPI targets');
   const definitionSelect = page.getByLabel('KPI definition');
   const definitionOption = definitionSelect.locator('option').nth(1);
   const definitionValue = (await definitionOption.getAttribute('value')) ?? '';
@@ -435,9 +436,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
     'Status rule requires clarification',
   );
 
-  await page
-    .getByRole('button', { name: 'Campaign analytics', exact: true })
-    .click();
+  await openSectionItem(page, 'Campaigns', 'Campaign analytics');
   await expect(
     page.getByRole('heading', { name: 'Period comparison' }),
   ).toBeVisible();
@@ -486,7 +485,7 @@ test('authenticated user can load views and logout', async ({ page }) => {
   expect(downloadedBytes.subarray(0, 5).toString('ascii')).toBe('%PDF-');
   expect(downloadedBytes.length).toBeGreaterThan(512);
   await page.getByRole('button', { name: 'Overview' }).click();
-  await page.getByRole('button', { name: 'Performance' }).click();
+  await openSectionItem(page, 'Data', 'Performance data');
   await performanceRow.getByRole('button', { name: 'Edit' }).click();
   await countMetric.fill('2');
   await page.getByRole('button', { name: 'Save changes' }).click();
@@ -539,7 +538,7 @@ test('Administrator can manage the channel and platform catalogue lifecycle', as
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.locator('h1')).toHaveText('Campaign overview');
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await openSectionItem(page, 'Administration', 'Settings');
   await page.getByLabel('Reporting currency').selectOption('NGN');
   await page.getByRole('button', { name: 'Save reporting currency' }).click();
   await expect(
@@ -547,7 +546,7 @@ test('Administrator can manage the channel and platform catalogue lifecycle', as
   ).toBeVisible();
   await page.reload();
   await expect(page.locator('h1')).toHaveText('Settings');
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await openSectionItem(page, 'Administration', 'Settings');
   await expect(page.getByLabel('Reporting currency')).toHaveValue('NGN');
   await expect(
     page.getByRole('heading', { name: 'Channels & Platforms' }),
@@ -836,7 +835,7 @@ test('all fixed roles authenticate and Management stays read-only', async ({
     await page.getByLabel('Password').fill(account.password);
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.locator('.sidebar-footer')).toContainText(roleName);
-    await page.getByRole('button', { name: 'KPI targets' }).click();
+    await openSectionItem(page, 'Campaigns', 'KPI targets');
     if (roleName === 'Administrator')
       await expect(
         page.getByRole('heading', { name: 'Create KPI target' }),

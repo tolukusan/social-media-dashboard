@@ -348,11 +348,12 @@ export function Overview({
         {[
           ...channels.map((channel) => ({
             id: channel.id,
+            code: channel.code,
             name: channel.name,
           })),
-          { id: 'shared', name: 'Shared campaign metrics' },
+          { id: 'shared', code: 'SHARED', name: 'Shared campaign metrics' },
         ].map((group) => {
-          const metrics = (result?.metricMetadata ?? []).filter(
+          const available = (result?.metricMetadata ?? []).filter(
             (metric) =>
               metric.code !== selectedMetric?.code &&
               result?.kpis[metric.code] != null &&
@@ -360,6 +361,29 @@ export function Overview({
                 ? metric.applicableChannelIds[0] === group.id
                 : group.id === 'shared'),
           );
+          const priorities: Record<string, string[]> = {
+            SOCIAL: [
+              'SM_ENGAGEMENTS',
+              'SM_REACH',
+              'SM_IMPRESSIONS',
+              'SM_LINK_CLICKS',
+            ],
+            EMAIL: [
+              'EMAIL_OPENS',
+              'EMAIL_SENT',
+              'EMAIL_DELIVERED',
+              'EMAIL_CLICKS',
+            ],
+          };
+          const priority = priorities[group.code ?? ''] ?? [];
+          const metrics = [...available].sort((a, b) => {
+            const ai = priority.indexOf(a.code);
+            const bi = priority.indexOf(b.code);
+            return (
+              (ai < 0 ? Number.MAX_SAFE_INTEGER : ai) -
+              (bi < 0 ? Number.MAX_SAFE_INTEGER : bi)
+            );
+          });
           if (!metrics.length) return null;
           return (
             <section
@@ -369,17 +393,22 @@ export function Overview({
             >
               <h3>{group.name}</h3>
               <div className="kpi-grid">
-                {metrics.slice(0, 8).map((metric) => (
-                  <Kpi
-                    key={metric.code}
-                    title={metric.label}
-                    value={
-                      metric.unit === 'COUNT'
-                        ? formatNumber(result, metric.code)
-                        : formatKpi(result, metric.code)
-                    }
-                  />
-                ))}
+                {metrics
+                  .slice(
+                    0,
+                    group.code === 'SOCIAL' || group.code === 'EMAIL' ? 4 : 8,
+                  )
+                  .map((metric) => (
+                    <Kpi
+                      key={metric.code}
+                      title={metric.label}
+                      value={
+                        metric.unit === 'COUNT'
+                          ? formatNumber(result, metric.code)
+                          : formatKpi(result, metric.code)
+                      }
+                    />
+                  ))}
               </div>
             </section>
           );

@@ -56,6 +56,12 @@ export function AccessManagement({ onChanged }: { onChanged: () => void }) {
   return (
     <section className="panel page-panel">
       <h2>Access requests and invitations</h2>
+      <p className="notice warning" role="note">
+        Public registration does not verify email ownership. Approval confirms
+        workspace access only; it does not prove the applicant controls the
+        submitted mailbox. Verify the applicant through your approved contact
+        process before approving.
+      </p>
       <p>
         Review public applications and invite people into this organization.
         Invitations expire in seven days. Deliver the link manually to the
