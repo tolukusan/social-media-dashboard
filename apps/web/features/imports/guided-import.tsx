@@ -10,7 +10,10 @@ import {
   queryKeys,
 } from '../../lib/api-client';
 import { useSession } from '../auth/use-session';
-import { WorkspaceNavigation } from '../../components/workspace-navigation';
+import {
+  WorkspaceNavigation,
+  SectionNavigation,
+} from '../../components/workspace-navigation';
 import { CreateImportCampaign } from './create-import-campaign';
 import { ImportFields } from './import-fields';
 import { ImportHistory } from './import-history';
@@ -554,7 +557,11 @@ export function Imports() {
             {navigationOpen ? 'Close menu' : 'Menu'}
           </button>
           <div>
-            <p className="eyebrow">Add data</p>
+            <SectionNavigation
+              currentUser={currentUser}
+              view="imports"
+              canLeave={canLeave}
+            />
             <h1>Import performance data</h1>
           </div>
           <Link

@@ -16,4 +16,15 @@ describe('import date normalization', () => {
       '2024-11-25T00:00:00.000Z',
     );
   });
+
+  it('normalizes US slash dates used by LinkedIn analytics exports', () => {
+    assert.equal(
+      parseDate('09/24/2025')?.toISOString(),
+      '2025-09-24T00:00:00.000Z',
+    );
+  });
+
+  it('rejects impossible US slash dates', () => {
+    assert.equal(parseDate('02/30/2025'), null);
+  });
 });

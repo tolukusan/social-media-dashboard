@@ -47,6 +47,24 @@ export function parseDate(value: unknown) {
     const date = new Date(`${iso}T00:00:00.000Z`);
     return Number.isNaN(date.getTime()) ? null : date;
   }
+  const monthDayYear = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+.*)?$/.exec(
+    text,
+  );
+  if (monthDayYear) {
+    const month = Number(monthDayYear[1]) - 1;
+    const day = Number(monthDayYear[2]);
+    const year = Number(monthDayYear[3]);
+    const date = new Date(Date.UTC(year, month, day));
+    if (
+      month < 0 ||
+      month > 11 ||
+      Number.isNaN(date.getTime()) ||
+      date.getUTCMonth() !== month ||
+      date.getUTCDate() !== day
+    )
+      return null;
+    return date;
+  }
   const named =
     /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),\s+(\d{4})(?:\s+.*)?$/i.exec(
       text,

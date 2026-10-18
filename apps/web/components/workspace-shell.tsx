@@ -11,7 +11,7 @@ import {
 import { AuthLoading, Login } from '../features/auth/login';
 import { useSession } from '../features/auth/use-session';
 import Link from 'next/link';
-import { WorkspaceNavigation } from './workspace-navigation';
+import { WorkspaceNavigation, SectionNavigation } from './workspace-navigation';
 import { Campaigns } from '../features/campaigns/campaigns';
 import { Performance } from '../features/performance/performance';
 import { Overview } from '../features/dashboard/overview';
@@ -326,11 +326,11 @@ export function WorkspaceShell() {
             {navigationOpen ? 'Close menu' : 'Menu'}
           </button>
           <div className="topbar-title">
-            <div className="breadcrumbs" aria-label="Page location">
-              <span>Workspace</span>
-              <span aria-hidden="true">/</span>
-              <strong>{viewTitles[view]}</strong>
-            </div>
+            <SectionNavigation
+              currentUser={currentUser}
+              view={view}
+              navigate={navigate}
+            />
             <h1>{viewTitles[view]}</h1>
           </div>
           <div className="topbar-user" aria-label="Signed in user">

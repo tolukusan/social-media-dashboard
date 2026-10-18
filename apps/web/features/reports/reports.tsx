@@ -343,74 +343,87 @@ export function Reports({
                 or include unavailable metrics.
               </p>
             )}
-            {preview.comparison && (
-              <span>
-                {preview.comparison.metric} comparison:{' '}
-                {preview.comparison.currentPeriod.from.slice(0, 10)} to{' '}
-                {preview.comparison.currentPeriod.to.slice(0, 10)} vs{' '}
-                {preview.comparison.previousPeriod.from.slice(0, 10)} to{' '}
-                {preview.comparison.previousPeriod.to.slice(0, 10)} · Current{' '}
-                {valueLabel(
-                  preview.comparison.current,
-                  preview.comparison.unit,
-                  preview.reportingCurrency,
-                )}
-                {' · Previous '}
-                {valueLabel(
-                  preview.comparison.previous,
-                  preview.comparison.unit,
-                  preview.reportingCurrency,
-                )}
-                {' · Difference '}
-                {valueLabel(
-                  preview.comparison.difference,
-                  preview.comparison.unit,
-                  preview.reportingCurrency,
-                )}
-                {' · Change '}
-                {preview.comparison.percentageChange === null
-                  ? 'Unavailable'
-                  : `${preview.comparison.percentageChange.toFixed(2)}%`}
-                {preview.comparison.isPartial
-                  ? ' · Partial calendar period'
-                  : ''}
-              </span>
-            )}
-            {preview.trend && (
-              <div className="table-scroll">
-                <table>
-                  <caption>
-                    {preview.trend.metric} trend by{' '}
-                    {preview.trend.grain.toLowerCase()}
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Period</th>
-                      <th scope="col">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.trend.points.map((point) => (
-                      <tr key={point.bucket}>
-                        <th scope="row">{point.bucket}</th>
-                        <td>
-                          {valueLabel(
-                            point.value,
-                            preview.trend!.unit,
-                            preview.reportingCurrency,
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {!preview.trend.points.length && (
-                      <tr>
-                        <td colSpan={2}>No trend buckets in this period.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            {preview.comparison &&
+              (preview.comparison.current !== null ||
+                preview.comparison.previous !== null) && (
+                <span>
+                  {preview.comparison.metric} comparison:{' '}
+                  {preview.comparison.currentPeriod.from.slice(0, 10)} to{' '}
+                  {preview.comparison.currentPeriod.to.slice(0, 10)} vs{' '}
+                  {preview.comparison.previousPeriod.from.slice(0, 10)} to{' '}
+                  {preview.comparison.previousPeriod.to.slice(0, 10)} · Current{' '}
+                  {valueLabel(
+                    preview.comparison.current,
+                    preview.comparison.unit,
+                    preview.reportingCurrency,
+                  )}
+                  {' · Previous '}
+                  {valueLabel(
+                    preview.comparison.previous,
+                    preview.comparison.unit,
+                    preview.reportingCurrency,
+                  )}
+                  {' · Difference '}
+                  {valueLabel(
+                    preview.comparison.difference,
+                    preview.comparison.unit,
+                    preview.reportingCurrency,
+                  )}
+                  {' · Change '}
+                  {preview.comparison.percentageChange === null
+                    ? 'Unavailable'
+                    : `${preview.comparison.percentageChange.toFixed(2)}%`}
+                  {preview.comparison.isPartial
+                    ? ' · Partial calendar period'
+                    : ''}
+                </span>
+              )}
+            {preview.trend &&
+              (preview.trend.points.some((point) => point.value !== null) ? (
+                <details key={query.toString()}>
+                  <summary>View data table</summary>
+                  <div className="table-scroll">
+                    <table>
+                      <caption>
+                        {preview.trend.metric} trend by{' '}
+                        {preview.trend.grain.toLowerCase()}
+                      </caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Period</th>
+                          <th scope="col">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.trend.points.map((point) => (
+                          <tr key={point.bucket}>
+                            <th scope="row">{point.bucket}</th>
+                            <td>
+                              {valueLabel(
+                                point.value,
+                                preview.trend!.unit,
+                                preview.reportingCurrency,
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                        {!preview.trend.points.length && (
+                          <tr>
+                            <td colSpan={2}>
+                              No trend buckets in this period.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              ) : (
+                <p role="status">
+                  No trend values are available for the selected metric in this
+                  period.
+                </p>
+              ))}
             {preview.caveats.map((note) => (
               <span key={note}>Data note: {note}</span>
             ))}

@@ -1742,6 +1742,44 @@ body {
   min-width: 0;
 }
 
+.section-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 8px 0 2px;
+}
+
+.section-navigation a,
+.section-navigation button {
+  padding: 5px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #526883;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.section-navigation .active {
+  color: #2764e7;
+  border-bottom-color: #2764e7;
+  font-weight: 700;
+}
+
+.section-navigation a:hover,
+.section-navigation button:hover {
+  color: #2764e7;
+  background: transparent;
+}
+
+.section-navigation :focus-visible {
+  outline: 2px solid #2764e7;
+  outline-offset: 3px;
+}
+
 .topbar-title h1 {
   color: var(--ink);
   font-size: 17px;

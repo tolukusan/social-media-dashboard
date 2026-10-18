@@ -532,6 +532,11 @@ export function Overview({
                 : 'No performance records exist for this period.'
             }
           />
+        ) : !trends.points.some((point) => point.kpis[chartMetric] != null) ? (
+          <Empty
+            title="No trend data for this metric"
+            detail="No values are available for the selected metric in this period. Choose another metric or date range."
+          />
         ) : (
           <>
             <TrendLineChart
@@ -543,43 +548,48 @@ export function Overview({
               unit={chartMetadata?.unit ?? 'DECIMAL'}
               currencyCode={result?.reportingContext.currencyCode}
             />
-            <div className="table-scroll">
-              <table>
-                <caption className="sr-only">
-                  {chartMetadata?.label ?? 'Aggregated daily reach'} trend
-                  values
-                </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Period starting</th>
-                    <th scope="col">
-                      {chartMetadata?.label ?? 'Aggregated reach'}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trends.points.map((point) => {
-                    const value = point.kpis[chartMetric];
-                    const formatted =
-                      value == null
-                        ? 'Unavailable'
-                        : chartMetadata?.unit === 'COUNT'
-                          ? new Intl.NumberFormat().format(value)
-                          : chartMetadata?.unit === 'PERCENT'
-                            ? `${value.toFixed(2)}%`
-                            : chartMetadata?.unit === 'CURRENCY'
-                              ? `${result?.reportingContext.currencyCode ?? 'Currency unset'} ${value.toFixed(2)}`
-                              : String(value);
-                    return (
-                      <tr key={point.bucket}>
-                        <td>{point.bucket}</td>
-                        <td>{formatted}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <details
+              key={`${chartMetric}:${filters.from}:${filters.to}:${filters.campaignId}:${filters.channelId}:${filters.platformId}`}
+            >
+              <summary>View data table</summary>
+              <div className="table-scroll">
+                <table>
+                  <caption className="sr-only">
+                    {chartMetadata?.label ?? 'Aggregated daily reach'} trend
+                    values
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Period starting</th>
+                      <th scope="col">
+                        {chartMetadata?.label ?? 'Aggregated reach'}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trends.points.map((point) => {
+                      const value = point.kpis[chartMetric];
+                      const formatted =
+                        value == null
+                          ? 'Unavailable'
+                          : chartMetadata?.unit === 'COUNT'
+                            ? new Intl.NumberFormat().format(value)
+                            : chartMetadata?.unit === 'PERCENT'
+                              ? `${value.toFixed(2)}%`
+                              : chartMetadata?.unit === 'CURRENCY'
+                                ? `${result?.reportingContext.currencyCode ?? 'Currency unset'} ${value.toFixed(2)}`
+                                : String(value);
+                      return (
+                        <tr key={point.bucket}>
+                          <td>{point.bucket}</td>
+                          <td>{formatted}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </details>
           </>
         )}
       </section>
