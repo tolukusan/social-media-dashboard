@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { apiRequest } from '../../lib/api-client';
@@ -18,13 +18,20 @@ export function ReportingSettings() {
   });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const initializedForm = useRef(false);
   const {
     register,
     handleSubmit,
-    formState: { isSubmitting },
+    reset,
+    formState: { isSubmitting, isDirty },
   } = useForm<{ reportingCurrency: string }>({
-    values: { reportingCurrency: settings.data?.reportingCurrency ?? '' },
+    defaultValues: { reportingCurrency: '' },
   });
+  useEffect(() => {
+    if (!settings.data || initializedForm.current) return;
+    reset({ reportingCurrency: settings.data.reportingCurrency ?? '' });
+    initializedForm.current = true;
+  }, [reset, settings.data]);
   const save = handleSubmit(async (values) => {
     setMessage('');
     setError('');
@@ -34,6 +41,7 @@ export function ReportingSettings() {
         body: values,
       });
       queryClient.setQueryData(['reporting-settings'], updated);
+      reset({ reportingCurrency: updated.reportingCurrency ?? '' });
       await queryClient.invalidateQueries({
         predicate: (query) =>
           [
@@ -95,9 +103,22 @@ export function ReportingSettings() {
               ))}
             </select>
           </label>
-          <button className="primary" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Saving…' : 'Save reporting currency'}
-          </button>
+          <div className="form-action-row">
+            <button
+              className="primary"
+              type="submit"
+              disabled={isSubmitting || !isDirty}
+            >
+              {isSubmitting ? 'Saving…' : 'Save reporting currency'}
+            </button>
+            <span className="form-save-status" role="status" aria-live="polite">
+              {isSubmitting
+                ? 'Saving…'
+                : isDirty
+                  ? 'Unsaved changes'
+                  : message || 'No unsaved changes'}
+            </span>
+          </div>
         </form>
       )}
     </section>

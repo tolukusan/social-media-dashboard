@@ -1,5 +1,5 @@
-import { Imports } from '../../features/imports/imports';
+import { redirect } from 'next/navigation';
 
 export default function ImportsPage() {
-  return <Imports />;
+  redirect('/#datasets');
 }

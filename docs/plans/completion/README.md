@@ -142,6 +142,8 @@ Supplemental campaign connector OAuth work for `IntegrationConnection` records i
 
 Application configuration follow-up (2026-10-08): complete locally. Currency settings, development recovery logs, and the implementation/release documentation split passed lint, typecheck, 48 unit tests, 41 isolated integration tests, build, all seven E2E journeys, and documentation checks. Migration `20261008050000_reporting_settings` was applied to the isolated test database. See [verification evidence](../../evidence/app-configuration-verification.md). No implementation task remains in TODO; optional release work stays in its checklist.
 
+Marketwise control clarity and campaign-data follow-up (2026-10-19): completed locally. See [implementation progress](../../evidence/IMPLEMENTATION_PROGRESS.md#marketwise-control-clarity-and-campaign-data--2026-10-19) and [verification evidence](../../evidence/marketwise-control-clarity-verification.md). Release verification and the provider migration guide are recorded in the evidence, including the default integration timeout and the passing extended-timeout rerun.
+
 ```text
 Read AGENTS.md and docs/plans/completion/README.md.
 Execute the next ready task in the recommended sequence, or the task ID I name.

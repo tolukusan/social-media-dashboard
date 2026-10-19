@@ -21,11 +21,13 @@ export function ImportHistory({
           <p>
             Staged and completed files remain traceable by checksum and user.
           </p>
+          <p>
+            Completed imports remain in history even after a campaign is
+            deleted. This preserves the audit trail; it does not restore the
+            campaign data.
+          </p>
           {canDelete && (
-            <p>
-              You can delete staged, rejected, or failed imports. Completed
-              imports are retained for provenance.
-            </p>
+            <p>You can delete staged, rejected, or failed imports.</p>
           )}
         </div>
       </div>
@@ -36,6 +38,7 @@ export function ImportHistory({
             <thead>
               <tr>
                 <th>File</th>
+                <th>Campaign</th>
                 <th>Source</th>
                 <th>Imported by</th>
                 <th>Rows</th>
@@ -53,6 +56,20 @@ export function ImportHistory({
                       {item.originalFilename}
                     </small>
                   </th>
+                  <td>
+                    {item.currentCampaignNames.length > 0
+                      ? item.currentCampaignNames.join(', ')
+                      : item.deletedCampaignCount > 0
+                        ? null
+                        : 'No current link'}
+                    {item.deletedCampaignCount > 0 && (
+                      <small className="table-secondary">
+                        {item.deletedCampaignCount === 1
+                          ? 'Campaign deleted'
+                          : `${item.deletedCampaignCount} campaigns deleted`}
+                      </small>
+                    )}
+                  </td>
                   <td>{item.sourcePlatform || 'Generic'}</td>
                   <td>{item.importedByUser?.name || '—'}</td>
                   <td>
@@ -71,7 +88,7 @@ export function ImportHistory({
                       {['COMPLETED', 'IMPORTING'].includes(item.status) ? (
                         <span>
                           {item.status === 'COMPLETED'
-                            ? 'Retained for provenance'
+                            ? 'History retained'
                             : 'Processing'}
                         </span>
                       ) : (

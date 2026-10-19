@@ -14,6 +14,10 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { FileParserService } from './file-parser.service.js';
+import {
+  attachImportCampaignContext,
+  type ImportHistoryCampaignLink,
+} from './import-history-context.js';
 import { isBlank, suggestedMapping } from './source-aliases.js';
 import { detectSourceAdapter } from './source-adapters.js';
 import {
@@ -955,8 +959,8 @@ export class ImportsService {
     });
   }
 
-  list() {
-    return this.prisma.importBatch.findMany({
+  async list() {
+    const batches = await this.prisma.importBatch.findMany({
       where: { datasetOperation: null },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -976,6 +980,50 @@ export class ImportsService {
         completedAt: true,
       },
     });
+    if (!batches.length) return [];
+
+    const batchIds = batches.map((batch) => batch.id);
+    const campaignLinks = await this.prisma.$queryRaw<
+      ImportHistoryCampaignLink[]
+    >`
+      WITH target_batches AS (
+        SELECT unnest(${batchIds}::uuid[]) AS id
+      ), current_links AS (
+        SELECT DISTINCT
+          target.id::text AS "batchId",
+          campaign.id::text AS "campaignId",
+          campaign.name AS "campaignName",
+          'CURRENT'::text AS state
+        FROM target_batches target
+        JOIN social_media_dashboard."PerformanceRecord" record
+          ON record."importBatchId" = target.id
+        JOIN social_media_dashboard."CampaignPlatform" campaign_platform
+          ON campaign_platform.id = record."campaignPlatformId"
+        JOIN social_media_dashboard."CampaignChannel" campaign_channel
+          ON campaign_channel.id = campaign_platform."campaignChannelId"
+        JOIN social_media_dashboard."Campaign" campaign
+          ON campaign.id = campaign_channel."campaignId"
+      ), deleted_links AS (
+        SELECT DISTINCT
+          target.id::text AS "batchId",
+          audit."entityId" AS "campaignId",
+          NULL::text AS "campaignName",
+          'DELETED'::text AS state
+        FROM target_batches target
+        JOIN social_media_dashboard."AuditLog" audit
+          ON audit.action = 'PERMANENT_DELETE'
+          AND audit."entityType" = 'Campaign'
+        CROSS JOIN LATERAL jsonb_array_elements_text(
+          COALESCE(audit.metadata->'retainedImportIds', '[]'::jsonb)
+        ) AS retained(batch_id)
+        WHERE retained.batch_id = target.id::text
+      )
+      SELECT * FROM current_links
+      UNION ALL
+      SELECT * FROM deleted_links
+    `;
+
+    return attachImportCampaignContext(batches, campaignLinks);
   }
   get(id: string) {
     return this.getBatch(id);

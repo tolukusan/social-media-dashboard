@@ -82,6 +82,7 @@ export function Campaigns({
       {campaigns.length ? (
         selectedCampaignId ? (
           <CampaignDetails
+            key={selectedCampaignId}
             campaign={
               campaigns.find((item) => item.id === selectedCampaignId) ?? null
             }

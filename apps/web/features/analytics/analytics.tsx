@@ -103,6 +103,9 @@ export function Analytics({
   const metadata = result?.metricMetadata.find(
     (item) => item.code === metricCode,
   );
+  const hasTrendValues = Boolean(
+    trends?.points.some((point) => point.kpis[metricCode] != null),
+  );
   const comparisonQuery = useQuery({
     queryKey: ['analytics-comparison', filters, period],
     enabled: Boolean(from && to && metadata),
@@ -492,47 +495,49 @@ export function Analytics({
           </>
         ) : null}
       </section>
-      <section className="panel page-panel">
-        <h2>Trend values</h2>
-        {trends?.points.length ? (
-          <>
-            <TrendLineChart
-              points={trends.points.map((point) => ({
-                bucket: point.bucket,
-                value: point.kpis[metricCode] ?? null,
-              }))}
-              label={metadata?.label ?? metricCode}
-              unit={metadata?.unit ?? 'DECIMAL'}
-              currencyCode={result?.reportingContext.currencyCode}
-            />
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Bucket</th>
-                    <th scope="col">
-                      {metadata?.label ?? 'Click-through rate'}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trends.points.map((point) => (
-                    <tr key={point.bucket}>
-                      <th scope="row">{point.bucket}</th>
-                      <td>{formatValue(point.kpis[metricCode])}</td>
+      {hasTrendValues ? (
+        <section className="panel page-panel">
+          <h2>Trend values</h2>
+          {trends?.points.length ? (
+            <>
+              <TrendLineChart
+                points={trends.points.map((point) => ({
+                  bucket: point.bucket,
+                  value: point.kpis[metricCode] ?? null,
+                }))}
+                label={metadata?.label ?? metricCode}
+                unit={metadata?.unit ?? 'DECIMAL'}
+                currencyCode={result?.reportingContext.currencyCode}
+              />
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Bucket</th>
+                      <th scope="col">
+                        {metadata?.label ?? 'Click-through rate'}
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        ) : (
-          <Empty
-            title="No trend points"
-            detail="Choose dates and a metric with data to see trends."
-          />
-        )}
-      </section>
+                  </thead>
+                  <tbody>
+                    {trends.points.map((point) => (
+                      <tr key={point.bucket}>
+                        <th scope="row">{point.bucket}</th>
+                        <td>{formatValue(point.kpis[metricCode])}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <Empty
+              title="No trend points"
+              detail="Choose dates and a metric with data to see trends."
+            />
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }

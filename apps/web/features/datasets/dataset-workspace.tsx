@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -24,7 +25,7 @@ import type {
   DatasetRowsResult,
   HistoricalImport,
 } from '../../lib/workspace-types';
-import { DatasetComparison } from './dataset-comparison';
+import { DatasetJoinByDate } from './dataset-join-by-date';
 
 function rawCell(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -101,6 +102,15 @@ export function DatasetWorkspace({
   const [columnMetadata, setColumnMetadata] = useState<
     Record<string, { meaning: string; unit: string }>
   >({});
+  const [confirmedColumnDetails, setConfirmedColumnDetails] = useState<{
+    datasetId: string;
+    labels: Record<string, string>;
+    metadata: Record<string, { meaning: string; unit: string }>;
+  } | null>(null);
+  const [columnSaveState, setColumnSaveState] = useState<
+    'clean' | 'saving' | 'saved' | 'failed'
+  >('clean');
+  const [savingColumns, setSavingColumns] = useState(false);
   const [templateId, setTemplateId] = useState('');
   const [createCampaignOpen, setCreateCampaignOpen] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState('');
@@ -129,6 +139,26 @@ export function DatasetWorkspace({
     queryFn: () => apiRequest<DatasetDetail>(`/datasets/${selectedDatasetId}`),
   });
   const columns = dataset.data?.columns ?? [];
+  const hasUnsavedColumnDetails = Boolean(
+    dataset.data &&
+    confirmedColumnDetails?.datasetId === dataset.data.id &&
+    columns.some((column) => {
+      const original = confirmedColumnDetails.labels[column.id] ?? column.label;
+      const savedMetadata = confirmedColumnDetails.metadata[column.id] ?? {
+        meaning: '',
+        unit: '',
+      };
+      const draftMetadata = columnMetadata[column.id] ?? {
+        meaning: '',
+        unit: '',
+      };
+      return (
+        (labels[column.id] ?? column.label) !== original ||
+        (draftMetadata.meaning ?? '') !== (savedMetadata.meaning ?? '') ||
+        (draftMetadata.unit ?? '') !== (savedMetadata.unit ?? '')
+      );
+    }),
+  );
   const dateColumns = columns.filter((column) => column.type === 'date');
   const numericColumns = columns.filter((column) => column.type === 'number');
   const rowsQuery = useQuery({
@@ -178,6 +208,9 @@ export function DatasetWorkspace({
       (column) => column.id === chartColumnId,
     );
     if (!selectedColumn) return [];
+    const dateColumn =
+      columns.find((column) => column.type === 'date') ??
+      columns.find((column) => /^date$/i.test(column.originalName.trim()));
     return rows.flatMap((row) => {
       const typed = row.typedCells[selectedColumn.ordinal];
       const value = Number(typed?.value);
@@ -187,13 +220,19 @@ export function DatasetWorkspace({
         ? [
             {
               sourceRow: row.sourceRowNumber,
+              date: dateColumn
+                ? rawCell(row.cells[dateColumn.ordinal]).replace(
+                    /^(\d{4}-\d{2}-\d{2})T.*$/,
+                    '$1',
+                  )
+                : undefined,
               value,
               exactValue: rawCell(row.cells[selectedColumn.ordinal]),
             },
           ]
         : [];
     });
-  }, [chartColumnId, numericColumns, rows]);
+  }, [chartColumnId, numericColumns, columns, rows]);
   const pendingDraft = Boolean(
     attempt ||
     file ||
@@ -267,23 +306,25 @@ export function DatasetWorkspace({
   }, [pendingDraft]);
 
   useEffect(() => {
-    if (!dataset.data) return;
-    setLabels(
-      Object.fromEntries(
-        dataset.data.columns.map((column) => [column.id, column.label]),
-      ),
+    if (!dataset.data || dataset.data.id !== selectedDatasetId) return;
+    if (confirmedColumnDetails?.datasetId === dataset.data.id) return;
+    const nextLabels = Object.fromEntries(
+      dataset.data.columns.map((column) => [column.id, column.label]),
     );
-    setColumnMetadata(
-      Object.fromEntries(
-        dataset.data.columns.map((column) => [
-          column.id,
-          {
-            meaning: column.meaning ?? '',
-            unit: column.unit ?? '',
-          },
-        ]),
-      ),
+    const nextMetadata = Object.fromEntries(
+      dataset.data.columns.map((column) => [
+        column.id,
+        { meaning: column.meaning ?? '', unit: column.unit ?? '' },
+      ]),
     );
+    setLabels(nextLabels);
+    setColumnMetadata(nextMetadata);
+    setConfirmedColumnDetails({
+      datasetId: dataset.data.id,
+      labels: nextLabels,
+      metadata: nextMetadata,
+    });
+    setColumnSaveState('clean');
     setDateColumnId(
       dataset.data.columns.find((column) => column.type === 'date')?.id ?? '',
     );
@@ -294,7 +335,7 @@ export function DatasetWorkspace({
     setSearch('');
     setFrom('');
     setTo('');
-  }, [dataset.data?.id, dataset.data?.currentRevision]);
+  }, [confirmedColumnDetails?.datasetId, dataset.data, selectedDatasetId]);
 
   const setUrlContext = (
     next: {
@@ -508,8 +549,10 @@ export function DatasetWorkspace({
   };
 
   const saveLabels = async () => {
-    if (!dataset.data) return;
+    if (!dataset.data || !hasUnsavedColumnDetails || savingColumns) return;
     setBusy(true);
+    setSavingColumns(true);
+    setColumnSaveState('saving');
     setError('');
     try {
       const result = await apiRequest<DatasetDetail>(
@@ -527,24 +570,32 @@ export function DatasetWorkspace({
         },
       );
       queryClient.setQueryData(['dataset', result.id], result);
-      setColumnMetadata(
-        Object.fromEntries(
-          result.columns.map((column) => [
-            column.id,
-            {
-              meaning: column.meaning ?? '',
-              unit: column.unit ?? '',
-            },
-          ]),
-        ),
+      const savedLabels = Object.fromEntries(
+        result.columns.map((column) => [column.id, column.label]),
       );
+      const savedMetadata = Object.fromEntries(
+        result.columns.map((column) => [
+          column.id,
+          { meaning: column.meaning ?? '', unit: column.unit ?? '' },
+        ]),
+      );
+      setLabels(savedLabels);
+      setColumnMetadata(savedMetadata);
+      setConfirmedColumnDetails({
+        datasetId: result.id,
+        labels: savedLabels,
+        metadata: savedMetadata,
+      });
+      setColumnSaveState('saved');
     } catch (cause) {
+      setColumnSaveState('failed');
       setError(
         cause instanceof Error
           ? cause.message
           : 'Column labels could not be saved.',
       );
     } finally {
+      setSavingColumns(false);
       setBusy(false);
     }
   };
@@ -788,6 +839,7 @@ export function DatasetWorkspace({
 
       {selectedDatasetId ? (
         <DatasetViewer
+          key={selectedDatasetId}
           dataset={dataset.data ?? null}
           loading={dataset.isPending || rowsQuery.isPending}
           error={dataset.error || rowsQuery.error}
@@ -803,6 +855,9 @@ export function DatasetWorkspace({
             Boolean(dataset.data?.capabilities.delete)
           }
           busy={busy}
+          savingColumns={savingColumns}
+          hasUnsavedColumnDetails={hasUnsavedColumnDetails}
+          columnSaveState={columnSaveState}
           search={search}
           setSearch={(value) => {
             setSearch(value);
@@ -1029,13 +1084,20 @@ export function DatasetWorkspace({
                   )}
                 </>
               ) : !attempt?.sheetSelectionRequired ? (
-                <button
-                  type="submit"
-                  className="primary"
-                  disabled={busy || !file}
-                >
-                  {busy ? 'Preparing…' : 'Preview file'}
-                </button>
+                <>
+                  <button
+                    type="submit"
+                    className="primary"
+                    disabled={busy || !file}
+                  >
+                    {busy ? 'Preparing…' : 'Preview file'}
+                  </button>
+                  {!file ? (
+                    <span className="field-help">
+                      Select a file to enable preview.
+                    </span>
+                  ) : null}
+                </>
               ) : null}
               {replaceTargetId && !attempt ? (
                 <button
@@ -1064,8 +1126,8 @@ export function DatasetWorkspace({
             </p>
           ) : null}
           {campaignQuery.data ? (
-            <DatasetComparison
-              campaignId={selectedCampaignId}
+            <DatasetJoinByDate
+              key={selectedCampaignId}
               datasets={campaignQuery.data.datasets}
             />
           ) : null}
@@ -1184,7 +1246,7 @@ export function DatasetWorkspace({
       )}
       <input
         ref={replacementFileInput}
-        className="visually-hidden"
+        hidden
         type="file"
         aria-label="Upload replacement file"
         accept=".csv,.xlsx,.json"
@@ -1210,6 +1272,9 @@ function DatasetViewer({
   canEdit,
   canDelete,
   busy,
+  savingColumns,
+  hasUnsavedColumnDetails,
+  columnSaveState,
   search,
   setSearch,
   dateColumnId,
@@ -1245,6 +1310,9 @@ function DatasetViewer({
   canEdit: boolean;
   canDelete: boolean;
   busy: boolean;
+  savingColumns: boolean;
+  hasUnsavedColumnDetails: boolean;
+  columnSaveState: 'clean' | 'saving' | 'saved' | 'failed';
   search: string;
   setSearch: (value: string) => void;
   dateColumnId: string;
@@ -1257,7 +1325,12 @@ function DatasetViewer({
   setChartColumnId: (value: string) => void;
   numericColumns: DatasetColumn[];
   dateColumns: DatasetColumn[];
-  chartData: Array<{ sourceRow: number; value: number; exactValue: string }>;
+  chartData: Array<{
+    sourceRow: number;
+    date?: string;
+    value: number;
+    exactValue: string;
+  }>;
   onBack: () => void;
   onSaveLabels: () => void;
   onSaveTemplate: () => void;
@@ -1266,6 +1339,7 @@ function DatasetViewer({
   onExport: (format: 'csv' | 'pdf') => void;
   onPage: (page: number) => void;
 }) {
+  const [sourceRowsOpen, setSourceRowsOpen] = useState(false);
   if (loading && !dataset) return <p role="status">Loading dataset…</p>;
   if (error)
     return (
@@ -1279,7 +1353,11 @@ function DatasetViewer({
     return <p className="notice">Dataset details are unavailable.</p>;
   return (
     <section className="panel dataset-viewer" aria-label="Dataset rows">
-      <button className="secondary" onClick={onBack}>
+      <button
+        type="button"
+        className="secondary dataset-back-action"
+        onClick={onBack}
+      >
         ← Back to campaign data
       </button>
       <div className="panel-heading detail-heading">
@@ -1290,6 +1368,9 @@ function DatasetViewer({
             {dataset.sourceFilename}
             {dataset.worksheetName ? ` · ${dataset.worksheetName}` : ''} ·{' '}
             {dataset.rowCount} rows
+          </p>
+          <p className="dataset-saved-status" role="status">
+            Dataset saved · {dataset.rowCount} rows
           </p>
         </div>
         <div className="button-row">
@@ -1310,11 +1391,34 @@ function DatasetViewer({
       ) : null}
       {canEdit ? (
         <div className="dataset-label-editor">
-          <h4>Column labels and comparison details</h4>
+          <h4>Column labels and details</h4>
+          <div className="dataset-label-actions">
+            <button
+              className="primary"
+              disabled={busy || savingColumns || !hasUnsavedColumnDetails}
+              onClick={onSaveLabels}
+            >
+              {savingColumns ? 'Saving…' : 'Save column details'}
+            </button>
+            <span
+              className="dataset-edit-status"
+              role="status"
+              aria-live="polite"
+            >
+              {columnSaveState === 'saving'
+                ? 'Saving…'
+                : hasUnsavedColumnDetails
+                  ? columnSaveState === 'failed'
+                    ? 'Changes not saved'
+                    : 'Unsaved changes'
+                  : columnSaveState === 'saved'
+                    ? 'Changes saved'
+                    : 'No unsaved changes'}
+            </span>
+          </div>
           <p className="field-help">
-            Labels do not change original headers or values. Matching meaning
-            and unit details allow a shared time-series chart when dates and
-            observation intervals also match.
+            Labels describe your imported columns. Changing a label, meaning, or
+            unit does not change the original values.
           </p>
           <div className="dataset-column-metadata">
             {columns.map((column) => (
@@ -1327,6 +1431,9 @@ function DatasetViewer({
                   <input
                     value={labels[column.id] ?? column.label}
                     maxLength={120}
+                    disabled={
+                      busy || savingColumns || columnSaveState === 'saving'
+                    }
                     onChange={(event) =>
                       setLabels({ ...labels, [column.id]: event.target.value })
                     }
@@ -1340,6 +1447,9 @@ function DatasetViewer({
                         value={columnMetadata[column.id]?.meaning ?? ''}
                         maxLength={120}
                         placeholder="For example: post impressions"
+                        disabled={
+                          busy || savingColumns || columnSaveState === 'saving'
+                        }
                         onChange={(event) =>
                           setColumnMetadata({
                             ...columnMetadata,
@@ -1357,6 +1467,9 @@ function DatasetViewer({
                         value={columnMetadata[column.id]?.unit ?? ''}
                         maxLength={40}
                         placeholder="For example: impressions"
+                        disabled={
+                          busy || savingColumns || columnSaveState === 'saving'
+                        }
                         onChange={(event) =>
                           setColumnMetadata({
                             ...columnMetadata,
@@ -1374,13 +1487,6 @@ function DatasetViewer({
             ))}
           </div>
           <div className="button-row">
-            <button
-              className="secondary"
-              disabled={busy}
-              onClick={onSaveLabels}
-            >
-              Save labels
-            </button>
             <button
               className="secondary"
               disabled={busy}
@@ -1453,26 +1559,51 @@ function DatasetViewer({
         <div
           className="dataset-chart"
           role="img"
-          aria-label={`Values in the current page for ${numericColumns.find((column) => column.id === chartColumnId)?.label ?? 'selected column'}`}
+          aria-label={`Chart of ${numericColumns.find((column) => column.id === chartColumnId)?.label ?? 'selected values'} by ${chartData[0]?.date !== undefined ? 'date' : 'source row'}`}
         >
           <p className="field-help">
             Each point is one imported row from the current page. Repeated dates
             and values are not combined.
           </p>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
+            <BarChart data={chartData} margin={{ left: 36, bottom: 18 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="sourceRow" />
-              <YAxis />
+              <XAxis
+                dataKey={
+                  chartData[0]?.date !== undefined ? 'date' : 'sourceRow'
+                }
+                height={60}
+                minTickGap={30}
+                label={{
+                  value:
+                    chartData[0]?.date !== undefined ? 'Date' : 'Source row',
+                  position: 'insideBottom',
+                  offset: -8,
+                }}
+              />
+              <YAxis
+                label={{
+                  value:
+                    numericColumns.find((column) => column.id === chartColumnId)
+                      ?.label ?? 'Value',
+                  angle: -90,
+                  position: 'insideLeft',
+                }}
+              />
+              <Legend height={30} />
               <Tooltip
                 formatter={(_value, _name, item) => [
                   item.payload.exactValue,
-                  'Imported value',
+                  numericColumns.find((column) => column.id === chartColumnId)
+                    ?.label ?? 'Value',
                 ]}
               />
               <Bar
                 dataKey="value"
-                name="Imported value"
+                name={
+                  numericColumns.find((column) => column.id === chartColumnId)
+                    ?.label ?? 'Value'
+                }
                 fill="#2764e7"
                 isAnimationActive={false}
               />
@@ -1481,7 +1612,12 @@ function DatasetViewer({
         </div>
       ) : null}
       {rows ? (
-        <>
+        <details
+          className="dataset-source-rows"
+          open={sourceRowsOpen}
+          onToggle={(event) => setSourceRowsOpen(event.currentTarget.open)}
+        >
+          <summary>View source rows</summary>
           <p className="muted-text">
             {rows.totalRows} matching rows · page {rows.page} of{' '}
             {Math.max(1, rows.totalPages)}
@@ -1548,11 +1684,14 @@ function DatasetViewer({
               </button>
             </div>
           </div>
-        </>
+        </details>
       ) : loading ? (
         <p role="status">Loading rows…</p>
       ) : null}
       <div className="button-row dataset-export-actions">
+        <button type="button" className="secondary" onClick={onBack}>
+          ← Back to campaign files
+        </button>
         <button
           className="secondary"
           disabled={busy}

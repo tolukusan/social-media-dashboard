@@ -49,3 +49,5 @@ Do not send the secret values in chat. Once the environment is configured, an Ad
 - [YouTube Analytics API reports.query](https://developers.google.com/youtube/analytics/reference/reports/query)
 - [YouTube Data API channels.list](https://developers.google.com/youtube/v3/docs/channels/list)
 - [Zoho Campaigns API](https://www.zoho.com/campaigns/help/api/)
+
+For installation on another system and the complete provider-console walkthrough, see [the step-by-step setup and migration guide](../guides/provider-setup-and-migration.md).

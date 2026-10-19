@@ -82,6 +82,8 @@ export type HistoryItem = {
   rejectedRows: number;
   createdAt: string;
   importedByUser?: { name: string };
+  currentCampaignNames: string[];
+  deletedCampaignCount: number;
 };
 export type Result = {
   id: string;

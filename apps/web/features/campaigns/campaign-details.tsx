@@ -1,11 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import type { Campaign, CurrentUser } from '../../lib/workspace-types';
-import { useQueryClient } from '@tanstack/react-query';
+import type {
+  Campaign,
+  CurrentUser,
+  DatasetCampaignResult,
+} from '../../lib/workspace-types';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, invalidateWorkspace } from '../../lib/api-client';
 import { CampaignEditForm } from './campaign-edit-form';
 import { DatasetWorkspace } from '../datasets/dataset-workspace';
+import { DatasetJoinByDate } from '../datasets/dataset-join-by-date';
 
 export function CampaignDetails({
   campaign,
@@ -32,6 +37,13 @@ export function CampaignDetails({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showDatasetWorkspace, setShowDatasetWorkspace] = useState(false);
+  const campaignData = useQuery({
+    queryKey: ['datasets', 'campaign', campaign?.id],
+    enabled: Boolean(campaign && currentUser),
+    queryFn: () =>
+      apiRequest<DatasetCampaignResult>(`/datasets/campaigns/${campaign!.id}`),
+  });
   if (!campaign)
     return (
       <div className="notice error" role="alert">
@@ -89,6 +101,25 @@ export function CampaignDetails({
           onCancel={() => setEditing(false)}
         />
       ) : null}
+      {currentUser && !showDatasetWorkspace ? (
+        campaignData.isPending ? (
+          <p role="status">Loading campaign data…</p>
+        ) : campaignData.error ? (
+          <p className="notice error" role="alert">
+            {campaignData.error.message}
+          </p>
+        ) : campaignData.data?.datasets.length ? (
+          <DatasetJoinByDate
+            key={campaign.id}
+            datasets={campaignData.data.datasets}
+            defaultOpen
+          />
+        ) : (
+          <p className="notice">
+            No imported data yet. Choose Manage campaign files to upload a file.
+          </p>
+        )
+      ) : null}
       <dl className="detail-grid">
         <div>
           <dt>Start date</dt>
@@ -97,26 +128,6 @@ export function CampaignDetails({
         <div>
           <dt>End date</dt>
           <dd>{campaign.endDate?.slice(0, 10) || 'Open'}</dd>
-        </div>
-        <div>
-          <dt>Channels</dt>
-          <dd>
-            {campaign.campaignChannels
-              ?.map((item) => item.channel.name)
-              .join(', ') || '—'}
-          </dd>
-        </div>
-        <div>
-          <dt>Platforms</dt>
-          <dd>
-            {campaign.campaignChannels
-              ?.flatMap(
-                (item) =>
-                  item.campaignPlatforms?.map((link) => link.platform.name) ??
-                  [],
-              )
-              .join(', ') || '—'}
-          </dd>
         </div>
       </dl>
       <p className="muted-text">
@@ -137,12 +148,29 @@ export function CampaignDetails({
         </button>
       )}
       {currentUser ? (
-        <DatasetWorkspace
-          campaigns={[campaign]}
-          currentUser={currentUser}
-          campaignId={campaign.id}
-          onDraftChange={onDatasetDraftChange}
-        />
+        <section className="campaign-data-section">
+          <button
+            type="button"
+            className="secondary"
+            aria-expanded={showDatasetWorkspace}
+            onClick={() => {
+              if (showDatasetWorkspace && !canLeaveDatasetDraft()) return;
+              setShowDatasetWorkspace((visible) => !visible);
+            }}
+          >
+            {showDatasetWorkspace
+              ? 'Back to campaign data'
+              : 'Manage campaign files'}
+          </button>
+          {showDatasetWorkspace ? (
+            <DatasetWorkspace
+              campaigns={[campaign]}
+              currentUser={currentUser}
+              campaignId={campaign.id}
+              onDraftChange={onDatasetDraftChange}
+            />
+          ) : null}
+        </section>
       ) : null}
     </section>
   );

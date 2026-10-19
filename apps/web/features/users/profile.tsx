@@ -20,7 +20,8 @@ export function Profile({ currentUser }: { currentUser: CurrentUser }) {
   const {
     register,
     handleSubmit,
-    formState: { isSubmitting },
+    reset,
+    formState: { isSubmitting, isDirty },
   } = useForm<ProfileForm>({ defaultValues: { name: currentUser.name } });
   const {
     register: registerPassword,
@@ -59,6 +60,7 @@ export function Profile({ currentUser }: { currentUser: CurrentUser }) {
         body: { name },
       });
       queryClient.setQueryData(queryKeys.session, updated);
+      reset({ name: updated.name });
       setMessage('Your display name was updated.');
     } catch (cause) {
       setError(
@@ -77,11 +79,6 @@ export function Profile({ currentUser }: { currentUser: CurrentUser }) {
           <p>Manage your workspace display name.</p>
         </div>
       </div>
-      {message && (
-        <div className="notice" role="status">
-          {message}
-        </div>
-      )}
       {error && (
         <div className="notice error" role="alert">
           {error}
@@ -105,9 +102,22 @@ export function Profile({ currentUser }: { currentUser: CurrentUser }) {
           Role
           <input value={currentUser.role.name} readOnly />
         </label>
-        <button className="primary" type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Saving…' : 'Save profile'}
-        </button>
+        <div className="form-action-row">
+          <button
+            className="primary"
+            type="submit"
+            disabled={isSubmitting || !isDirty}
+          >
+            {isSubmitting ? 'Saving…' : 'Save profile'}
+          </button>
+          <span className="form-save-status" role="status" aria-live="polite">
+            {isSubmitting
+              ? 'Saving…'
+              : isDirty
+                ? 'Unsaved changes'
+                : message || 'No unsaved changes'}
+          </span>
+        </div>
       </form>
       <div className="panel-heading">
         <div>

@@ -226,6 +226,12 @@ Commands: node .reorganisation-backup/check-docs.cjs (155 links resolve); node .
 - Added two unit cases, five PostgreSQL integration cases, and four browser journeys; updated nine existing browser journeys. Verification and changed-file inventory are in [guided UX evidence](simple-ux-verification.md). Verification passed: 50 unit tests, 53 integration tests, all 13 browser journeys, typecheck, builds, documentation and changed-code formatting. Full lint reports only an existing untracked user script.
 - Existing untracked user files and application data were preserved. Drafts remain in memory with a leave warning; stakeholder usability testing remains a follow-up. No external deployment, commit, or push is claimed.
 
+## Marketwise control clarity and campaign data — 2026-10-19
+
+- Standardized common control boundaries and state feedback, improved dataset column-detail save states, hid campaign data until requested, removed empty Channels/Platforms tiles, labeled metric charts, and added joined-by-date table export for separate datasets.
+- See [focused verification evidence](marketwise-control-clarity-verification.md) for changed behavior, viewport coverage, and actual checks. `pnpm lint`, `pnpm typecheck`, `pnpm test:unit` (114 tests), `pnpm build`, and `pnpm test:e2e` (23 journeys) passed. The isolated integration suite passed 83/84; one import-preview authorization test exceeded its timeout.
+- No API or schema changes. Existing import work and local credentials were preserved.
+
 ## Live marketing integration addition — 2026-10-08
 
 - The stakeholder requested Facebook, Instagram, Zoho, LinkedIn, and further automatic imports, then clarified campaign/advertising/performance scope and explicitly instructed implementation before keys are ready. This promotes the named integration work beyond the completed MVP. Zoho Campaigns is the stated product assumption; no unnamed or organic connectors are claimed implemented. Existing metric formulas, roles, application architecture, manual records, and file formats remain authoritative.

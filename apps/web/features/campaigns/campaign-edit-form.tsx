@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import type { Campaign } from '../../lib/workspace-types';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiRequest, invalidateWorkspace } from '../../lib/api-client';
@@ -17,6 +17,27 @@ export function CampaignEditForm({
   const queryClient = useQueryClient();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const initialValues = useRef({
+    name: campaign.name,
+    objective: campaign.objective ?? '',
+    targetAudience: campaign.targetAudience ?? '',
+    description: campaign.description ?? '',
+    startDate: campaign.startDate.slice(0, 10),
+    endDate: campaign.endDate?.slice(0, 10) ?? '',
+    status: campaign.status,
+    budget: campaign.budget == null ? '' : String(campaign.budget),
+    notes: campaign.notes ?? '',
+  });
+  const [isDirty, setIsDirty] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
+  const updateDirty = (form: HTMLFormElement) => {
+    const values = Object.fromEntries(new FormData(form).entries());
+    const changed = Object.entries(initialValues.current).some(
+      ([name, value]) => String(values[name] ?? '') !== value,
+    );
+    setIsDirty(changed);
+    if (changed) setSaveStatus('idle');
+  };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -39,6 +60,7 @@ export function CampaignEditForm({
         },
       });
       await invalidateWorkspace(queryClient);
+      setSaveStatus('saved');
       onSaved(updated);
     } catch (cause) {
       setError(
@@ -51,7 +73,12 @@ export function CampaignEditForm({
     }
   };
   return (
-    <form className="form-grid nested-form" onSubmit={submit}>
+    <form
+      className="form-grid nested-form campaign-edit-form"
+      onSubmit={submit}
+      onInput={(event) => updateDirty(event.currentTarget)}
+      onChange={(event) => updateDirty(event.currentTarget)}
+    >
       <h3>Edit campaign</h3>
       {error && (
         <div className="notice error" role="alert">
@@ -79,7 +106,7 @@ export function CampaignEditForm({
           defaultValue={campaign.targetAudience ?? ''}
         />
       </label>
-      <label>
+      <label className="campaign-field-wide">
         Description
         <textarea
           name="description"
@@ -123,7 +150,7 @@ export function CampaignEditForm({
           defaultValue={campaign.budget ?? ''}
         />
       </label>
-      <label>
+      <label className="campaign-field-wide">
         Notes
         <textarea name="notes" defaultValue={campaign.notes ?? ''} />
       </label>
@@ -132,8 +159,8 @@ export function CampaignEditForm({
         {campaign.responsibleUser?.name ?? 'Current assignment'}. Channel and
         platform links stay intact while editing campaign details.
       </p>
-      <span>
-        <button className="primary" disabled={busy}>
+      <div className="campaign-edit-actions form-action-row">
+        <button className="primary" disabled={busy || !isDirty}>
           {busy ? 'Saving…' : 'Save campaign'}
         </button>{' '}
         <button
@@ -144,7 +171,16 @@ export function CampaignEditForm({
         >
           Cancel
         </button>
-      </span>
+        <span className="form-save-status" role="status" aria-live="polite">
+          {busy
+            ? 'Saving…'
+            : isDirty
+              ? 'Unsaved changes'
+              : saveStatus === 'saved'
+                ? 'Changes saved'
+                : 'No unsaved changes'}
+        </span>
+      </div>
     </form>
   );
 }

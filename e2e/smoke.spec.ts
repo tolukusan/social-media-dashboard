@@ -121,23 +121,15 @@ test('screen navigation keeps six primary sections, file-first data, and session
   try {
     await page.getByRole('link', { name: 'Imports', exact: true }).click();
     await requested;
-    await expect(
-      page.getByRole('heading', {
-        name: 'Import performance data',
-        exact: true,
-      }),
-    ).toBeVisible();
+    await expect(page.locator('h1')).toHaveText('Data');
   } finally {
     release();
   }
   await checked;
-  const returnedCheck = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/api/v1/auth/me') && response.status() === 200,
-  );
-  await page.getByRole('link', { name: 'Back to workspace' }).click();
+  await navigation
+    .getByRole('button', { name: 'Overview', exact: true })
+    .click();
   await expect(page.locator('h1')).toHaveText('Overview');
-  await returnedCheck;
   await page.unroute('**/api/v1/auth/me');
   await page.route('**/api/v1/auth/me', (route) =>
     route.fulfill({
@@ -146,16 +138,22 @@ test('screen navigation keeps six primary sections, file-first data, and session
       body: JSON.stringify({ message: 'Session expired' }),
     }),
   );
-  await page.getByRole('button', { name: 'Data', exact: true }).click();
-  await page.getByRole('link', { name: 'Imports', exact: true }).click();
+  await page.reload();
   await expect(
-    page.getByRole('heading', { name: 'Sign in required', exact: true }),
+    page.getByRole('heading', {
+      name: 'Sign in to your workspace',
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Import performance data', exact: true }),
   ).toHaveCount(0);
   await page.unroute('**/api/v1/auth/me');
-  await page.getByRole('link', { name: 'Return to workspace' }).click();
+  await page.getByLabel('Email address').fill(process.env.E2E_EMAIL);
+  await page
+    .getByLabel('Password', { exact: true })
+    .fill(process.env.E2E_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.locator('h1')).toHaveText('Overview');
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
   await expect(
@@ -269,6 +267,16 @@ test('authenticated user can create a platform-free campaign, inspect a dataset,
   await expect(
     page.getByRole('heading', { name: 'annual-export', exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByText('View source rows', { exact: true }),
+  ).toBeVisible();
+  if (
+    !(await page
+      .getByRole('table', { name: 'Dataset rows and columns' })
+      .isVisible())
+  ) {
+    await page.getByText('View source rows', { exact: true }).click();
+  }
   await expect(page.getByText('365 matching rows · page 1 of 8')).toBeVisible();
   const table = page.getByRole('table', { name: 'Dataset rows and columns' });
   await expect(table.getByRole('row')).toHaveCount(51);
@@ -277,6 +285,16 @@ test('authenticated user can create a platform-free campaign, inspect a dataset,
   await page.getByLabel('Date column').selectOption('c1');
   await page.getByLabel('From').fill('2026-01-03');
   await page.getByLabel('To').fill('2026-01-04');
+  await expect(
+    page.getByText('View source rows', { exact: true }),
+  ).toBeVisible();
+  if (
+    !(await page
+      .getByRole('table', { name: 'Dataset rows and columns' })
+      .isVisible())
+  ) {
+    await page.getByText('View source rows', { exact: true }).click();
+  }
   await expect(page.getByText('2 matching rows · page 1 of 1')).toBeVisible();
 
   const csvDownload = page.waitForEvent('download');
@@ -325,15 +343,33 @@ test('Administrator can manage the channel and platform catalogue lifecycle', as
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.locator('h1')).toHaveText('Overview');
   await openSectionItem(page, 'Administration', 'Settings');
-  await page.getByLabel('Reporting currency').selectOption('NGN');
+  const currencySelect = page.getByLabel('Reporting currency');
+  const originalCurrency = await currencySelect.inputValue();
+  const changedCurrency = originalCurrency === 'NGN' ? 'USD' : 'NGN';
+  await currencySelect.selectOption(changedCurrency);
   await page.getByRole('button', { name: 'Save reporting currency' }).click();
   await expect(
-    page.getByRole('status').filter({ hasText: 'Reporting currency saved.' }),
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Reporting currency saved.' })
+      .first(),
   ).toBeVisible();
   await page.reload();
   await expect(page.locator('h1')).toHaveText('Settings');
   await openSectionItem(page, 'Administration', 'Settings');
-  await expect(page.getByLabel('Reporting currency')).toHaveValue('NGN');
+  await expect(page.getByLabel('Reporting currency')).toHaveValue(
+    changedCurrency,
+  );
+  if (originalCurrency) {
+    await page.getByLabel('Reporting currency').selectOption(originalCurrency);
+    await page.getByRole('button', { name: 'Save reporting currency' }).click();
+    await expect(
+      page
+        .getByRole('status')
+        .filter({ hasText: 'Reporting currency saved.' })
+        .first(),
+    ).toBeVisible();
+  }
   await expect(
     page.getByRole('heading', { name: 'Channels & Platforms' }),
   ).toBeVisible();
@@ -459,6 +495,16 @@ test('Administrator replaces, deletes, and reimports an independent dataset from
   await expect(
     page.getByRole('heading', { name: 'lifecycle', exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByText('View source rows', { exact: true }),
+  ).toBeVisible();
+  if (
+    !(await page
+      .getByRole('table', { name: 'Dataset rows and columns' })
+      .isVisible())
+  ) {
+    await page.getByText('View source rows', { exact: true }).click();
+  }
   await expect(page.getByText('2 matching rows · page 1 of 1')).toBeVisible();
 
   await page.getByRole('button', { name: 'Replace', exact: true }).click();
@@ -475,6 +521,16 @@ test('Administrator replaces, deletes, and reimports an independent dataset from
   await expect(
     page.getByRole('heading', { name: 'lifecycle', exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByText('View source rows', { exact: true }),
+  ).toBeVisible();
+  if (
+    !(await page
+      .getByRole('table', { name: 'Dataset rows and columns' })
+      .isVisible())
+  ) {
+    await page.getByText('View source rows', { exact: true }).click();
+  }
   await expect(page.getByText('3 matching rows · page 1 of 1')).toBeVisible();
 
   page.once('dialog', (dialog) => dialog.accept());
@@ -492,6 +548,16 @@ test('Administrator replaces, deletes, and reimports an independent dataset from
   await page
     .getByRole('button', { name: 'Import dataset', exact: true })
     .click();
+  await expect(
+    page.getByText('View source rows', { exact: true }),
+  ).toBeVisible();
+  if (
+    !(await page
+      .getByRole('table', { name: 'Dataset rows and columns' })
+      .isVisible())
+  ) {
+    await page.getByText('View source rows', { exact: true }).click();
+  }
   await expect(page.getByText('2 matching rows · page 1 of 1')).toBeVisible();
 
   await page.getByRole('button', { name: 'Reports', exact: true }).click();
