@@ -3,8 +3,7 @@ name: TODO completion verification
 on:
   push:
     branches:
-      - chatgpt/todo-completion
-      - chatgpt/pdfkit-renderer
+      - 'chatgpt/**'
 
 permissions:
   contents: read
