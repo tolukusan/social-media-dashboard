@@ -23,10 +23,23 @@ describe('resolveProductionApiOrigin', () => {
     ).toThrow(/HTTPS/);
   });
 
-  it('allows loopback HTTP for the isolated local production-build proxy test', () => {
-    expect(
+  it('rejects loopback HTTP in production unless the isolated E2E build opts in', () => {
+    expect(() =>
       resolveProductionApiOrigin('production', 'http://localhost:4201'),
+    ).toThrow(/HTTPS/);
+  });
+
+  it('allows loopback HTTP only when the isolated local production-build proxy test opts in', () => {
+    expect(
+      resolveProductionApiOrigin('production', 'http://localhost:4201', {
+        allowHttpLoopbackForTests: true,
+      }),
     ).toBe('http://localhost:4201');
+    expect(() =>
+      resolveProductionApiOrigin('production', 'http://example.onrender.com', {
+        allowHttpLoopbackForTests: true,
+      }),
+    ).toThrow(/HTTPS/);
   });
 
   it('leaves development routing under the existing NEXT_PUBLIC_API_URL setting', () => {

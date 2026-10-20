@@ -370,56 +370,32 @@ Reference: [Zoho app registration](https://www.zoho.com/developer/oauth/register
 
 ## 11. Permanent HTTPS deployment
 
-Use your host's documented domain/TLS and process-manager setup for the following application configuration.
+For the current Render deployment, use the detailed [Render deployment guide](render-deployment.md). It uses the `staging` branch, a same-origin `/api/v1` proxy, and provider callbacks on the web service origin.
 
-1. Provision web/API services and PostgreSQL. Install Node/pnpm as above.
-2. Assign same-site HTTPS web/API addresses.
-3. Clone `main`, install the frozen lockfile, and securely supply API configuration.
-4. Set API `NODE_ENV=production`, `APP_ORIGIN=https://<web-host>` and `INTEGRATION_OAUTH_REDIRECT_URI=https://<api-host>/api/v1/accounts/oauth/callback`.
-5. Set web `NEXT_PUBLIC_API_URL=https://<api-host>/api/v1` **before building**. It is embedded in the web build; changing it requires rebuilding.
-6. Back up the database and run:
-
-   ```powershell
-   pnpm --filter @smd/api prisma:generate
-   pnpm --filter @smd/api exec prisma migrate deploy
-   pnpm build
-   ```
-
-7. Configure API process working directory `apps/api`, command `node dist/src/main.js`, with its private environment loaded.
-8. Configure web process working directory `apps/web`, command `pnpm exec next start --port 3000`.
-9. Route API hostname to port 4000 and web hostname to port 3000 through HTTPS ingress. Preserve `/api/v1` paths. Keep PostgreSQL private.
-10. Verify public `/api/v1/health` returns 200.
-11. Register the permanent shared callback in all four provider consoles. Retain old callbacks only for deliberately active environments.
-12. Restart API after environment changes. Sign in through the permanent website and reconnect providers where needed.
-13. Check account discovery and successful sync separately for each provider.
-14. Configure restart-on-boot, stable secrets, database backups, and recovery access.
-15. Configure authorised SMTP if password recovery is required.
-16. Retire the old tunnel deliberately after success.
-
-See [deployment runbook](deployment-runbook.md) for backup, rollback, and release checks. This document does not claim an external deployment has been performed.
+Do not combine that procedure with the former separate-origin setup, which pointed browser requests directly at the API hostname. The current app's production web build requires `NEXT_PUBLIC_API_URL=/api/v1` and a server-only `SMD_API_ORIGIN`; the Render guide covers the exact service fields, callback URLs, migrations, first Administrator setup, and verification. Follow the [deployment runbook](deployment-runbook.md) for backup, rollback, and release checks. This document does not claim an external deployment has been performed.
 
 ## 12. Troubleshooting the problems we solved
 
-| Symptom                                               | Check/fix                                                                                                   |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Invalid `instagram_basic` scope                       | Instagram use case, Facebook-login setup, main app credentials, permission readiness.                       |
-| Invalid `read_insights` / `instagram_manage_insights` | Add Page insights and Instagram analytics permissions; inspect access level. Start fresh consent.           |
-| Only `instagram_business_*` permissions shown         | Switch Instagram-login setup to Facebook-login setup for this implementation.                               |
-| Redirect mismatch                                     | Exact HTTPS hostname/path in backend and console; save, restart, start a fresh connection.                  |
-| Consent succeeds but no Page                          | Create/administer a Page; personal-profile consent alone cannot supply metrics.                             |
-| No Instagram account                                  | Professional account, Page link, Page access, app role, scopes.                                             |
-| Blank callback and blank public health                | API terminal, tunnel port 4000, active hostname, HTTP status, proxy path. Fix reachability first.           |
-| Callback never returns to website                     | Inspect backend callback error and APP_ORIGIN. The public callback itself is expected.                      |
-| Reopening callback fails                              | Codes/state expire and are single-use. Start Connect again; do not reuse the URL.                           |
-| API setup needed                                      | Correct Accounts variable names, shared encryption/redirect, supported API version/region; restart backend. |
-| LinkedIn forbidden after consent                      | Community Management approval, requested scopes, organisation-admin role, supported API version.            |
-| Google testing/access blocked                         | Exact Test user, audience, correct project/client, both APIs enabled.                                       |
-| YouTube has no channel                                | Correct channel/Brand Account identity, not an unrelated Google login.                                      |
-| Zoho invalid client/grant                             | Matching region, server client, exact callback, fresh one-time code.                                        |
-| Migrated tokens cannot decrypt                        | Restore original key paired with database or reconnect. Do not generate a new key over old tokens.          |
-| Website calls old API                                 | Correct NEXT_PUBLIC_API_URL, rebuild and restart web.                                                       |
-| Cross-domain login fails                              | Exact APP_ORIGIN, HTTPS, credentialed requests, same-site web/API deployment.                               |
-| Successful sync with empty chart                      | Check provider activity/date availability; unavailable does not mean zero.                                  |
+| Symptom                                               | Check/fix                                                                                                           |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Invalid `instagram_basic` scope                       | Instagram use case, Facebook-login setup, main app credentials, permission readiness.                               |
+| Invalid `read_insights` / `instagram_manage_insights` | Add Page insights and Instagram analytics permissions; inspect access level. Start fresh consent.                   |
+| Only `instagram_business_*` permissions shown         | Switch Instagram-login setup to Facebook-login setup for this implementation.                                       |
+| Redirect mismatch                                     | Exact HTTPS hostname/path in backend and console; save, restart, start a fresh connection.                          |
+| Consent succeeds but no Page                          | Create/administer a Page; personal-profile consent alone cannot supply metrics.                                     |
+| No Instagram account                                  | Professional account, Page link, Page access, app role, scopes.                                                     |
+| Blank callback and blank public health                | API terminal, tunnel port 4000, active hostname, HTTP status, proxy path. Fix reachability first.                   |
+| Callback never returns to website                     | Inspect backend callback error and APP_ORIGIN. The public callback itself is expected.                              |
+| Reopening callback fails                              | Codes/state expire and are single-use. Start Connect again; do not reuse the URL.                                   |
+| API setup needed                                      | Correct Accounts variable names, shared encryption/redirect, supported API version/region; restart backend.         |
+| LinkedIn forbidden after consent                      | Community Management approval, requested scopes, organisation-admin role, supported API version.                    |
+| Google testing/access blocked                         | Exact Test user, audience, correct project/client, both APIs enabled.                                               |
+| YouTube has no channel                                | Correct channel/Brand Account identity, not an unrelated Google login.                                              |
+| Zoho invalid client/grant                             | Matching region, server client, exact callback, fresh one-time code.                                                |
+| Migrated tokens cannot decrypt                        | Restore original key paired with database or reconnect. Do not generate a new key over old tokens.                  |
+| Website calls the wrong API origin                    | Set `NEXT_PUBLIC_API_URL=/api/v1` and the web service's server-only `SMD_API_ORIGIN`, then rebuild the web service. |
+| Cross-domain login fails                              | Exact APP_ORIGIN, HTTPS, credentialed requests, same-site web/API deployment.                                       |
+| Successful sync with empty chart                      | Check provider activity/date availability; unavailable does not mean zero.                                          |
 
 Never share callback query strings containing codes/state, access tokens, or revealed secrets. For support, share the route without its query string and the error code.
 

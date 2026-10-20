@@ -70,7 +70,7 @@ Create the API only after the existing-database restore is complete, if you are 
    - **Normal Start Command:**
 
      ```sh
-     pnpm --filter @smd/api exec prisma migrate deploy && node apps/api/dist/src/main.js
+     pnpm --filter @smd/api exec prisma migrate deploy && pnpm --filter @smd/api start:prod
      ```
 
    - **Auto-Deploy:** keep disabled during first setup; enable it after the smoke checks pass if you want staging pushes to deploy automatically.
@@ -107,7 +107,7 @@ Create the API only after the existing-database restore is complete, if you are 
 
 ### Build output and startup behavior
 
-The API build emits `apps/api/dist/src/main.js`. The start command chains migration and server start with `&&`, so a migration error prevents the API from starting. It uses `prisma migrate deploy`; never substitute `prisma migrate dev` or `prisma migrate reset` on Render.
+The API build emits `apps/api/dist/src/main.js`. Start it with the package's `start:prod` script, which uses the production-installed `tsx` runtime to resolve the extensionless ESM imports emitted by TypeScript and Prisma. Do not set `SMD_E2E_ALLOW_HTTP_API_ORIGIN` on Render; only the isolated local browser-test runner sets that flag, so production builds require HTTPS. The start command chains migration and server start with `&&`, so a migration error prevents the API from starting. It uses `prisma migrate deploy`; never substitute `prisma migrate dev` or `prisma migrate reset` on Render.
 
 ## 5. Initialize a fresh database or restore existing data
 
@@ -121,7 +121,7 @@ Do exactly one of these procedures. Do not restore over a database after the API
 2. Temporarily change the API **Start Command** to:
 
    ```sh
-   pnpm --filter @smd/api exec prisma migrate deploy && pnpm --filter @smd/api prisma:seed && node apps/api/dist/src/main.js
+   pnpm --filter @smd/api exec prisma migrate deploy && pnpm --filter @smd/api prisma:seed && pnpm --filter @smd/api start:prod
    ```
 
 3. Save and deploy. The seed applies the fixed application catalogue and creates the first Administrator only when no Administrator exists. It does not add demonstration campaigns, users, analytics, or imported files.

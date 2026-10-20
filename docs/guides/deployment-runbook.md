@@ -35,7 +35,7 @@ Do not commit production values. Production `APP_ORIGIN` must use HTTPS. CORS an
 The Render API start command applies committed migrations before the server starts. A migration failure prevents startup:
 
 ```text
-pnpm --filter @smd/api exec prisma migrate deploy && node apps/api/dist/src/main.js
+pnpm --filter @smd/api exec prisma migrate deploy && pnpm --filter @smd/api start:prod
 ```
 
 Do not use `prisma migrate reset` or destructive reset commands against an existing environment. The catalogue seed may be run when the deployment process explicitly requires the deterministic fixed catalogue. Do not run the demo-data command in production.

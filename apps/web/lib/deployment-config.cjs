@@ -1,4 +1,8 @@
-function resolveProductionApiOrigin(nodeEnvironment, configuredOrigin) {
+function resolveProductionApiOrigin(
+  nodeEnvironment,
+  configuredOrigin,
+  { allowHttpLoopbackForTests = false } = {},
+) {
   if (nodeEnvironment !== 'production') return null;
   if (!configuredOrigin || !configuredOrigin.trim()) {
     throw new Error(
@@ -28,10 +32,14 @@ function resolveProductionApiOrigin(nodeEnvironment, configuredOrigin) {
   const loopbackHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
   if (
     parsed.protocol !== 'https:' &&
-    !(parsed.protocol === 'http:' && loopbackHosts.has(parsed.hostname))
+    !(
+      allowHttpLoopbackForTests === true &&
+      parsed.protocol === 'http:' &&
+      loopbackHosts.has(parsed.hostname)
+    )
   ) {
     throw new Error(
-      'SMD_API_ORIGIN must use HTTPS, except for an HTTP loopback URL used by isolated local tests.',
+      'SMD_API_ORIGIN must use HTTPS. The isolated E2E runner may explicitly allow HTTP loopback for its local test server.',
     );
   }
 

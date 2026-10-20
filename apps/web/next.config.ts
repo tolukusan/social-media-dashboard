@@ -10,6 +10,10 @@ const projectRoot = path.resolve(
 const productionApiOrigin = resolveProductionApiOrigin(
   process.env.NODE_ENV,
   process.env.SMD_API_ORIGIN,
+  {
+    allowHttpLoopbackForTests:
+      process.env.SMD_E2E_ALLOW_HTTP_API_ORIGIN === 'true',
+  },
 );
 
 const nextConfig: NextConfig = {

@@ -111,6 +111,7 @@ const env: NodeJS.ProcessEnv = {
 const webEnv: NodeJS.ProcessEnv = {
   ...env,
   NODE_ENV: 'production',
+  SMD_E2E_ALLOW_HTTP_API_ORIGIN: 'true',
   SMD_NEXT_DIST_DIR: '.next-e2e',
 };
 const apiEnv: NodeJS.ProcessEnv = { ...env, NODE_ENV: 'development' };
