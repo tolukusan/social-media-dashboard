@@ -1,6 +1,6 @@
 # Deployment Runbook
 
-This runbook describes a single-organisation deployment of the current Next.js web app, NestJS API, and PostgreSQL database. It does not record a deployment as completed.
+This runbook describes a single-organisation deployment of the current Next.js web app, NestJS API, and PostgreSQL database. See the [current deployment handover](../../project-documentation/DEPLOYMENT.md) and [evidence status](../../project-documentation/STATUS.md) for recorded production addresses, repair history and verification boundaries. The runbook itself is a procedure, not proof of successful deployment.
 
 ## Required configuration
 
@@ -72,7 +72,7 @@ They remove only stale session records and recovery tokens beyond their document
 
 ### Connected-account analytics and Meta history jobs
 
-The connected-account worker and retention sweep run inside the API process. Keep at least one API process continuously running and set `INTEGRATIONS_SCHEDULER_ENABLED=true` (or leave it unset) to enable daily refresh, queued Meta history jobs, and expiry cleanup. A deployment that sleeps or stops the API cannot promise daily account history collection. Do not run multiple ad hoc workers: PostgreSQL leases and the one-active-job-per-account constraint coordinate the existing worker process. For the initial Render Free demo, leave the setting `false` and synchronize manually.
+The connected-account worker and retention sweep run inside the API process. Keep an API process continuously running and set `INTEGRATIONS_SCHEDULER_ENABLED=true` explicitly for daily refresh and queued Meta history jobs. False disables even manually requested Meta jobs; the old false-plus-manual advice is superseded by the [Render sync repair](../evidence/render-account-sync-repairs.md). The separate canonical retention sweep does not depend on this flag, but all process timers depend on API uptime. A sleeping/stopped API cannot promise daily collection. Meta jobs use PostgreSQL leases and a one-active-job-per-account constraint; non-Meta account sync/refresh still uses process-local exclusion, so review coordination before adding API instances.
 
 For a release that adds Meta annual history, take a verified PostgreSQL backup first, then deploy the additive migration before starting the API version that claims sync jobs:
 
@@ -95,7 +95,7 @@ If an application release fails, roll back the application version first. Do not
 
 ## Current deployment status
 
-No external environment is recorded as deployed by this repository task. M12 remains dependent on an authorised external environment.
+The original preparation task did not deploy. Later repair evidence and the current public routing checks are documented in [STATUS](../../project-documentation/STATUS.md); authenticated provider, SMTP and recovery acceptance remain separately identified there. Do not treat an old preparation-only statement as a claim that no public deployment exists today.
 
 ## Usability/archive/access migrations (2026-10-18)
 

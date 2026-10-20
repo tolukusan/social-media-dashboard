@@ -15,7 +15,7 @@ With `NODE_ENV=development`, requesting password recovery prints the recipient, 
 ```text
 pnpm install
 pnpm --filter @smd/api prisma:generate
-pnpm --filter @smd/api prisma:migrate
+pnpm --filter @smd/api exec prisma migrate deploy
 pnpm --filter @smd/api prisma:seed
 pnpm dev
 ```

@@ -1,5 +1,7 @@
 # User Guide
 
+For a consolidated guide to the current file-first campaign screens, column-detail saving, joined-date exports, connected-account reports and access approval, start with the [Marketwise user guide](../../project-documentation/USER_GUIDE.md). The structured KPI import instructions below describe the separate canonical performance workflow; file datasets do not automatically populate those KPIs.
+
 ## Sign in and account access
 
 Open the web application and authenticate with an Administrator, Marketing Officer, or Management account. Sessions use secure, opaque cookies in production. **Forgot password?** sends a time-limited recovery link when email delivery is configured.
@@ -10,7 +12,7 @@ Under **My profile**, any signed-in user can update their display name or change
 
 Use the sidebar to switch screens; on a phone, open **Menu**. Workspace screens retain their selection when refreshed, and browser Back/Forward returns to previously visited screens. Keyboard users can use **Skip to content** to bypass navigation.
 
-Overview requests KPI values from the API as filters change; no separate refresh button is required. On first opening, the date range covers the available active data. Campaign and dates are visible initially; **More filters** exposes channel, platform, metric, and an applicable target period. Active advanced filters are counted and the selected platform/metric scope is displayed. Available metrics provide useful initial results; an explicitly selected unavailable metric remains unavailable. Missing data is displayed as unavailable rather than zero. Analytics provides period comparison, campaign/channel comparison, and the same backend trend values used by Overview.
+Overview requests KPI values from the API as filters change; no separate refresh button is required. On first opening, the default campaign date range ends at the latest eligible record and includes its preceding 29 calendar days; explicit dates are preserved. Campaign and dates are visible initially; **More filters** exposes channel, platform, metric, and an applicable target period. Active advanced filters are counted and the selected platform/metric scope is displayed. Available metrics provide useful initial results; an explicitly selected unavailable metric remains unavailable. Missing data is displayed as unavailable rather than zero. Analytics provides period comparison, campaign/channel comparison, and the same backend trend values used by Overview.
 
 For Administrators and Marketing Officers, an empty Overview offers **Add your first data**, with **Enter manually** as an alternative. Returning users can choose **Add data** or **Download PDF** for the current filters. Management sees the read-only results journey. Data, Results, and Administration are grouped in the sidebar; My profile is beside your account details.
 

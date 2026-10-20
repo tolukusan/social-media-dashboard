@@ -1,14 +1,14 @@
 # Deploy Marketwise to Render
 
-Updated 20 October 2026. This guide prepares the current monorepo for two Render Node Web Services and one PostgreSQL 18 database. It does not mean that a Render service has been created or deployed.
+Updated 20 October 2026. This guide gives field-by-field setup for two Render Node Web Services and one PostgreSQL 18 database. For current recorded addresses, repair history and evidence limits, read the [deployment handover](../../project-documentation/DEPLOYMENT.md). The earlier [preparation evidence](../evidence/render-deployment-preparation.md) describes a preparation-only task; later public routing and repair observations are recorded separately. Verify private Render settings before a release.
 
 ## 1. What you will create
 
-| Render resource | Name            | Region    | Plan | Purpose                                      |
-| --------------- | --------------- | --------- | ---- | -------------------------------------------- |
-| PostgreSQL      | `smmd-postgres` | Frankfurt | Free | Application data in `social_media_dashboard` |
-| Web Service     | `smmd-api`      | Frankfurt | Free | NestJS API and committed Prisma migrations   |
-| Web Service     | `smmd-web`      | Frankfurt | Free | Next.js website and same-origin API proxy    |
+| Render resource | Name       | Region    | Plan | Purpose                                      |
+| --------------- | ---------- | --------- | ---- | -------------------------------------------- |
+| PostgreSQL      | `smmd-db`  | Frankfurt | Free | Application data in `social_media_dashboard` |
+| Web Service     | `smmd-api` | Frankfurt | Free | NestJS API and committed Prisma migrations   |
+| Web Service     | `smmd-web` | Frankfurt | Free | Next.js website and same-origin API proxy    |
 
 All three resources must use the same region. The browser will call the web origin for `/api/v1/...`; the Next.js server forwards those requests to the API origin. This keeps session cookies on the website's origin while retaining the existing CSRF, Origin, CORS, `HttpOnly`, `SameSite=Lax`, and production `Secure` protections. Do not change the browser API URL to the API service hostname.
 
@@ -17,18 +17,18 @@ Render terminates public TLS and supplies the API's `PORT`. The API binds to `0.
 ## 2. Before opening Render
 
 1. Confirm you can access the GitHub repository `tolukusan/social-media-dashboard`.
-2. Use the `staging` branch. This task leaves `main` unchanged.
+2. Select the approved release branch/commit in Render. The current documentation baseline is `main` at `20a364f`, including `9762543`; earlier preparation used `staging`. Confirm actual service branch settings rather than assuming they changed. This documentation task does not deploy or merge.
 3. Decide whether this is a **fresh database** or a **restore of an existing database**. Follow only that database path in section 5.
 4. For an existing installation, make and verify a PostgreSQL backup first. Keep the database and both OAuth encryption keys together. Do not change `INTEGRATION_TOKEN_ENCRYPTION_KEY` or `INTEGRATION_OAUTH_ENCRYPTION_KEY` when moving saved encrypted tokens.
 5. Keep all passwords, database URLs, OAuth client secrets, SMTP credentials, and encryption keys in Render's private Environment settings. Never put them in this repository, a `NEXT_PUBLIC_` variable, or a screenshot.
-6. The commands below were checked with Node 24.20.0 and pnpm 11.8.0. Render's current Node 24 patch can move; set `NODE_VERSION=24.21.0` or another Node 24 patch currently offered by Render. The root `packageManager` field pins pnpm 11.8.0.
+6. Earlier preparation checked the commands with Node 24.20.0 and pnpm 11.8.0. Select a supported Node 24 LTS patch currently offered by Render; dated patch examples are not a version guarantee. The root `packageManager` field pins pnpm 11.8.0.
 
 ## 3. Create the PostgreSQL database
 
 1. Sign in to Render and open the dashboard.
 2. Select **New +** → **PostgreSQL**.
 3. Enter:
-   - **Name:** `smmd-postgres`
+   - **Name:** `smmd-db` (current task-reported resource; earlier proposal used `smmd-postgres`)
    - **Database:** use Render's generated value or `marketwise`
    - **User:** use Render's generated value
    - **Region:** `Frankfurt`
@@ -58,7 +58,7 @@ Create the API only after the existing-database restore is complete, if you are 
 2. Enter the service fields:
    - **Name:** `smmd-api`
    - **Language/Runtime:** `Node`
-   - **Branch:** `staging`
+   - **Branch:** approved release branch, including `20a364f` and its migration repair ancestor; verify Render's current selection
    - **Root Directory:** leave blank
    - **Region:** `Frankfurt`
    - **Instance Type:** `Free`
@@ -75,18 +75,18 @@ Create the API only after the existing-database restore is complete, if you are 
      pnpm --filter @smd/api exec prisma migrate deploy && pnpm --filter @smd/api start:prod
      ```
 
-   - **Auto-Deploy:** keep disabled during first setup; enable it after the smoke checks pass if you want staging pushes to deploy automatically.
+   - **Auto-Deploy:** keep disabled during first setup; enable it after smoke checks only for the intended approved release branch.
 3. Add these Environment variables. Replace angle-bracket placeholders with the actual values from your Render dashboard; do not include the angle brackets.
 
    | Key                                | Value                                                                                                           |
    | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
    | `NODE_ENV`                         | `production`                                                                                                    |
-   | `NODE_VERSION`                     | `24.21.0` (or the current supported Node 24 patch)                                                              |
+   | `NODE_VERSION`                     | A supported Node 24 LTS patch currently offered by Render                                                       |
    | `DATABASE_URL`                     | Internal Render database URL plus `schema=social_media_dashboard`                                               |
    | `APP_ORIGIN`                       | `https://<actual-smmd-web-host>`; exact origin only, no trailing path                                           |
    | `REPORTING_TIMEZONE`               | `Africa/Lagos`                                                                                                  |
    | `SESSION_COOKIE_NAME`              | `smd_session`                                                                                                   |
-   | `INTEGRATIONS_SCHEDULER_ENABLED`   | `false` for the initial Free-tier demo                                                                          |
+   | `INTEGRATIONS_SCHEDULER_ENABLED`   | `true`; required for queued Meta history jobs, including manual requests                                        |
    | `INTEGRATION_TOKEN_ENCRYPTION_KEY` | Existing key when restoring; otherwise a new private 32-byte base64 key if Accounts OAuth will be used          |
    | `INTEGRATION_OAUTH_ENCRYPTION_KEY` | Existing key when restoring; otherwise a separate new private 32-byte base64 key if campaign OAuth will be used |
 
@@ -153,7 +153,7 @@ Create the frontend after the API is reachable so you can use the actual API hos
 2. Enter:
    - **Name:** `smmd-web`
    - **Language/Runtime:** `Node`
-   - **Branch:** `staging`
+   - **Branch:** the matching approved web release branch/commit; verify Render's current selection
    - **Root Directory:** leave blank
    - **Region:** `Frankfurt`
    - **Instance Type:** `Free`
@@ -238,13 +238,13 @@ The API health route does not perform a database read. The successful sign-in an
 - Free Web Services can spin down after 15 minutes without traffic. The first request after sleeping may wait for the service to wake.
 - Free PostgreSQL expires after 30 days and has no managed backups. Make and test separate backups before using it for real records.
 - The free web/API instances have limited memory (512 MB); monitor build and runtime restarts.
-- Do not rely on hourly/daily integration synchronization while the API service can sleep. Keep `INTEGRATIONS_SCHEDULER_ENABLED=false` for the initial Free-tier demo and use **Sync this period** manually. Enable scheduled work only on an always-on service and after monitoring.
+- Set `INTEGRATIONS_SCHEDULER_ENABLED=true` for account collection. False also disables the worker for manually queued Meta jobs; the earlier false-plus-manual advice is superseded by the [20 October repair](../evidence/render-account-sync-repairs.md). Enabled workers can run while a Free API is awake, but sleeping services cannot guarantee collection. Use an always-running API for continuous history and monitor job age/coverage.
 - Keep the API, web, and database in Frankfurt. Render's free services use their public service URLs; the web proxy calls the API URL server-side. Use the internal database URL for API-to-database traffic.
 - Recheck backups and provider consent before moving from a temporary demo to ongoing use.
 
 ## 10. What is not done by this guide
 
-No Render service, database, deployment, provider console setting, credential, or production record was changed by preparing this guide. Deploying remains an action you perform in your Render and provider dashboards. `main` is not used or modified by these instructions.
+The original preparation task changed no Render resource or production record; its [dated evidence](../evidence/render-deployment-preparation.md) remains intact. Current deployment observations and remaining acceptance checks are in the [handover status](../../project-documentation/STATUS.md). Writing/updating this guide does not deploy, change provider settings or merge a release.
 
 ### Official references
 

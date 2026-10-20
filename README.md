@@ -4,6 +4,8 @@ A general-purpose digital marketing performance analytics MVP for one organisati
 
 Project specifications and implementation evidence are indexed in [docs](docs/README.md). Track outstanding tasks in [TODO.md](TODO.md) and unresolved dependencies in [BLOCKERS.md](BLOCKERS.md).
 
+For the current handover, start with [Marketwise project documentation](project-documentation/README.md): [setup](project-documentation/SETUP.md), [architecture](project-documentation/ARCHITECTURE.md), [API reference](project-documentation/API.md), [user guide](project-documentation/USER_GUIDE.md), [deployment](project-documentation/DEPLOYMENT.md), and [implementation status/evidence](project-documentation/STATUS.md). It distinguishes current source, historical verification and provider acceptance still needing live checks.
+
 Administrators select the organisation's reporting currency in Settings; monetary values use that saved code without conversion. Development password-recovery links appear in the API terminal when `NODE_ENV=development`. Optional release activities are tracked in the [release checklist](docs/guides/release-checklist.md).
 
 The account-first connected analytics experience is specified in [product design](docs/product/account-first-connected-analytics.md); server-side OAuth setup and owner handoff steps are in the [provider setup guide](docs/integrations/account-provider-setup.md).
@@ -15,7 +17,7 @@ Requirements: Node.js 24 LTS, pnpm 11 (packageManager pins 11.8.0), PostgreSQL 1
 ```text
 pnpm install
 pnpm db:generate
-pnpm db:migrate
+pnpm --filter @smd/api exec prisma migrate deploy
 pnpm db:seed
 pnpm dev
 ```

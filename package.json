@@ -9,7 +9,7 @@
     "dev": "pnpm --parallel --filter @smd/api --filter @smd/web dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
-    "format:docs": "prettier --ignore-path .prettierignore --check README.md TODO.md AGENTS.md BLOCKERS.md .ai docs",
+    "format:docs": "prettier --ignore-path .prettierignore --check README.md TODO.md AGENTS.md BLOCKERS.md .ai docs project-documentation",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm test:unit",
     "db:generate": "pnpm --filter @smd/api prisma:generate",

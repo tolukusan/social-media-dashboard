@@ -1,5 +1,7 @@
 # Structured Import Workflow
 
+This guide describes the **canonical daily KPI import** path under `/imports`. The separate current **campaign file dataset** workflow preserves arbitrary columns/revisions under `/datasets`; it does not automatically map source columns to campaign KPIs. For file import, saved column details, date joining and exports, follow the [current user guide](../../project-documentation/USER_GUIDE.md#choose-the-appropriate-import-workflow). The four-step workflow below remains implemented for structured performance imports.
+
 The importer is a deterministic, two-phase workflow for CSV, JSON, and XLSX files.
 Legacy `.xls` files are intentionally deferred because the selected workbook parser is XLSX-focused.
 Open older Excel exports in Excel or LibreOffice and save a copy as XLSX or CSV before uploading. Renaming the extension does not convert a file. Files must be 10 MB or smaller; export a smaller date range when necessary.

@@ -2,6 +2,8 @@
 
 Updated 19 October 2026. This guide configures **Accounts → Connect**.
 
+The observations in section 1 are the **19 October snapshot**, not current provider acceptance. The [20 October handover status](../../project-documentation/STATUS.md) and [Render repair evidence](../evidence/render-account-sync-repairs.md) supersede the older Instagram/no-Page verification limitation where later evidence exists. Facebook post-reconnection and current LinkedIn approval remain unverified. For a new installation use [current setup](../../project-documentation/SETUP.md); for recorded hosting, callback URLs and the required enabled Meta worker use [deployment](../../project-documentation/DEPLOYMENT.md).
+
 ## 1. Before starting
 
 Moving to another computer does not require new developer apps. Reuse the existing apps if the same organisation owns the new installation. Add the new callback URL to each console. Create new apps only for a different owner or when the original apps are unavailable.
@@ -41,8 +43,8 @@ The callback must match exactly in the backend and every provider console: schem
 ## 3. Install on the new system
 
 1. Install [Git](https://git-scm.com/downloads).
-2. Install [Node.js](https://nodejs.org/) version **24 or later**.
-3. Open a new PowerShell window. Run `node --version`; confirm major version 24 or above.
+2. Install [Node.js](https://nodejs.org/) **24 LTS**. The package engine permits later majors, but they are not an independently verified baseline.
+3. Open a new PowerShell window. Run `node --version`; confirm major version 24.
 4. Install the required package manager:
 
    ```powershell
@@ -370,7 +372,7 @@ Reference: [Zoho app registration](https://www.zoho.com/developer/oauth/register
 
 ## 11. Permanent HTTPS deployment
 
-For the current Render deployment, use the detailed [Render deployment guide](render-deployment.md). It uses the `staging` branch, a same-origin `/api/v1` proxy, and provider callbacks on the web service origin.
+For the current Render deployment, use the detailed [Render deployment guide](render-deployment.md). Select the approved release branch/commit and verify the actual Render setting; the earlier preparation used `staging`, while current repair source is on `main`. Browser requests use the same-origin `/api/v1` proxy and provider callbacks on the web service origin.
 
 Do not combine that procedure with the former separate-origin setup, which pointed browser requests directly at the API hostname. The current app's production web build requires `NEXT_PUBLIC_API_URL=/api/v1` and a server-only `SMD_API_ORIGIN`; the Render guide covers the exact service fields, callback URLs, migrations, first Administrator setup, and verification. Follow the [deployment runbook](deployment-runbook.md) for backup, rollback, and release checks. This document does not claim an external deployment has been performed.
 
