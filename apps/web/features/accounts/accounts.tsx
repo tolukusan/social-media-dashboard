@@ -62,6 +62,30 @@ type Metric = {
   previous: number | null;
   difference: number | null;
   percentageChange: number | null;
+  coverage: {
+    status: 'COMPLETE' | 'PARTIAL' | 'NONE';
+    requestedDays: number | null;
+    observedDays: number | null;
+    firstObservedDate: string | null;
+    lastObservedDate: string | null;
+    snapshotDate?: string | null;
+  };
+  previousCoverage?: { status: 'COMPLETE' | 'PARTIAL' | 'NONE' };
+};
+type SyncJob = {
+  id: string;
+  status:
+    'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
+  requestedPeriod: { from: string; to: string };
+  fetchablePeriod: { from: string; to: string } | null;
+  completedChunks: number;
+  totalChunks: number;
+  successfulChunks: number;
+  failedChunks: number;
+  errors: Array<{ code: string; from: string; to: string; attempts: number }>;
+  finalErrorCode: string | null;
+  updatedAt: string;
+  completedAt: string | null;
 };
 type TopPost = {
   externalPostId: string;
@@ -78,6 +102,11 @@ type AccountAnalytics = {
   period: { from: string; to: string };
   previousPeriod: { from: string; to: string };
   metrics: Metric[];
+  coverage: {
+    requestedDays: number;
+    latestSuccessfulHistoryFetchAt: string | null;
+    postSnapshotRetentionDays: number | null;
+  };
   series: Array<{ date: string; values: Record<string, number | null> }>;
   topPosts: TopPost[];
   caveats: string[];
@@ -265,6 +294,11 @@ export function Accounts({
   const [selectedId, setSelectedId] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [periodPreset, setPeriodPreset] = useState<
+    '30' | '90' | '365' | 'CUSTOM'
+  >('30');
+  const [syncJobId, setSyncJobId] = useState('');
+  const [syncJobAccountId, setSyncJobAccountId] = useState('');
   const [comparisonIds, setComparisonIds] = useState<string[]>([]);
   const [comparisonInitialized, setComparisonInitialized] = useState(false);
   const [chartMetric, setChartMetric] = useState('');
@@ -304,7 +338,10 @@ export function Accounts({
     () => accounts.find((account) => account.id === selectedId) ?? null,
     [accounts, selectedId],
   );
-  const timezone = optionsQuery.data?.reportingTimezone ?? 'UTC';
+  const timezone = optionsQuery.data?.reportingTimezone ?? 'Africa/Lagos';
+  const isMetaAccount =
+    selected?.provider === 'INSTAGRAM' || selected?.provider === 'FACEBOOK';
+  const today = dayInTimezone(timezone);
 
   const accountSummaryQueries = useQueries({
     queries: socialAccounts.map((account) => ({
@@ -321,12 +358,34 @@ export function Accounts({
   });
 
   useEffect(() => {
+    if (view === 'account-insights') {
+      if (periodPreset === 'CUSTOM') return;
+      const days = Number(periodPreset);
+      setTo(today);
+      setFrom(dayInTimezone(timezone, -(days - 1)));
+      return;
+    }
     if (!from || !to) {
-      const latest = dayInTimezone(timezone);
-      setTo(latest);
+      setTo(today);
       setFrom(dayInTimezone(timezone, -29));
     }
-  }, [from, to, timezone]);
+  }, [from, periodPreset, timezone, today, to, view]);
+
+  useEffect(() => {
+    setSyncJobId('');
+    setSyncJobAccountId('');
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (
+      selected &&
+      selected.provider !== 'INSTAGRAM' &&
+      selected.provider !== 'FACEBOOK' &&
+      periodPreset === '365'
+    ) {
+      setPeriod(90);
+    }
+  }, [periodPreset, selected]);
 
   useEffect(() => {
     setMessage('');
@@ -412,6 +471,98 @@ export function Accounts({
       );
     },
   });
+  const activeSyncJobQuery = useQuery({
+    queryKey: ['account-sync-job-active', currentUser.id, selectedId],
+    enabled: Boolean(
+      view === 'account-insights' && isMetaAccount && selected?.active,
+    ),
+    queryFn: () =>
+      apiRequest<SyncJob | null>(`/accounts/${selectedId}/sync-jobs/active`),
+    refetchInterval: () =>
+      typeof document !== 'undefined' && document.visibilityState === 'visible'
+        ? 3000
+        : false,
+  });
+  const activeSyncJob = activeSyncJobQuery.data;
+  useEffect(() => {
+    if (!activeSyncJob) return;
+    setSyncJobId(activeSyncJob.id);
+    setSyncJobAccountId(selectedId);
+  }, [activeSyncJob, selectedId]);
+  const syncJobQuery = useQuery({
+    queryKey: ['account-sync-job', currentUser.id, syncJobAccountId, syncJobId],
+    enabled: Boolean(
+      syncJobId &&
+      syncJobAccountId === selectedId &&
+      selected?.provider &&
+      isMetaAccount,
+    ),
+    queryFn: () =>
+      apiRequest<SyncJob>(
+        `/accounts/${syncJobAccountId}/sync-jobs/${syncJobId}`,
+      ),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'QUEUED' || status === 'RUNNING' ? 3000 : false;
+    },
+  });
+  const syncJob = syncJobQuery.data;
+  const syncProgressRefresh = useRef({
+    jobId: '',
+    successfulChunks: -1,
+    lastAnalyticsRefreshAt: 0,
+    finalizedJobId: '',
+  });
+  useEffect(() => {
+    if (!syncJob || syncJobAccountId !== selectedId) return;
+    if (syncProgressRefresh.current.jobId !== syncJob.id) {
+      syncProgressRefresh.current = {
+        jobId: syncJob.id,
+        successfulChunks: -1,
+        lastAnalyticsRefreshAt: 0,
+        finalizedJobId: '',
+      };
+    }
+    const progress = syncProgressRefresh.current;
+    if (syncJob.successfulChunks !== progress.successfulChunks) {
+      progress.successfulChunks = syncJob.successfulChunks;
+      const now = Date.now();
+      if (now - progress.lastAnalyticsRefreshAt >= 10_000) {
+        progress.lastAnalyticsRefreshAt = now;
+        void queryClient.invalidateQueries({
+          queryKey: ['account-analytics', currentUser.id, selectedId],
+        });
+      }
+    }
+    const terminal = ['SUCCEEDED', 'PARTIAL', 'FAILED', 'CANCELLED'].includes(
+      syncJob.status,
+    );
+    if (!terminal || progress.finalizedJobId === syncJob.id) return;
+    progress.finalizedJobId = syncJob.id;
+    void Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ['connected-accounts', currentUser.id],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['account-analytics', currentUser.id, selectedId],
+      }),
+    ]);
+    if (syncJob.status === 'SUCCEEDED') {
+      setMessage(
+        'Available history sync completed. The report has been refreshed.',
+      );
+    } else if (syncJob.status === 'PARTIAL') {
+      setMessage(
+        `History sync completed with gaps or failed sections (${syncJob.successfulChunks} of ${syncJob.totalChunks} sections succeeded).`,
+      );
+    } else if (syncJob.status === 'FAILED') {
+      setError(
+        friendlySyncError(
+          syncJob.finalErrorCode ?? syncJob.errors[0]?.code ?? null,
+        ) ?? 'History sync failed. Retry the sync or reconnect this account.',
+      );
+    }
+  }, [currentUser.id, queryClient, selectedId, syncJob, syncJobAccountId]);
   const emailQuery = useQuery({
     queryKey: ['account-email-report', currentUser.id, selectedId, from, to],
     enabled: Boolean(
@@ -475,15 +626,32 @@ export function Accounts({
     ) ??
     availableChartMetrics[0];
   const chartPoints = (analytics?.series ?? []).map((point) => ({
-    date: point.date.slice(5),
+    date: point.date,
     value: chosenChartMetric
       ? (point.values[chosenChartMetric.code] ?? null)
       : null,
   }));
   const growthPoints = (analytics?.series ?? []).map((point) => ({
-    date: point.date.slice(5),
+    date: point.date,
     value: point.values.AUDIENCE_CHANGE ?? null,
   }));
+
+  function setPeriod(days: 30 | 90 | 365) {
+    const end = dayInTimezone(timezone);
+    setFrom(dayInTimezone(timezone, -(days - 1)));
+    setTo(end);
+    setPeriodPreset(String(days) as '30' | '90' | '365');
+  }
+
+  function setCustomFrom(value: string) {
+    setFrom(value);
+    setPeriodPreset('CUSTOM');
+  }
+
+  function setCustomTo(value: string) {
+    setTo(value);
+    setPeriodPreset('CUSTOM');
+  }
 
   async function connect(provider: Provider) {
     setBusy(true);
@@ -514,17 +682,36 @@ export function Accounts({
     setError('');
     setMessage('');
     try {
-      const result = await apiRequest<{
-        observations: number;
-        posts: number;
-        emailCampaigns: number;
-      }>(`/accounts/${selected.id}/sync`, {
-        method: 'POST',
-        body: { from, to },
-      });
-      setMessage(
-        `Updated this period: ${result.observations} daily metrics, ${result.posts} content items, and ${result.emailCampaigns} email campaigns.`,
-      );
+      if (
+        selected.provider === 'INSTAGRAM' ||
+        selected.provider === 'FACEBOOK'
+      ) {
+        const job = await apiRequest<SyncJob>(
+          `/accounts/${selected.id}/sync-jobs`,
+          { method: 'POST', body: { from, to } },
+        );
+        setSyncJobId(job.id);
+        setSyncJobAccountId(selected.id);
+        setMessage(
+          job.status === 'QUEUED' || job.status === 'RUNNING'
+            ? job.completedChunks > 0
+              ? `History sync resumed: ${job.completedChunks} of ${job.totalChunks} sections complete.`
+              : 'Available history is queued. Saved report data remains available while it runs.'
+            : 'Available history sync has completed.',
+        );
+      } else {
+        const result = await apiRequest<{
+          observations: number;
+          posts: number;
+          emailCampaigns: number;
+        }>(`/accounts/${selected.id}/sync`, {
+          method: 'POST',
+          body: { from, to },
+        });
+        setMessage(
+          `Updated this period: ${result.observations} daily metrics, ${result.posts} content items, and ${result.emailCampaigns} email campaigns.`,
+        );
+      }
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: ['connected-accounts', currentUser.id],
@@ -837,13 +1024,62 @@ export function Accounts({
             }
           />
           {view === 'account-insights' && (
-            <DateRangeControls
-              from={from}
-              to={to}
-              max={dayInTimezone(timezone)}
-              onFromChange={setFrom}
-              onToChange={setTo}
-            />
+            <div className="account-period-picker">
+              <div
+                className="account-period-presets"
+                role="group"
+                aria-label="Reporting period"
+              >
+                <button
+                  className={periodPreset === '30' ? 'primary' : 'secondary'}
+                  type="button"
+                  aria-pressed={periodPreset === '30'}
+                  onClick={() => setPeriod(30)}
+                >
+                  Last 30 days
+                </button>
+                <button
+                  className={periodPreset === '90' ? 'primary' : 'secondary'}
+                  type="button"
+                  aria-pressed={periodPreset === '90'}
+                  onClick={() => setPeriod(90)}
+                >
+                  Last 90 days
+                </button>
+                {isMetaAccount && (
+                  <button
+                    className={periodPreset === '365' ? 'primary' : 'secondary'}
+                    type="button"
+                    aria-pressed={periodPreset === '365'}
+                    onClick={() => setPeriod(365)}
+                  >
+                    Last 365 days
+                  </button>
+                )}
+                <button
+                  className={
+                    periodPreset === 'CUSTOM' ? 'primary' : 'secondary'
+                  }
+                  type="button"
+                  aria-pressed={periodPreset === 'CUSTOM'}
+                  onClick={() => setPeriodPreset('CUSTOM')}
+                >
+                  Custom
+                </button>
+              </div>
+              <p className="account-period-summary" aria-live="polite">
+                {from} to {to}
+              </p>
+              {periodPreset === 'CUSTOM' && (
+                <DateRangeControls
+                  from={from}
+                  to={to}
+                  max={today}
+                  onFromChange={setCustomFrom}
+                  onToChange={setCustomTo}
+                />
+              )}
+            </div>
           )}
         </section>
       )}
@@ -1276,7 +1512,7 @@ export function Accounts({
                 );
                 const trend = trendMetric
                   ? report.series.map((point) => ({
-                      date: point.date.slice(5),
+                      date: point.date,
                       value: point.values[trendMetric.code] ?? null,
                     }))
                   : [];
@@ -1306,9 +1542,17 @@ export function Accounts({
                               {formatValue(metric.value, metric.unit)}
                             </strong>
                             <span>
-                              {metric.difference === null
-                                ? 'Comparison unavailable'
-                                : `${metric.difference > 0 ? '+' : ''}${formatValue(metric.difference, metric.unit)} vs previous period${metric.percentageChange === null ? '' : ` (${metric.percentageChange > 0 ? '+' : ''}${metric.percentageChange}%)`}`}
+                              {metric.mode === 'SNAPSHOT'
+                                ? metric.coverage.snapshotDate
+                                  ? `Snapshot observed ${metric.coverage.snapshotDate}`
+                                  : 'No saved history for this period'
+                                : metric.coverage.status === 'PARTIAL'
+                                  ? `Partial total — ${metric.coverage.observedDays ?? 0} of ${metric.coverage.requestedDays ?? report.coverage.requestedDays} days available`
+                                  : metric.coverage.status === 'NONE'
+                                    ? 'No saved history for this period'
+                                    : metric.difference === null
+                                      ? 'Comparison unavailable'
+                                      : `${metric.difference > 0 ? '+' : ''}${formatValue(metric.difference, metric.unit)} vs previous period${metric.percentageChange === null ? '' : ` (${metric.percentageChange > 0 ? '+' : ''}${metric.percentageChange}%)`}`}
                             </span>
                           </dd>
                         </div>
@@ -1339,9 +1583,24 @@ export function Accounts({
                                 tick={{ fontSize: 8, fill: '#8a9bb1' }}
                                 axisLine={false}
                                 tickLine={false}
+                                tickFormatter={(value: string) =>
+                                  report.coverage.requestedDays > 100
+                                    ? value.slice(0, 7)
+                                    : value.slice(5)
+                                }
                               />
-                              <YAxis hide />
+                              <YAxis
+                                width={44}
+                                tick={{ fontSize: 8, fill: '#8a9bb1' }}
+                                label={{
+                                  value: `${trendMetric.label} (${trendMetric.unit === 'COUNT' ? 'count' : trendMetric.unit.toLowerCase()})`,
+                                  angle: -90,
+                                  position: 'insideLeft',
+                                  fontSize: 8,
+                                }}
+                              />
                               <Tooltip
+                                labelFormatter={(value) => `Date: ${value}`}
                                 formatter={(value) => [
                                   formatValue(
                                     typeof value === 'number' ? value : null,
@@ -1470,11 +1729,22 @@ export function Accounts({
                   !canConnect ||
                   !selected.active ||
                   busy ||
-                  analyticsQuery.isFetching
+                  Boolean(
+                    syncJob?.status === 'QUEUED' ||
+                    syncJob?.status === 'RUNNING' ||
+                    activeSyncJob?.status === 'QUEUED' ||
+                    activeSyncJob?.status === 'RUNNING',
+                  )
                 }
                 onClick={() => void syncNow()}
               >
-                {busy ? 'Working…' : 'Sync this period'}
+                {busy
+                  ? isMetaAccount
+                    ? 'Queueing…'
+                    : 'Working…'
+                  : isMetaAccount
+                    ? 'Sync available history'
+                    : 'Sync this period'}
               </button>
               <button
                 className="secondary"
@@ -1492,6 +1762,51 @@ export function Accounts({
               </p>
             )}
           </div>
+          {isMetaAccount && syncJob && (
+            <div className="sync-job-status" role="status" aria-live="polite">
+              <div className="sync-job-status-copy">
+                <strong>
+                  {syncJob.status === 'QUEUED'
+                    ? 'History sync queued'
+                    : syncJob.status === 'RUNNING'
+                      ? `Fetching available history — ${syncJob.completedChunks} of ${syncJob.totalChunks} sections`
+                      : syncJob.status === 'SUCCEEDED'
+                        ? 'History sync completed'
+                        : syncJob.status === 'PARTIAL'
+                          ? 'History sync completed with gaps or failures'
+                          : syncJob.status === 'CANCELLED'
+                            ? 'History sync cancelled'
+                            : 'History sync failed'}
+                </strong>
+                <span>
+                  {syncJob.fetchablePeriod
+                    ? `Provider fetch window: ${syncJob.fetchablePeriod.from} to ${syncJob.fetchablePeriod.to}.`
+                    : 'No dates in this report are currently available from the provider.'}
+                  {syncJob.status === 'RUNNING' || syncJob.status === 'QUEUED'
+                    ? ' Saved report data remains available while syncing.'
+                    : ''}
+                  {syncJob.status === 'PARTIAL' &&
+                    ` ${syncJob.failedChunks} sections need retry or reconnect.`}
+                  {syncJob.status === 'FAILED' &&
+                    ` ${friendlySyncError(syncJob.finalErrorCode ?? syncJob.errors[0]?.code ?? null) ?? 'Retry the sync or reconnect the account.'}`}
+                </span>
+              </div>
+              {(syncJob.status === 'QUEUED' ||
+                syncJob.status === 'RUNNING') && (
+                <progress
+                  max={Math.max(syncJob.totalChunks, 1)}
+                  value={syncJob.completedChunks}
+                  aria-label={`History sync progress: ${syncJob.completedChunks} of ${syncJob.totalChunks} sections`}
+                />
+              )}
+            </div>
+          )}
+          {isMetaAccount && selected.provider === 'INSTAGRAM' && (
+            <p className="meta-history-note">
+              Instagram supplies recent account history. Older saved days remain
+              available in Marketwise.
+            </p>
+          )}
           {selectedError && (
             <div className="notice error" role="alert">
               {selectedError}
@@ -1520,7 +1835,17 @@ export function Accounts({
                     label={metric.label}
                     value={formatValue(metric.value, metric.unit)}
                     detail={
-                      metric.difference === null ? (
+                      metric.mode === 'SNAPSHOT' ? (
+                        metric.coverage.snapshotDate ? (
+                          `Snapshot observed ${metric.coverage.snapshotDate}`
+                        ) : (
+                          'No saved history for this period'
+                        )
+                      ) : metric.coverage.status === 'PARTIAL' ? (
+                        `Partial total — ${metric.coverage.observedDays ?? 0} of ${metric.coverage.requestedDays ?? analytics.coverage.requestedDays} days available`
+                      ) : metric.coverage.status === 'NONE' ? (
+                        'No saved history for this period'
+                      ) : metric.difference === null ? (
                         'Comparison unavailable'
                       ) : (
                         <>
@@ -1543,11 +1868,19 @@ export function Accounts({
                   />
                 ))}
               </div>
-              {analytics.dataAvailableThrough && (
+              {(isMetaAccount
+                ? analytics.coverage.latestSuccessfulHistoryFetchAt
+                : analytics.dataAvailableThrough) && (
                 <p className="data-freshness">
-                  Provider data last synced{' '}
-                  {formatDate(analytics.dataAvailableThrough)}. Recent provider
-                  data can arrive late.
+                  {isMetaAccount
+                    ? 'Latest successful history fetch '
+                    : 'Provider data available through '}
+                  {formatDateTime(
+                    (isMetaAccount
+                      ? analytics.coverage.latestSuccessfulHistoryFetchAt
+                      : analytics.dataAvailableThrough) as string,
+                  )}
+                  . This timestamp does not mean every report date has data.
                 </p>
               )}
 
@@ -1556,7 +1889,11 @@ export function Accounts({
                   <div className="account-chart-heading">
                     <div>
                       <h3>Daily content activity</h3>
-                      <p>Daily totals use the provider’s metric definition.</p>
+                      <p>
+                        {chosenChartMetric
+                          ? `${chosenChartMetric.label} (${chosenChartMetric.unit === 'COUNT' ? 'count' : chosenChartMetric.unit.toLowerCase()}) by date. Missing days remain gaps.`
+                          : 'Daily totals use the provider’s metric definition.'}
+                      </p>
                     </div>
                     <label>
                       Show
@@ -1590,9 +1927,19 @@ export function Accounts({
                             dataKey="date"
                             minTickGap={26}
                             tick={{ fontSize: 11 }}
+                            tickFormatter={(value: string) =>
+                              analytics.coverage.requestedDays > 100
+                                ? value.slice(0, 7)
+                                : value.slice(5)
+                            }
                           />
                           <YAxis
                             width={48}
+                            label={{
+                              value: `${chosenChartMetric.label} (${chosenChartMetric.unit === 'COUNT' ? 'count' : chosenChartMetric.unit.toLowerCase()})`,
+                              angle: -90,
+                              position: 'insideLeft',
+                            }}
                             tickFormatter={(value: number) =>
                               new Intl.NumberFormat(undefined, {
                                 notation: 'compact',
@@ -1602,6 +1949,7 @@ export function Accounts({
                             tick={{ fontSize: 11 }}
                           />
                           <Tooltip
+                            labelFormatter={(value) => `Date: ${value}`}
                             formatter={(value) => [
                               formatValue(
                                 typeof value === 'number' ? value : null,
@@ -1625,8 +1973,13 @@ export function Accounts({
                     </div>
                   ) : (
                     <div className="account-chart-empty">
-                      No activity values are available for these dates. Sync
-                      this period to request provider data.
+                      {analytics.metrics.every(
+                        (metric) => metric.coverage.status === 'NONE',
+                      )
+                        ? isMetaAccount
+                          ? 'No saved history is available for these dates. Sync available history to request dates the provider can still supply.'
+                          : 'No saved history is available for these dates. Sync this period to request provider data.'
+                        : 'No activity values are available for this metric in the selected period.'}
                     </div>
                   )}
                 </section>
@@ -1656,9 +2009,19 @@ export function Accounts({
                             dataKey="date"
                             minTickGap={26}
                             tick={{ fontSize: 11 }}
+                            tickFormatter={(value: string) =>
+                              analytics.coverage.requestedDays > 100
+                                ? value.slice(0, 7)
+                                : value.slice(5)
+                            }
                           />
                           <YAxis
                             width={48}
+                            label={{
+                              value: 'Audience change (count)',
+                              angle: -90,
+                              position: 'insideLeft',
+                            }}
                             tickFormatter={(value: number) =>
                               new Intl.NumberFormat(undefined, {
                                 notation: 'compact',
@@ -1668,6 +2031,7 @@ export function Accounts({
                             tick={{ fontSize: 11 }}
                           />
                           <Tooltip
+                            labelFormatter={(value) => `Date: ${value}`}
                             formatter={(value) => [
                               formatValue(
                                 typeof value === 'number' ? value : null,
@@ -1701,7 +2065,7 @@ export function Accounts({
               <section className="account-content-section">
                 <div className="panel-heading">
                   <div>
-                    <h3>Top content</h3>
+                    <h3>{isMetaAccount ? 'Recent content' : 'Top content'}</h3>
                     <p>
                       Ranked by{' '}
                       {formatProviderMetric(
@@ -1714,6 +2078,8 @@ export function Accounts({
                       )}
                       . Lifetime snapshots and selected-period metrics are
                       labelled.
+                      {isMetaAccount &&
+                        ` Content snapshots are retained for ${analytics.coverage.postSnapshotRetentionDays ?? 90} days; this is not a full-year content ranking.`}
                     </p>
                   </div>
                 </div>
@@ -1765,8 +2131,9 @@ export function Accounts({
                   </div>
                 ) : (
                   <div className="account-chart-empty">
-                    No top content is available for this period. Sync the exact
-                    date range to refresh content results.
+                    {isMetaAccount
+                      ? `No recent content snapshots are available. Meta post snapshots are retained for ${analytics.coverage.postSnapshotRetentionDays ?? 90} days; account metrics can still cover a longer period.`
+                      : 'No top content is available for this period. Sync the exact date range to refresh content results.'}
                   </div>
                 )}
               </section>

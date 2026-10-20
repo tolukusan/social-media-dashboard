@@ -4,6 +4,8 @@ The repository is a pnpm workspace with a Next.js frontend, NestJS modular-monol
 
 The API owns authentication, authorization, validation, KPI calculations, target resolution, report view models, and audit events. The frontend must consume API results and must not reimplement KPI formulas.
 
+Instagram and Facebook account analytics also distinguish report range, fetchable provider history, saved-value coverage, and local retention. See [ADR-012](../decisions/ADR-012-connected-account-analytics.md). Meta history runs as PostgreSQL-backed, resumable chunks in the existing API process. Do not start this worker in unit/integration tests; the worker is disabled when `TEST_DATABASE_URL` is set. Deploy its additive migration before starting code that reads/claims sync jobs, and keep a production API process running with `INTEGRATIONS_SCHEDULER_ENABLED` enabled for ongoing collection.
+
 Important module boundaries are `auth`, `users`, `channels`, `campaigns`, `performance`, `analytics`, `targets`, `reports`, and `imports`. Database changes require a Prisma migration and integrity review. Analytics changes require golden, zero/missing-data, filter, aggregation, and target tests. Unsafe HTTP methods are protected by both CSRF validation and exact configured-Origin validation.
 
 Use `pnpm lint`, `pnpm typecheck`, `pnpm test:unit`, `pnpm test:integration`, `pnpm test:e2e`, and `pnpm build` before handoff. `pnpm test` runs unit tests only. The generated Prisma client under `apps/api/src/generated` is build output and should not be edited directly.

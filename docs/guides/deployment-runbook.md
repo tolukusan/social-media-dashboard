@@ -69,6 +69,21 @@ pnpm --filter @smd/api recovery:cleanup
 
 They remove only stale session records and recovery tokens beyond their documented retention windows.
 
+### Connected-account analytics and Meta history jobs
+
+The connected-account worker and retention sweep run inside the API process. Keep at least one API process continuously running and set `INTEGRATIONS_SCHEDULER_ENABLED=true` (or leave it unset) to enable daily refresh, queued Meta history jobs, and expiry cleanup. A deployment that sleeps or stops the API cannot promise daily account history collection. Do not run multiple ad hoc workers: PostgreSQL leases and the one-active-job-per-account constraint coordinate the existing worker process.
+
+For a release that adds Meta annual history, take a verified PostgreSQL backup first, then deploy the additive migration before starting the API version that claims sync jobs:
+
+```text
+pnpm --filter @smd/api prisma:generate
+pnpm --filter @smd/api exec prisma migrate deploy
+```
+
+The migration adds sync-job/chunk tables and changes only eligible, still-unexpired Instagram/Facebook account metric expiries to their stored retrieval timestamp plus 365 days. It leaves expired values expired and does not change 90-day post snapshots, LinkedIn values, campaign imports, or other providers. Do not reset the database or rerun the full seed to apply this release.
+
+After deployment, verify one bounded job for each connected Meta provider in a controlled account, then check job completion/partial status, per-metric coverage, and `latestSuccessfulHistoryFetchAt`. Instagram requests are clipped to the latest 90 days; Facebook uses up to 365 days for this app's annual backfill. Reports may remain partial when a metric or date is unavailable. Sync-job status contains no credentials or raw provider payloads and is retained for 30 days after completion.
+
 ## Backup and restore
 
 Create backups with PostgreSQL tooling and restore only to a target whose identity has been verified. Use the isolated procedure in [backup/restore verification](../evidence/backup-restore-verification.md) before relying on the procedure for a live environment.

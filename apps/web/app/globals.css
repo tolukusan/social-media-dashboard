@@ -3925,3 +3925,93 @@ summary:focus-visible {
     flex-basis: 100%;
   }
 }
+
+/* Connected account reporting periods and durable Meta history sync. */
+.account-period-picker {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.account-period-presets {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-period-presets > button {
+  min-height: 36px;
+  padding: 7px 12px;
+}
+
+.account-period-summary {
+  margin: 0;
+  color: #52637a;
+  font-size: 12px;
+}
+
+.sync-job-status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid #c9d8f3;
+  border-radius: 10px;
+  color: #20395f;
+  background: #f2f6ff;
+}
+
+.sync-job-status-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.sync-job-status-copy > span,
+.meta-history-note {
+  color: #52637a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sync-job-status progress {
+  width: min(100%, 220px);
+  min-width: 120px;
+  height: 10px;
+  accent-color: #1d4ed8;
+}
+
+.meta-history-note {
+  margin: 0 0 12px;
+}
+
+.metric-tile-detail {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 620px) {
+  .account-period-picker,
+  .account-period-presets {
+    width: 100%;
+  }
+
+  .account-period-presets > button {
+    flex: 1 1 auto;
+  }
+
+  .sync-job-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sync-job-status progress {
+    width: 100%;
+  }
+}

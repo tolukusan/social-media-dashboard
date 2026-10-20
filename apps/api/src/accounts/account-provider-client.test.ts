@@ -14,6 +14,110 @@ afterEach(() => {
 });
 
 describe('account provider read-only analytics', () => {
+  it('fetches an Instagram daily-history chunk without profiles or posts and keeps real zeroes', async () => {
+    vi.stubEnv('INTEGRATION_META_API_VERSION', 'v99.0');
+    const urls: URL[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(input.toString());
+        urls.push(url);
+        return Response.json({
+          data: [
+            { name: 'views', total_value: { value: 0 } },
+            { name: 'reach', total_value: { value: 3 } },
+            { name: 'total_interactions', total_value: { value: 1 } },
+          ],
+        });
+      }),
+    );
+
+    const result = await new AccountProviderClient().syncMetaAccountMetrics(
+      { provider: 'INSTAGRAM', externalAccountId: '123' },
+      { accessToken: 'fixture-token' },
+      '2026-10-01',
+      '2026-10-01',
+    );
+
+    expect(result).toContainEqual(
+      expect.objectContaining({ code: 'MEDIA_VIEWS', value: 0 }),
+    );
+    expect(urls).toHaveLength(1);
+    expect(urls[0].pathname).toBe('/v99.0/123/insights');
+    expect(urls[0].searchParams.get('until')).toBe('2026-10-02');
+  });
+
+  it('keeps Facebook organic metrics explicit and snapshots followers on retrieval date', async () => {
+    vi.stubEnv('INTEGRATION_META_API_VERSION', 'v99.0');
+    const fetcher = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(input.toString());
+      if (
+        url.pathname.endsWith('/insights') &&
+        url.searchParams.get('metric') === 'page_views_total'
+      )
+        return Response.json({
+          data: [
+            {
+              name: 'page_views_total',
+              values: [{ end_time: '2026-10-01T07:00:00+0000', value: 0 }],
+            },
+          ],
+        });
+      if (url.pathname.endsWith('/insights'))
+        return Response.json({
+          data: [
+            {
+              name: 'page_media_view',
+              values: [
+                {
+                  end_time: '2026-10-01T07:00:00+0000',
+                  is_from_ads: false,
+                  value: 0,
+                },
+                {
+                  end_time: '2026-10-01T07:00:00+0000',
+                  is_from_ads: true,
+                  value: 18,
+                },
+              ],
+            },
+          ],
+        });
+      if (url.pathname.endsWith('/123'))
+        return Response.json({ id: '123', followers_count: 42 });
+      throw new Error(`Unexpected provider endpoint: ${url.href}`);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const client = new AccountProviderClient();
+
+    const metrics = await client.syncMetaAccountMetrics(
+      { provider: 'FACEBOOK', externalAccountId: '123' },
+      { accessToken: 'fixture-token' },
+      '2026-10-01',
+      '2026-10-01',
+    );
+    const snapshot = await client.fetchMetaAudienceSnapshot(
+      { provider: 'FACEBOOK', externalAccountId: '123' },
+      { accessToken: 'fixture-token' },
+      '2026-10-20',
+    );
+
+    expect(metrics).toContainEqual(
+      expect.objectContaining({ code: 'PAGE_VISITS', value: 0 }),
+    );
+    expect(metrics).toContainEqual(
+      expect.objectContaining({ code: 'ORGANIC_MEDIA_VIEWS', value: 0 }),
+    );
+    expect(metrics).not.toContainEqual(
+      expect.objectContaining({ code: 'ORGANIC_MEDIA_VIEWS', value: 18 }),
+    );
+    expect(snapshot).toMatchObject({
+      date: '2026-10-20',
+      code: 'AUDIENCE_SIZE',
+      value: 42,
+    });
+  });
+
   it('follows Meta cursor pagination without following a provider-supplied URL', async () => {
     vi.stubEnv('INTEGRATION_META_API_VERSION', 'v99.0');
     const pageCursors: Array<string | null> = [];
@@ -152,7 +256,7 @@ describe('account provider read-only analytics', () => {
       fetcher.mock.calls.filter(([input]) =>
         new URL(input.toString()).pathname.endsWith('/insights'),
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(result.metrics).toContainEqual(
       expect.objectContaining({ code: 'AUDIENCE_SIZE', value: 42 }),
     );
@@ -422,7 +526,7 @@ describe('account provider read-only analytics', () => {
           value: 93,
         }),
         expect.objectContaining({
-          date: '2026-10-14',
+          date: '2026-10-20',
           scope: 'SNAPSHOT',
           code: 'AUDIENCE_SIZE',
           value: 812,
@@ -689,7 +793,7 @@ describe('account provider read-only analytics', () => {
         '2026-10-01',
         '2026-10-17',
       ),
-    ).rejects.toMatchObject({ code: 'PROVIDER_REQUEST_FAILED' });
+    ).rejects.toMatchObject({ code: 'PROVIDER_UNAVAILABLE' });
   });
 });
 

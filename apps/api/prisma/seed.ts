@@ -500,7 +500,7 @@ const accountMetricDefinitions: AccountMetricSeed[] = [
   ...providerMetrics(
     IntegrationProvider.INSTAGRAM_ORGANIC,
     AccountAnalyticsScope.ACCOUNT,
-    90,
+    365,
     [
       [
         'AUDIENCE_SIZE',
@@ -563,7 +563,7 @@ const accountMetricDefinitions: AccountMetricSeed[] = [
   ...providerMetrics(
     IntegrationProvider.FACEBOOK_ORGANIC,
     AccountAnalyticsScope.ACCOUNT,
-    90,
+    365,
     [
       [
         'AUDIENCE_SIZE',

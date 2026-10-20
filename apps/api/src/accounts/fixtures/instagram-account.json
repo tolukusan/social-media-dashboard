@@ -3,15 +3,15 @@
     "data": [
       {
         "name": "views",
-        "values": [{ "value": 142, "end_time": "2026-10-14T07:00:00+0000" }]
+        "total_value": { "value": 142 }
       },
       {
         "name": "reach",
-        "values": [{ "value": 93, "end_time": "2026-10-14T07:00:00+0000" }]
+        "total_value": { "value": 93 }
       },
       {
         "name": "total_interactions",
-        "values": [{ "value": 17, "end_time": "2026-10-14T07:00:00+0000" }]
+        "total_value": { "value": 17 }
       }
     ]
   },

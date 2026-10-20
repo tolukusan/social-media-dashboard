@@ -16,6 +16,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { AppModule } from '../app.module.js';
 import { AccountProviderClient } from './account-provider-client.js';
+import { ConnectedAccountsService } from './connected-accounts.service.js';
 import type { ConnectedCandidate } from './account-provider-client.js';
 import type { ProviderSyncResult } from './account-contract.js';
 
@@ -37,7 +38,38 @@ let accountProvider: AccountProviderClient;
 let exchangeCode: MockInstance<AccountProviderClient['exchangeCode']>;
 let discover: MockInstance<AccountProviderClient['discover']>;
 let syncProvider: MockInstance<AccountProviderClient['sync']>;
+let syncMetaMetrics: MockInstance<
+  AccountProviderClient['syncMetaAccountMetrics']
+>;
+let fetchMetaAudience: MockInstance<
+  AccountProviderClient['fetchMetaAudienceSnapshot']
+>;
+let syncMetaContent: MockInstance<
+  AccountProviderClient['syncMetaRecentContent']
+>;
 let revokeCredentials: MockInstance<AccountProviderClient['revokeCredentials']>;
+
+async function drainSyncJobs(accountId: string) {
+  const service = app.get(ConnectedAccountsService) as unknown as {
+    claimSyncJob(): Promise<{ id: string; leaseToken: string } | null>;
+    processSyncJob(id: string, leaseToken: string): Promise<void>;
+  };
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const pending = await prisma.connectedAccountSyncJob.findFirst({
+      where: {
+        connectedAccountId: accountId,
+        status: { in: ['QUEUED', 'RUNNING'] },
+      },
+      select: { id: true },
+    });
+    if (!pending) return;
+    const claimed = await service.claimSyncJob();
+    if (!claimed)
+      throw new Error('An active fixture sync job could not be claimed.');
+    await service.processSyncJob(claimed.id, claimed.leaseToken);
+  }
+  throw new Error('Fixture sync job exceeded the bounded chunk count.');
+}
 
 function request(path: string, method = 'GET', body?: unknown) {
   return fetch(`${base}/api/v1${path}`, {
@@ -261,6 +293,53 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
           };
         return socialResult(end);
       });
+    syncMetaMetrics = vi
+      .spyOn(accountProvider, 'syncMetaAccountMetrics')
+      .mockImplementation(
+        async (_account, _credentials, chunkFrom, chunkTo) => {
+          const metrics: Awaited<
+            ReturnType<AccountProviderClient['syncMetaAccountMetrics']>
+          > = [];
+          const current = new Date(`${chunkFrom}T00:00:00.000Z`);
+          const end = new Date(`${chunkTo}T00:00:00.000Z`);
+          while (current <= end) {
+            const date = current.toISOString().slice(0, 10);
+            metrics.push({
+              date,
+              scope: 'DAILY',
+              code: 'ORGANIC_MEDIA_VIEWS',
+              sourceMetric: 'page_media_view:is_from_ads=false',
+              value: 68,
+            });
+            current.setUTCDate(current.getUTCDate() + 1);
+          }
+          return metrics;
+        },
+      );
+    fetchMetaAudience = vi
+      .spyOn(accountProvider, 'fetchMetaAudienceSnapshot')
+      .mockImplementation(async (_account, _credentials, snapshotDate) => ({
+        date: snapshotDate!,
+        scope: 'SNAPSHOT',
+        code: 'AUDIENCE_SIZE',
+        sourceMetric: 'followers_count',
+        value: 425,
+      }));
+    syncMetaContent = vi
+      .spyOn(accountProvider, 'syncMetaRecentContent')
+      .mockImplementation(
+        async (_account, _credentials, _contentFrom, contentTo) => [
+          {
+            externalPostId: `facebook-post-${suffix}`,
+            title: 'Persisted Facebook post',
+            postType: 'PHOTO',
+            permalink: 'https://example.invalid/post',
+            publishedAt: `${contentTo}T09:00:00.000Z`,
+            metricValues: { ORGANIC_VIEWS: 91 },
+            dataScope: 'LIFETIME',
+          },
+        ],
+      );
     revokeCredentials = vi
       .spyOn(accountProvider, 'revokeCredentials')
       .mockResolvedValue('revoked');
@@ -383,23 +462,150 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
       'credentialCiphertext',
     );
 
+    const bootstrapResponse = await request(
+      `/accounts/${socialAccount.id}/sync-jobs/active`,
+    );
+    expect(bootstrapResponse.status).toBe(200);
+    const bootstrap = (await bootstrapResponse.json()) as {
+      id: string;
+      source: string;
+      status: string;
+      totalChunks: number;
+    };
+    expect(bootstrap).toMatchObject({
+      source: 'OAUTH',
+      status: 'QUEUED',
+      totalChunks: expect.any(Number),
+    });
+    expect(bootstrap.totalChunks).toBeGreaterThan(1);
+    await drainSyncJobs(socialAccount.id);
+    expect(syncMetaMetrics).toHaveBeenCalled();
+    expect(fetchMetaAudience).toHaveBeenCalledTimes(1);
+    expect(syncMetaContent).toHaveBeenCalledTimes(1);
+    const audienceSnapshotRows =
+      await prisma.connectedAccountAnalyticsRecord.findMany({
+        where: {
+          connectedAccountId: socialAccount.id,
+          scope: 'ACCOUNT',
+          recordDate: new Date(`${to}T00:00:00.000Z`),
+        },
+        include: {
+          metricValues: {
+            where: { metricDefinition: { code: 'AUDIENCE_SIZE' } },
+          },
+        },
+      });
+    expect(
+      audienceSnapshotRows.flatMap((row) =>
+        row.metricValues.map((metric) => Number(metric.value)),
+      ),
+    ).toEqual([425]);
+
     const syncResponse = await request(
       `/accounts/${socialAccount.id}/sync`,
       'POST',
       { from, to },
     );
-    expect(syncResponse.status).toBe(201);
-    expect(await syncResponse.json()).toMatchObject({
-      accountId: socialAccount.id,
-      observations: 2,
-      posts: 1,
+    expect(syncResponse.status).toBe(202);
+    const queued = (await syncResponse.json()) as {
+      id: string;
+      status: string;
+    };
+    expect(queued).toMatchObject({ status: 'QUEUED', queued: true });
+    await drainSyncJobs(socialAccount.id);
+    const completedJob = await request(
+      `/accounts/${socialAccount.id}/sync-jobs/${queued.id}`,
+    );
+    expect(completedJob.status).toBe(200);
+    expect(await completedJob.json()).toMatchObject({
+      id: queued.id,
+      status: 'SUCCEEDED',
     });
-    expect(syncProvider).toHaveBeenCalledWith(
+    expect(syncProvider).not.toHaveBeenCalledWith(
       expect.objectContaining({ id: socialAccount.id }),
-      expect.objectContaining({ accessToken: 'fixture-access-token' }),
+      expect.anything(),
       from,
       to,
     );
+
+    const recoveryStart = new Date(`${to}T00:00:00.000Z`);
+    recoveryStart.setUTCDate(recoveryStart.getUTCDate() - 30);
+    const recoveryFrom = recoveryStart.toISOString().slice(0, 10);
+    const syncJobResponse = await request(
+      `/accounts/${socialAccount.id}/sync-jobs`,
+      'POST',
+      { from: recoveryFrom, to },
+    );
+    expect(syncJobResponse.status).toBe(202);
+    const recoveryJob = (await syncJobResponse.json()) as {
+      id: string;
+      status: string;
+      totalChunks: number;
+      alreadyRunning: boolean;
+    };
+    expect(recoveryJob).toMatchObject({
+      status: 'QUEUED',
+      totalChunks: 2,
+      alreadyRunning: false,
+    });
+    const duplicateSyncJobResponse = await request(
+      `/accounts/${socialAccount.id}/sync-jobs`,
+      'POST',
+      { from: recoveryFrom, to },
+    );
+    expect(duplicateSyncJobResponse.status).toBe(202);
+    expect(await duplicateSyncJobResponse.json()).toMatchObject({
+      id: recoveryJob.id,
+      alreadyRunning: true,
+    });
+
+    const service = app.get(ConnectedAccountsService) as unknown as {
+      claimSyncJob(): Promise<{ id: string; leaseToken: string } | null>;
+      processSyncJob(id: string, leaseToken: string): Promise<void>;
+    };
+    const firstClaim = await service.claimSyncJob();
+    expect(firstClaim).toMatchObject({ id: recoveryJob.id });
+    await service.processSyncJob(firstClaim!.id, firstClaim!.leaseToken);
+    const interruptedClaim = await service.claimSyncJob();
+    expect(interruptedClaim).toMatchObject({ id: recoveryJob.id });
+    const interruptedChunk =
+      await prisma.connectedAccountSyncChunk.findFirstOrThrow({
+        where: { jobId: recoveryJob.id, status: 'QUEUED' },
+        orderBy: { sequence: 'asc' },
+      });
+    await prisma.connectedAccountSyncChunk.update({
+      where: { id: interruptedChunk.id },
+      data: {
+        status: 'RUNNING',
+        attemptCount: 1,
+        updatedAt: new Date(Date.now() - 6 * 60_000),
+      },
+    });
+    await prisma.connectedAccountSyncJob.update({
+      where: { id: recoveryJob.id },
+      data: { leaseUntil: new Date(Date.now() - 60_000) },
+    });
+    const recoveredClaim = await service.claimSyncJob();
+    expect(recoveredClaim).toMatchObject({ id: recoveryJob.id });
+    await service.processSyncJob(
+      recoveredClaim!.id,
+      recoveredClaim!.leaseToken,
+    );
+    const recoveredJob = await prisma.connectedAccountSyncJob.findUniqueOrThrow(
+      {
+        where: { id: recoveryJob.id },
+        include: { chunks: true },
+      },
+    );
+    expect(recoveredJob.status).toBe('SUCCEEDED');
+    expect(recoveredJob.chunks).toHaveLength(2);
+    expect(
+      recoveredJob.chunks.every((chunk) => chunk.status === 'SUCCEEDED'),
+    ).toBe(true);
+    expect(
+      recoveredJob.chunks.find((chunk) => chunk.id === interruptedChunk.id)
+        ?.attemptCount,
+    ).toBe(2);
 
     const analyticsResponse = await request(
       `/accounts/${socialAccount.id}/analytics?from=${from}&to=${to}`,
@@ -409,17 +615,26 @@ describe('connected account OAuth, sync, reports, and disconnect HTTP flow', () 
       metrics: Array<{ code: string; value: number | null }>;
       topPosts: Array<{ dataScope: string; metricValue: number | null }>;
       caveats: string[];
+      coverage: {
+        requestedDays: number;
+        latestSuccessfulHistoryFetchAt: string | null;
+      };
     };
     expect(analytics.metrics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: 'AUDIENCE_SIZE', value: 425 }),
-        expect.objectContaining({ code: 'ORGANIC_MEDIA_VIEWS', value: 68 }),
+        expect.objectContaining({ code: 'ORGANIC_MEDIA_VIEWS', value: 204 }),
       ]),
     );
-    expect(analytics.topPosts).toEqual([
-      expect.objectContaining({ dataScope: 'LIFETIME', metricValue: 91 }),
-    ]);
-    expect(analytics.caveats.join(' ')).toContain('lifetime totals');
+    expect(analytics.topPosts).toEqual([]);
+    expect(analytics.coverage.requestedDays).toBeGreaterThan(0);
+    expect(analytics.coverage.latestSuccessfulHistoryFetchAt).toBeTruthy();
+    expect(analytics.caveats.join(' ')).toContain(
+      'not a complete annual ranking',
+    );
+    expect(analytics.caveats.join(' ')).toContain(
+      'not a deduplicated count of unique people',
+    );
 
     const pdfResponse = await request(
       `/accounts/${socialAccount.id}/report.pdf?from=${from}&to=${to}`,

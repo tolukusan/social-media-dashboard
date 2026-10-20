@@ -160,6 +160,7 @@ model User {
   integrationConnections    IntegrationConnection[]
   connectedAccounts         ConnectedAccount[]
   accountOAuthStates        AccountOAuthState[]
+  requestedAccountSyncJobs  ConnectedAccountSyncJob[] @relation("AccountSyncRequestedBy")
   integrationOAuthAttempts  IntegrationOAuthAttempt[]
   createdAt                 DateTime                  @default(now())
   updatedAt                 DateTime                  @updatedAt
@@ -385,28 +386,108 @@ model AccountOAuthState {
 }
 
 model ConnectedAccount {
-  id                       String                            @id @default(uuid()) @db.Uuid
-  provider                 ConnectedAccountProvider
-  kind                     ConnectedAccountKind
-  externalAccountId        String                            @db.VarChar(180)
-  displayName              String                            @db.VarChar(160)
-  handle                   String?                           @db.VarChar(160)
-  profileUrl               String?                           @db.VarChar(500)
-  profileMetadataExpiresAt DateTime?
-  credentialCiphertext     String?                           @db.Text
-  tokenExpiresAt           DateTime?
-  connectedByUserId        String                            @db.Uuid
-  connectedByUser          User                              @relation(fields: [connectedByUserId], references: [id], onDelete: Restrict)
-  active                   Boolean                           @default(true)
-  connectedAt              DateTime                          @default(now())
-  lastSyncedAt             DateTime?
-  lastSyncErrorCode        String?                           @db.VarChar(60)
-  accountAnalyticsRecords  ConnectedAccountAnalyticsRecord[]
-  createdAt                DateTime                          @default(now())
-  updatedAt                DateTime                          @updatedAt
+  id                         String                            @id @default(uuid()) @db.Uuid
+  provider                   ConnectedAccountProvider
+  kind                       ConnectedAccountKind
+  externalAccountId          String                            @db.VarChar(180)
+  displayName                String                            @db.VarChar(160)
+  handle                     String?                           @db.VarChar(160)
+  profileUrl                 String?                           @db.VarChar(500)
+  profileMetadataExpiresAt   DateTime?
+  credentialCiphertext       String?                           @db.Text
+  tokenExpiresAt             DateTime?
+  connectedByUserId          String                            @db.Uuid
+  connectedByUser            User                              @relation(fields: [connectedByUserId], references: [id], onDelete: Restrict)
+  active                     Boolean                           @default(true)
+  connectedAt                DateTime                          @default(now())
+  lastSyncedAt               DateTime?
+  lastSyncErrorCode          String?                           @db.VarChar(60)
+  historyBootstrapEnqueuedAt DateTime?
+  accountAnalyticsRecords    ConnectedAccountAnalyticsRecord[]
+  syncJobs                   ConnectedAccountSyncJob[]
+  createdAt                  DateTime                          @default(now())
+  updatedAt                  DateTime                          @updatedAt
 
   @@unique([provider, externalAccountId])
   @@index([kind, active, provider])
+  @@schema("social_media_dashboard")
+}
+
+enum ConnectedAccountSyncJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  CANCELLED
+
+  @@schema("social_media_dashboard")
+}
+
+enum ConnectedAccountSyncJobSource {
+  MANUAL
+  SCHEDULED
+  OAUTH
+
+  @@schema("social_media_dashboard")
+}
+
+enum ConnectedAccountSyncChunkStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+
+  @@schema("social_media_dashboard")
+}
+
+model ConnectedAccountSyncJob {
+  id                       String                        @id @default(uuid()) @db.Uuid
+  connectedAccountId       String                        @db.Uuid
+  connectedAccount         ConnectedAccount              @relation(fields: [connectedAccountId], references: [id], onDelete: Cascade)
+  requestedFrom            DateTime                      @db.Date
+  requestedTo              DateTime                      @db.Date
+  fetchFrom                DateTime?                     @db.Date
+  fetchTo                  DateTime?                     @db.Date
+  source                   ConnectedAccountSyncJobSource
+  status                   ConnectedAccountSyncJobStatus @default(QUEUED)
+  requestedByUserId        String?                       @db.Uuid
+  requestedByUser          User?                         @relation("AccountSyncRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  createdAt                DateTime                      @default(now())
+  startedAt                DateTime?
+  updatedAt                DateTime                      @updatedAt
+  completedAt              DateTime?
+  snapshotRecordedAt       DateTime?
+  contentRefreshRecordedAt DateTime?
+  leaseToken               String?                       @db.Uuid
+  leaseUntil               DateTime?
+  finalErrorCode           String?                       @db.VarChar(60)
+  chunks                   ConnectedAccountSyncChunk[]
+
+  @@index([connectedAccountId, status, createdAt])
+  @@index([status, leaseUntil, createdAt])
+  @@index([completedAt])
+  @@schema("social_media_dashboard")
+}
+
+model ConnectedAccountSyncChunk {
+  id               String                          @id @default(uuid()) @db.Uuid
+  jobId            String                          @db.Uuid
+  job              ConnectedAccountSyncJob         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  fromDate         DateTime                        @db.Date
+  toDate           DateTime                        @db.Date
+  sequence         Int
+  status           ConnectedAccountSyncChunkStatus @default(QUEUED)
+  attemptCount     Int                             @default(0)
+  nextAttemptAt    DateTime                        @default(now())
+  observationCount Int                             @default(0)
+  errorCode        String?                         @db.VarChar(60)
+  createdAt        DateTime                        @default(now())
+  updatedAt        DateTime                        @updatedAt
+
+  @@unique([jobId, sequence])
+  @@index([jobId, status, sequence])
+  @@index([status, nextAttemptAt])
   @@schema("social_media_dashboard")
 }
 

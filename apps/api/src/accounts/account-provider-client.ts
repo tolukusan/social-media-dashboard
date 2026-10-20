@@ -43,6 +43,18 @@ function stringValue(value: unknown, fallback = '') {
   return typeof value === 'string' ? value : fallback;
 }
 
+function reportingDay(at = new Date()) {
+  const timezone = process.env.REPORTING_TIMEZONE ?? 'Africa/Lagos';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(at);
+  const get = (type: string) => parts.find((part) => part.type === type)!.value;
+  return validDay(`${get('year')}-${get('month')}-${get('day')}`);
+}
+
 function expiryFromToken(payload: Record<string, unknown>): Date | null {
   const seconds = Number(payload.expires_in);
   return Number.isFinite(seconds) && seconds > 0
@@ -573,6 +585,7 @@ export class AccountProviderClient {
     credentials: OAuthCredentials,
     from: string,
     to: string,
+    snapshotDate = reportingDay(),
   ): Promise<ProviderSyncResult> {
     if (account.provider === 'INSTAGRAM')
       return this.syncInstagram(
@@ -580,6 +593,7 @@ export class AccountProviderClient {
         credentials,
         from,
         to,
+        snapshotDate,
       );
     if (account.provider === 'FACEBOOK')
       return this.syncFacebook(
@@ -587,6 +601,7 @@ export class AccountProviderClient {
         credentials,
         from,
         to,
+        snapshotDate,
       );
     if (account.provider === 'LINKEDIN')
       return this.syncLinkedIn(
@@ -600,44 +615,225 @@ export class AccountProviderClient {
     return this.syncZoho(credentials, from, to);
   }
 
+  async syncMetaAccountMetrics(
+    account: {
+      provider: 'INSTAGRAM' | 'FACEBOOK';
+      externalAccountId: string;
+    },
+    credentials: OAuthCredentials,
+    from: string,
+    to: string,
+  ): Promise<MetricObservation[]> {
+    const version = process.env.INTEGRATION_META_API_VERSION!;
+    const metrics: MetricObservation[] = [];
+    if (account.provider === 'INSTAGRAM') {
+      const metricNames: Record<string, string> = {
+        views: 'MEDIA_VIEWS',
+        reach: 'ACCOUNTS_REACHED',
+        total_interactions: 'CONTENT_INTERACTIONS',
+      };
+      for (let date = from; date <= to; date = this.nextDay(date)) {
+        const insightsUrl = new URL(
+          `https://graph.facebook.com/${version}/${account.externalAccountId}/insights`,
+        );
+        insightsUrl.searchParams.set(
+          'metric',
+          'views,reach,total_interactions',
+        );
+        insightsUrl.searchParams.set('period', 'day');
+        insightsUrl.searchParams.set('metric_type', 'total_value');
+        insightsUrl.searchParams.set('since', date);
+        insightsUrl.searchParams.set('until', this.nextDay(date));
+        const response = await this.requestJson(
+          insightsUrl,
+          credentials.accessToken,
+        );
+        for (const value of records(response.data)) {
+          const metric = record(value);
+          const code = metricNames[stringValue(metric.name)];
+          const total = record(metric.total_value).value;
+          if (code && total !== undefined && total !== null)
+            metrics.push({
+              date,
+              scope: 'DAILY',
+              code,
+              sourceMetric: stringValue(metric.name),
+              value: metricNumber(total),
+            });
+        }
+      }
+      return metrics.filter((metric) => this.inRange(metric.date, from, to));
+    }
+
+    const visitsUrl = new URL(
+      `https://graph.facebook.com/${version}/${account.externalAccountId}/insights`,
+    );
+    visitsUrl.searchParams.set('metric', 'page_views_total');
+    visitsUrl.searchParams.set('period', 'day');
+    visitsUrl.searchParams.set('since', from);
+    visitsUrl.searchParams.set('until', this.nextDay(to));
+    const pageInsights = await this.requestJson(
+      visitsUrl,
+      credentials.accessToken,
+    );
+    for (const item of records(pageInsights.data)) {
+      const metric = record(item);
+      for (const observation of records(metric.values)) {
+        const point = record(observation);
+        const date = this.metaObservationDate(
+          point.start_time ?? point.end_time,
+        );
+        if (
+          date &&
+          this.inRange(date, from, to) &&
+          point.value !== undefined &&
+          point.value !== null
+        )
+          metrics.push({
+            date,
+            scope: 'DAILY',
+            code: 'PAGE_VISITS',
+            sourceMetric: 'page_views_total',
+            value: metricNumber(point.value),
+          });
+      }
+    }
+    const organicUrl = new URL(
+      `https://graph.facebook.com/${version}/${account.externalAccountId}/insights`,
+    );
+    organicUrl.searchParams.set('metric', 'page_media_view');
+    organicUrl.searchParams.set('period', 'day');
+    organicUrl.searchParams.set('since', from);
+    organicUrl.searchParams.set('until', this.nextDay(to));
+    organicUrl.searchParams.set('breakdown', 'is_from_ads');
+    const organicInsights = await this.requestJson(
+      organicUrl,
+      credentials.accessToken,
+    );
+    metrics.push(
+      ...this.explicitOrganicValues(organicInsights, from, to).map((point) => ({
+        ...point,
+        code: 'ORGANIC_MEDIA_VIEWS',
+        sourceMetric: 'page_media_view:is_from_ads=false',
+        scope: 'DAILY' as const,
+      })),
+    );
+    return metrics.filter((metric) => this.inRange(metric.date, from, to));
+  }
+
+  async fetchMetaAudienceSnapshot(
+    account: {
+      provider: 'INSTAGRAM' | 'FACEBOOK';
+      externalAccountId: string;
+    },
+    credentials: OAuthCredentials,
+    snapshotDate = reportingDay(),
+  ): Promise<MetricObservation | null> {
+    const version = process.env.INTEGRATION_META_API_VERSION!;
+    const fields =
+      account.provider === 'INSTAGRAM'
+        ? 'id,username,name,followers_count'
+        : 'id,name,followers_count';
+    const profileUrl = new URL(
+      `https://graph.facebook.com/${version}/${account.externalAccountId}`,
+    );
+    profileUrl.searchParams.set('fields', fields);
+    const profile = await this.requestJson(profileUrl, credentials.accessToken);
+    if (
+      profile.followers_count === undefined ||
+      profile.followers_count === null
+    )
+      return null;
+    return {
+      date: validDay(snapshotDate),
+      scope: 'SNAPSHOT',
+      code: 'AUDIENCE_SIZE',
+      sourceMetric: 'followers_count',
+      value: metricNumber(profile.followers_count),
+    };
+  }
+
+  async syncMetaRecentContent(
+    account: {
+      provider: 'INSTAGRAM' | 'FACEBOOK';
+      externalAccountId: string;
+    },
+    credentials: OAuthCredentials,
+    from: string,
+    to: string,
+  ): Promise<PostObservation[]> {
+    validDay(from);
+    validDay(to);
+    const days =
+      Math.floor(
+        (Date.parse(`${to}T00:00:00.000Z`) -
+          Date.parse(`${from}T00:00:00.000Z`)) /
+          86_400_000,
+      ) + 1;
+    if (days < 1 || days > 30)
+      providerFailure(
+        'INVALID_POST_SYNC_RANGE',
+        'Recent post refresh is limited to 30 calendar days.',
+      );
+    const version = process.env.INTEGRATION_META_API_VERSION!;
+    return account.provider === 'INSTAGRAM'
+      ? this.fetchInstagramPosts(
+          account.externalAccountId,
+          credentials.accessToken,
+          version,
+          from,
+          to,
+        )
+      : this.fetchFacebookPosts(
+          account.externalAccountId,
+          credentials.accessToken,
+          version,
+          from,
+          to,
+        );
+  }
+
   private async syncInstagram(
     accountId: string,
     credentials: OAuthCredentials,
     from: string,
     to: string,
+    snapshotDate: string,
   ): Promise<ProviderSyncResult> {
     const version = process.env.INTEGRATION_META_API_VERSION!;
     const metrics: MetricObservation[] = [];
-    const insightsUrl = new URL(
-      `https://graph.facebook.com/${version}/${accountId}/insights`,
-    );
-    insightsUrl.searchParams.set('metric', 'views,reach,total_interactions');
-    insightsUrl.searchParams.set('period', 'day');
-    insightsUrl.searchParams.set('since', from);
-    insightsUrl.searchParams.set('until', to);
-    const insightResponse = await this.requestJson(
-      insightsUrl,
-      credentials.accessToken,
-    );
     const metricNames: Record<string, string> = {
       views: 'MEDIA_VIEWS',
       reach: 'ACCOUNTS_REACHED',
       total_interactions: 'CONTENT_INTERACTIONS',
     };
-    for (const value of records(insightResponse.data)) {
-      const metric = record(value);
-      const code = metricNames[stringValue(metric.name)];
-      if (!code) continue;
-      for (const observation of records(metric.values)) {
-        const point = record(observation);
-        const date = this.metaObservationDate(point.end_time);
-        if (date && this.inRange(date, from, to) && point.value !== undefined)
+    // These account metrics require total_value in current Graph versions.
+    // Request one calendar day at a time so period totals are never stored
+    // as daily observations or duplicated across the selected date range.
+    for (let date = from; date <= to; date = this.nextDay(date)) {
+      const insightsUrl = new URL(
+        `https://graph.facebook.com/${version}/${accountId}/insights`,
+      );
+      insightsUrl.searchParams.set('metric', 'views,reach,total_interactions');
+      insightsUrl.searchParams.set('period', 'day');
+      insightsUrl.searchParams.set('metric_type', 'total_value');
+      insightsUrl.searchParams.set('since', date);
+      insightsUrl.searchParams.set('until', this.nextDay(date));
+      const insightResponse = await this.requestJson(
+        insightsUrl,
+        credentials.accessToken,
+      );
+      for (const value of records(insightResponse.data)) {
+        const metric = record(value);
+        const code = metricNames[stringValue(metric.name)];
+        const total = record(metric.total_value).value;
+        if (code && total !== undefined && total !== null)
           metrics.push({
             date,
             scope: 'DAILY',
             code,
             sourceMetric: stringValue(metric.name),
-            value: metricNumber(point.value),
+            value: metricNumber(total),
           });
       }
     }
@@ -649,7 +845,7 @@ export class AccountProviderClient {
     const profile = await this.requestJson(profileUrl, credentials.accessToken);
     if (profile.followers_count !== undefined)
       metrics.push({
-        date: to,
+        date: snapshotDate,
         scope: 'SNAPSHOT',
         code: 'AUDIENCE_SIZE',
         sourceMetric: 'followers_count',
@@ -746,6 +942,7 @@ export class AccountProviderClient {
     credentials: OAuthCredentials,
     from: string,
     to: string,
+    snapshotDate: string,
   ): Promise<ProviderSyncResult> {
     const version = process.env.INTEGRATION_META_API_VERSION!;
     const metrics: MetricObservation[] = [];
@@ -756,7 +953,7 @@ export class AccountProviderClient {
     const profile = await this.requestJson(profileUrl, credentials.accessToken);
     if (profile.followers_count !== undefined)
       metrics.push({
-        date: to,
+        date: snapshotDate,
         scope: 'SNAPSHOT',
         code: 'AUDIENCE_SIZE',
         sourceMetric: 'followers_count',
@@ -769,7 +966,7 @@ export class AccountProviderClient {
     visitsUrl.searchParams.set('metric', 'page_views_total');
     visitsUrl.searchParams.set('period', 'day');
     visitsUrl.searchParams.set('since', from);
-    visitsUrl.searchParams.set('until', to);
+    visitsUrl.searchParams.set('until', this.nextDay(to));
     const pageInsights = await this.requestJson(
       visitsUrl,
       credentials.accessToken,
@@ -778,7 +975,9 @@ export class AccountProviderClient {
       const metric = record(item);
       for (const observation of records(metric.values)) {
         const point = record(observation);
-        const date = this.metaObservationDate(point.end_time);
+        const date = this.metaObservationDate(
+          point.start_time ?? point.end_time,
+        );
         if (date && this.inRange(date, from, to) && point.value !== undefined)
           metrics.push({
             date,
@@ -796,7 +995,7 @@ export class AccountProviderClient {
     organicUrl.searchParams.set('metric', 'page_media_view');
     organicUrl.searchParams.set('period', 'day');
     organicUrl.searchParams.set('since', from);
-    organicUrl.searchParams.set('until', to);
+    organicUrl.searchParams.set('until', this.nextDay(to));
     organicUrl.searchParams.set('breakdown', 'is_from_ads');
     const organicInsights = await this.requestJson(
       organicUrl,
@@ -899,7 +1098,9 @@ export class AccountProviderClient {
       const metric = record(value);
       for (const item of records(metric.values)) {
         const entry = record(item);
-        const date = this.metaObservationDate(entry.end_time);
+        const date = this.metaObservationDate(
+          entry.start_time ?? entry.end_time,
+        );
         if (!allowNoDate && (!date || !this.inRange(date, from, to))) continue;
         if (allowNoDate && date && !this.inRange(date, from, to)) continue;
         const organic = this.isExplicitOrganic(entry);
@@ -913,6 +1114,21 @@ export class AccountProviderClient {
   }
 
   private isExplicitOrganic(value: Record<string, unknown>) {
+    // Current Page Insights places the breakdown directly on each value.
+    if (
+      value.is_from_ads === false ||
+      value.is_from_ads === 0 ||
+      value.is_from_ads === 'false' ||
+      value.is_from_ads === '0'
+    )
+      return true;
+    if (
+      value.is_from_ads === true ||
+      value.is_from_ads === 1 ||
+      value.is_from_ads === 'true' ||
+      value.is_from_ads === '1'
+    )
+      return false;
     const breakdowns =
       value.breakdowns ?? value.breakdown ?? value.dimension_values;
     if (Array.isArray(breakdowns)) {
@@ -1778,12 +1994,22 @@ export class AccountProviderClient {
     return delay <= 1000 ? delay : null;
   }
 
+  private retryAfterMilliseconds(retryAfter: string | null) {
+    if (!retryAfter) return undefined;
+    const seconds = Number(retryAfter);
+    const delay = Number.isFinite(seconds)
+      ? seconds * 1000
+      : Date.parse(retryAfter) - Date.now();
+    return Number.isFinite(delay) && delay > 0 ? delay : undefined;
+  }
+
   private wait(milliseconds: number) {
     return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
   }
 
   private async readJson(response: Response): Promise<Record<string, unknown>> {
     if (!response.ok) {
+      const retryAfter = response.headers.get('retry-after');
       await response.body?.cancel();
       if (response.status === 401)
         providerFailure(
@@ -1799,6 +2025,13 @@ export class AccountProviderClient {
         providerFailure(
           'PROVIDER_RATE_LIMITED',
           'The provider rate limit was reached. Retry later.',
+          this.retryAfterMilliseconds(retryAfter),
+        );
+      if ([408, 425, 500, 502, 503, 504].includes(response.status))
+        providerFailure(
+          'PROVIDER_UNAVAILABLE',
+          'The provider could not complete the request. Retry later.',
+          this.retryAfterMilliseconds(retryAfter),
         );
       providerFailure(
         'PROVIDER_REQUEST_FAILED',

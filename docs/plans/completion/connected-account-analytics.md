@@ -1,6 +1,6 @@
 # Connected-account analytics implementation plan
 
-Date: 2026-10-14; updated 2026-10-18. Status: AAN-01/02/03/04/06 are implemented locally; live provider acceptance remains conditional on credentials and account access.
+Date: 2026-10-14; updated 2026-10-20. Status: AAN-01/02/03/04/06 and the Meta annual-report extension are implemented locally; live provider acceptance remains conditional on credentials and account access.
 
 ## Approved product direction
 
@@ -73,3 +73,11 @@ Use sanitized fixtures and mock credentials for provider contract, correction, r
 - Zoho campaign responses remain cumulative snapshots and do not establish daily account totals.
 - Older unmanaged LinkedIn campaign values may have ambiguous per-value provenance; review those before claiming full retention compliance.
 - External deployment and live API verification remain separate, authorized release activities.
+
+## Meta annual reporting extension — 2026-10-20
+
+The approved extension supports **Last 365 days** for connected Instagram and Facebook account metrics while keeping report dates, provider fetch windows, and local retention separate. Instagram sync jobs fetch only the latest 90 calendar dates; Facebook jobs attempt up to 365 selected dates in inclusive chunks of at most 30 days. The API stores account metrics for 365 days after retrieval. Recent post snapshots keep the existing 90-day retention and are not treated as annual rankings. Current follower counts are stored on the actual retrieval date; the application does not reconstruct old snapshots.
+
+PostgreSQL sync jobs and chunks use per-account leases, checkpointed observations, bounded retries, and restart recovery. Saved reports load independently of sync, and per-metric coverage distinguishes actual zeroes from missing dates. Partial totals, snapshot dates, and history limitations are included in report/PDF output. The daily scheduler queues Meta work in the existing API process; collection requires that process to remain running with scheduling enabled.
+
+The additive migration extends only still-unexpired matching Instagram/Facebook `ACCOUNT` metric values from their stored retrieval timestamps, leaves expired values expired, and does not alter post retention or unrelated providers. See [ADR-012](../../decisions/ADR-012-connected-account-analytics.md), [deployment runbook](../../guides/deployment-runbook.md), and the dated [verification evidence](../../evidence/meta-year-reports-verification.md) for exact checks and rollout notes. Live provider history availability and external deployment remain unverified.

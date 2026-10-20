@@ -63,6 +63,154 @@ describe('connected account response boundary', () => {
   });
 });
 
+describe('Meta annual report ranges', () => {
+  const instagram = {
+    id: 'ig-account',
+    provider: 'INSTAGRAM',
+    kind: 'SOCIAL',
+    externalAccountId: 'ig-page-id',
+    displayName: 'Example Instagram',
+    handle: null,
+    profileUrl: null,
+    profileMetadataExpiresAt: null,
+    active: true,
+    connectedAt: new Date('2026-01-01T00:00:00.000Z'),
+    lastSyncedAt: null,
+    lastSyncErrorCode: null,
+  };
+
+  function createAnalyticsService() {
+    return newService({
+      connectedAccount: {
+        findUnique: vi.fn().mockResolvedValue(instagram),
+      },
+      connectedAccountAnalyticsRecord: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      connectedAccountSyncJob: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    });
+  }
+
+  it('allows exactly 365 inclusive dates and returns the selected report with no saved values', async () => {
+    const report = await createAnalyticsService().analytics(
+      'ig-account',
+      '2025-10-20',
+      '2026-10-19',
+    );
+
+    expect(report.period).toEqual({ from: '2025-10-20', to: '2026-10-19' });
+    expect(report.coverage.requestedDays).toBe(365);
+    expect(
+      report.metrics.find((metric) => metric.code === 'MEDIA_VIEWS'),
+    ).toMatchObject({
+      value: null,
+      coverage: { status: 'NONE', observedDays: 0, requestedDays: 365 },
+    });
+  });
+
+  it('rejects 366 inclusive dates with the report-range limit', async () => {
+    await expect(
+      createAnalyticsService().analytics(
+        'ig-account',
+        '2025-10-19',
+        '2026-10-19',
+      ),
+    ).rejects.toMatchObject({
+      response: { code: 'ACCOUNT_DATE_RANGE_TOO_WIDE' },
+    });
+  });
+
+  it('validates the current date in the configured reporting timezone', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-19T23:30:00.000Z'));
+    vi.stubEnv('REPORTING_TIMEZONE', 'Africa/Lagos');
+    try {
+      const report = await createAnalyticsService().analytics(
+        'ig-account',
+        '2026-10-20',
+        '2026-10-20',
+      );
+      expect(report.period).toEqual({ from: '2026-10-20', to: '2026-10-20' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('Meta sync job progress', () => {
+  it('does not count a failed section awaiting retry as completed', () => {
+    const service = newService({}) as unknown as {
+      syncJobSummary(
+        job: {
+          id: string;
+          status: string;
+          source: string;
+          requestedFrom: Date;
+          requestedTo: Date;
+          fetchFrom: Date | null;
+          fetchTo: Date | null;
+          createdAt: Date;
+          startedAt: Date | null;
+          updatedAt: Date;
+          completedAt: Date | null;
+          finalErrorCode: string | null;
+        },
+        chunks: Array<{
+          status: string;
+          attemptCount: number;
+          observationCount: number;
+          errorCode: string | null;
+          fromDate: Date;
+          toDate: Date;
+          sequence: number;
+        }>,
+      ): { completedChunks: number; totalChunks: number };
+    };
+    const now = new Date('2026-10-20T12:00:00.000Z');
+    const summary = service.syncJobSummary(
+      {
+        id: 'job-id',
+        status: 'QUEUED',
+        source: 'MANUAL',
+        requestedFrom: now,
+        requestedTo: now,
+        fetchFrom: now,
+        fetchTo: now,
+        createdAt: now,
+        startedAt: now,
+        updatedAt: now,
+        completedAt: null,
+        finalErrorCode: null,
+      },
+      [
+        {
+          status: 'SUCCEEDED',
+          attemptCount: 1,
+          observationCount: 2,
+          errorCode: null,
+          fromDate: now,
+          toDate: now,
+          sequence: 0,
+        },
+        {
+          status: 'FAILED',
+          attemptCount: 1,
+          observationCount: 0,
+          errorCode: 'PROVIDER_UNAVAILABLE',
+          fromDate: now,
+          toDate: now,
+          sequence: 1,
+        },
+      ],
+    );
+
+    expect(summary).toMatchObject({ completedChunks: 1, totalChunks: 2 });
+  });
+});
+
 describe('Zoho email report definitions', () => {
   const inactiveZohoAccount = {
     id: 'zoho-account',
@@ -275,6 +423,7 @@ describe('connected account disconnect and data deletion', () => {
         }),
       },
       auditLog: { create: vi.fn() },
+      $queryRaw: vi.fn().mockResolvedValue([{ active: false }]),
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback(prisma),
       ),

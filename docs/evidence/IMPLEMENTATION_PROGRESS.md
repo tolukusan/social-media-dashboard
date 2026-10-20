@@ -266,3 +266,12 @@ Commands: node .reorganisation-backup/check-docs.cjs (155 links resolve); node .
 ## Usability, archive lifecycle, and approved access — 2026-10-18
 
 Implemented the four-stage [approved follow-up](../plans/completion/usability-archive-registration.md), including the corrected single-organization registration decision. See [combined verification and migration evidence](usability-archive-registration-verification.md). Existing seeded Administrators, roles, OAuth integrations, import provenance, and historical records remain preserved. Permanent deletion is explicit and Administrator-controlled; public signup never grants access automatically.
+
+Meta connected-account sync repair (2026-10-19): corrected Instagram total-value requests and Facebook organic breakdown parsing, permitted metric-free Meta content metadata, and installed 11 missing canonical local Meta definitions. Both accounts now sync successfully through the app. See [verification evidence](meta-account-sync-fix.md). No schema migration or credential rotation.
+
+## Meta one-year account reports — 2026-10-20
+
+- Implemented 365-calendar-day Instagram/Facebook reports with immediate saved-data reads and per-metric coverage. Instagram backfills are clipped to 90 currently fetchable days; Facebook attempts the selected year in chunks of at most 30 days. Account metrics retain for 365 days from retrieval; post snapshots remain at 90 days.
+- Added PostgreSQL-backed, leased, checkpointed Meta sync jobs, OAuth/scheduler bootstrap, recovery after worker/API interruption, bounded retries, and API job status endpoints. Current follower counts are saved at retrieval date; historical snapshots are not backdated. Partial/missing coverage and recent-post limits appear in account reports and PDFs.
+- Updated the account dashboard with a Last 365 days preset, asynchronous progress/reload recovery, metric coverage and chart labels. Updated the deployment guide, privacy/retention explanation, ADR, domain model, and ERD.
+- Verification passed: `pnpm lint`, `pnpm typecheck`, `pnpm test:unit` (128 tests), `pnpm test:integration` (84 tests), `pnpm build`, `pnpm format:docs`, `git diff --check`, and the isolated Playwright runner (24 journeys). Reviewed 1440×900 and 390×844 account-report screens. See [Meta annual-report verification evidence](meta-year-reports-verification.md). No external deployment or live provider year-history completeness is claimed.

@@ -156,7 +156,7 @@ test('compares accounts and keeps provider-specific measures and content separat
       connectedAt: '2026-08-01T00:00:00.000Z',
       lastSyncedAt: null,
       lastSyncErrorCode: null,
-      retention: { reportingDays: 90, postSnapshotDays: 90 },
+      retention: { reportingDays: 365, postSnapshotDays: 90 },
     },
     {
       id: 'youtube-account',
@@ -193,6 +193,11 @@ test('compares accounts and keeps provider-specific measures and content separat
     series: [],
     caveats: [],
     dataAvailableThrough: null,
+    coverage: {
+      requestedDays: 30,
+      latestSuccessfulHistoryFetchAt: null,
+      postSnapshotRetentionDays: 90,
+    },
     generatedAt: new Date().toISOString(),
   };
   const reports: Record<string, unknown> = {
@@ -209,6 +214,14 @@ test('compares accounts and keeps provider-specific measures and content separat
           previous: 1200,
           difference: 50,
           percentageChange: 4.17,
+          coverage: {
+            status: 'COMPLETE',
+            requestedDays: null,
+            observedDays: null,
+            firstObservedDate: '2026-10-17',
+            lastObservedDate: '2026-10-17',
+            snapshotDate: '2026-10-17',
+          },
         },
         {
           code: 'MEDIA_VIEWS',
@@ -219,6 +232,13 @@ test('compares accounts and keeps provider-specific measures and content separat
           previous: null,
           difference: null,
           percentageChange: null,
+          coverage: {
+            status: 'PARTIAL',
+            requestedDays: 30,
+            observedDays: 18,
+            firstObservedDate: '2026-10-01',
+            lastObservedDate: '2026-10-17',
+          },
         },
       ],
       topPosts: [
@@ -247,6 +267,14 @@ test('compares accounts and keeps provider-specific measures and content separat
           previous: 610,
           difference: 10,
           percentageChange: 1.64,
+          coverage: {
+            status: 'COMPLETE',
+            requestedDays: null,
+            observedDays: null,
+            firstObservedDate: '2026-10-17',
+            lastObservedDate: '2026-10-17',
+            snapshotDate: '2026-10-17',
+          },
         },
         {
           code: 'VIEWS',
@@ -257,6 +285,13 @@ test('compares accounts and keeps provider-specific measures and content separat
           previous: null,
           difference: null,
           percentageChange: null,
+          coverage: {
+            status: 'COMPLETE',
+            requestedDays: 30,
+            observedDays: 30,
+            firstObservedDate: '2026-09-18',
+            lastObservedDate: '2026-10-17',
+          },
         },
       ],
       topPosts: [
@@ -288,8 +323,25 @@ test('compares accounts and keeps provider-specific measures and content separat
     const accountId = new URL(route.request().url()).pathname
       .split('/')
       .at(-2)!;
+    const report = structuredClone(reports[accountId]) as Record<string, any>;
+    const params = new URL(route.request().url()).searchParams;
+    const start = new Date(`${params.get('from')}T00:00:00Z`);
+    const end = new Date(`${params.get('to')}T00:00:00Z`);
+    const requestedDays =
+      Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
+    if (report.coverage) report.coverage.requestedDays = requestedDays;
+    for (const metric of report.metrics ?? []) {
+      if (metric.mode !== 'SUM' || !metric.coverage) continue;
+      const observedDays = Math.min(requestedDays, 18);
+      metric.coverage = {
+        ...metric.coverage,
+        status: observedDays === requestedDays ? 'COMPLETE' : 'PARTIAL',
+        requestedDays,
+        observedDays,
+      };
+    }
     await route.fulfill({
-      json: reports[accountId],
+      json: report,
       headers: {
         'access-control-allow-origin': baseUrl,
         'access-control-allow-credentials': 'true',
@@ -355,15 +407,74 @@ test('compares accounts and keeps provider-specific measures and content separat
     },
   );
   let syncRange: { from: string; to: string } | undefined;
+  let syncJob: Record<string, unknown> | null = null;
+  let syncJobDetailPolls = 0;
   await page.route(
-    /\/api\/v1\/accounts\/instagram-account\/sync$/,
+    /\/api\/v1\/accounts\/instagram-account\/sync-jobs\/active$/,
+    async (route) => {
+      const activeJob =
+        syncJob && ['QUEUED', 'RUNNING'].includes(String(syncJob.status))
+          ? syncJob
+          : null;
+      await route.fulfill({
+        json: activeJob,
+        headers: {
+          'access-control-allow-origin': baseUrl,
+          'access-control-allow-credentials': 'true',
+        },
+      });
+    },
+  );
+  await page.route(
+    /\/api\/v1\/accounts\/instagram-account\/sync-jobs\/fixture-sync-job$/,
+    async (route) => {
+      syncJobDetailPolls += 1;
+      if (syncJob && syncJobDetailPolls >= 2) {
+        syncJob = {
+          ...syncJob,
+          status: 'SUCCEEDED',
+          completedChunks: 3,
+          successfulChunks: 3,
+          completedAt: new Date().toISOString(),
+        };
+      } else if (syncJob) {
+        syncJob = { ...syncJob, status: 'RUNNING' };
+      }
+      await route.fulfill({
+        json: syncJob,
+        headers: {
+          'access-control-allow-origin': baseUrl,
+          'access-control-allow-credentials': 'true',
+        },
+      });
+    },
+  );
+  await page.route(
+    /\/api\/v1\/accounts\/instagram-account\/sync-jobs$/,
     async (route) => {
       syncRange = route.request().postDataJSON() as {
         from: string;
         to: string;
       };
+      syncJobDetailPolls = 0;
+      syncJob = {
+        id: 'fixture-sync-job',
+        status: 'QUEUED',
+        requestedPeriod: syncRange,
+        fetchablePeriod: { from: syncRange.from, to: syncRange.to },
+        completedChunks: 0,
+        totalChunks: 3,
+        successfulChunks: 0,
+        failedChunks: 0,
+        errors: [],
+        finalErrorCode: null,
+        updatedAt: new Date().toISOString(),
+        completedAt: null,
+        queued: true,
+      };
       await route.fulfill({
-        json: { observations: 3, posts: 1, emailCampaigns: 0 },
+        status: 202,
+        json: syncJob,
         headers: {
           'access-control-allow-origin': baseUrl,
           'access-control-allow-credentials': 'true',
@@ -444,15 +555,31 @@ test('compares accounts and keeps provider-specific measures and content separat
     fullPage: true,
   });
   await verifyResponsiveWidths(page);
+  await page.getByRole('button', { name: 'Custom', exact: true }).click();
   const insightsFrom = await page
     .getByLabel('From', { exact: true })
     .inputValue();
   const insightsTo = await page.getByLabel('To', { exact: true }).inputValue();
-  await insights.getByRole('button', { name: 'Sync this period' }).click();
+  await insights
+    .getByRole('button', { name: 'Sync available history' })
+    .click();
   await expect(page.locator('.notice.account-success')).toContainText(
-    'Updated this period: 3 daily metrics, 1 content items, and 0 email campaigns.',
+    'Available history is queued.',
   );
+  await expect(insights.locator('.sync-job-status')).toContainText(
+    'Fetching available history',
+  );
+  await expect(
+    insights.getByRole('button', { name: 'Sync available history' }),
+  ).toBeDisabled();
   expect(syncRange).toEqual({ from: insightsFrom, to: insightsTo });
+  await expect(insights.locator('.sync-job-status')).toContainText(
+    'History sync completed',
+    { timeout: 10_000 },
+  );
+  await expect(
+    insights.getByRole('button', { name: 'Sync available history' }),
+  ).toBeEnabled();
   const pdfPromise = page.waitForEvent('download');
   await insights.getByRole('button', { name: 'Download PDF' }).click();
   const pdfDownload = await pdfPromise;
@@ -462,6 +589,24 @@ test('compares accounts and keeps provider-specific measures and content separat
   const pdfPath = await pdfDownload.path();
   expect(pdfPath).toBeTruthy();
   expect(await readFile(pdfPath!, 'utf8')).toContain('%PDF-1.4');
+  await page.getByRole('button', { name: 'Last 365 days' }).click();
+  await expect(insights).toContainText(
+    'Partial total — 18 of 365 days available',
+  );
+  await expect(insights).toContainText(
+    'Instagram supplies recent account history. Older saved days remain available in Marketwise.',
+  );
+  await verifyResponsiveWidths(page);
+  await page.screenshot({
+    path: 'test-results/meta-year-report-desktop.png',
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: 'test-results/meta-year-report-mobile.png',
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await sectionNavigation
     .getByRole('button', { name: 'Compare', exact: true })
     .click();

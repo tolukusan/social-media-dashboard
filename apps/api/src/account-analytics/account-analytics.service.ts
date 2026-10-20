@@ -9,6 +9,7 @@ import {
   AccountAnalyticsScope,
   IntegrationProvider,
   MetricUnit,
+  type Prisma,
 } from '../generated/prisma/client.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { ConnectedAccountProvider } from '../accounts/account-contract.js';
@@ -297,6 +298,7 @@ export class AccountAnalyticsService {
     observations: AccountAnalyticsObservation[],
     sourceApiVersion?: string,
     retrievedAt = new Date(),
+    writeGuard?: (tx: Prisma.TransactionClient) => Promise<void>,
   ) {
     if (observations.length > 1000)
       throw new BadRequestException({
@@ -337,9 +339,16 @@ export class AccountAnalyticsService {
       const scope = observation.scope ?? 'ACCOUNT';
       const sourceObjectId = observation.sourceObjectId ?? 'ACCOUNT';
       const sourceObservationKey = observation.sourceObservationKey;
+      // Meta can return a readable post without an available insights metric.
+      // Preserve its metadata without fabricating a zero or failing the whole
+      // account sync. Account observations still require actual metric values.
+      const metaContentWithoutMetrics =
+        scope === 'CONTENT' &&
+        (provider === 'FACEBOOK' || provider === 'INSTAGRAM');
       if (
         !date ||
-        !Object.keys(observation.values).length ||
+        (!Object.keys(observation.values).length &&
+          !metaContentWithoutMetrics) ||
         !sourceObservationKey ||
         sourceObservationKey.length > 512 ||
         (scope === 'ACCOUNT' &&
@@ -439,6 +448,7 @@ export class AccountAnalyticsService {
       }
 
     return this.prisma.$transaction(async (tx) => {
+      if (writeGuard) await writeGuard(tx);
       const counts = { created: 0, updated: 0, unchanged: 0 };
       for (const observation of observations) {
         const scope = observation.scope ?? 'ACCOUNT';

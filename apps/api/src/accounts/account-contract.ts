@@ -58,13 +58,18 @@ export class AccountProviderFailure extends Error {
   constructor(
     readonly code: string,
     message: string,
+    readonly retryAfterMs?: number,
   ) {
     super(message);
   }
 }
 
-export function providerFailure(code: string, message: string): never {
-  throw new AccountProviderFailure(code, message);
+export function providerFailure(
+  code: string,
+  message: string,
+  retryAfterMs?: number,
+): never {
+  throw new AccountProviderFailure(code, message, retryAfterMs);
 }
 
 export function record(value: unknown): Record<string, unknown> {

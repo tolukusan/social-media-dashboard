@@ -64,12 +64,40 @@ export class ConnectedAccountsController {
 
   @Post(':id/sync')
   @Roles('ADMIN', 'MARKETING_OFFICER')
-  sync(
+  async sync(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: AccountDateRangeDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.accounts.sync(id, dto.from, dto.to, user.id);
+    const result = await this.accounts.sync(id, dto.from, dto.to, user.id);
+    if ('queued' in result && result.queued) response.status(202);
+    return result;
+  }
+
+  @Post(':id/sync-jobs')
+  @Roles('ADMIN', 'MARKETING_OFFICER')
+  syncJob(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: AccountDateRangeDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    response.status(202);
+    return this.accounts.enqueueSyncJob(id, dto.from, dto.to, user.id);
+  }
+
+  @Get(':id/sync-jobs/active')
+  activeSyncJob(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.accounts.activeSyncJob(id);
+  }
+
+  @Get(':id/sync-jobs/:jobId')
+  syncJobStatus(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('jobId', new ParseUUIDPipe()) jobId: string,
+  ) {
+    return this.accounts.syncJob(id, jobId);
   }
 
   @Get(':id/analytics')

@@ -320,3 +320,46 @@ Unique keys are `(provider, code, definition_version)` for provider metrics, `(c
 ## 2026-10-18 additions
 
 Role has many UserInvitation rows (restrictive role reference). RegistrationRequest retains resolution actor and approved-user identifiers as historical evidence. ArchiveDeletionConfirmation and DeletedPerformanceKey intentionally retain entity identifiers without entity foreign keys so confirmation consumption and deletion evidence survive entity removal. Existing entity relationships are unchanged; no organization or tenancy entity is introduced.
+
+## 2026-10-20 connected-account sync jobs
+
+```mermaid
+erDiagram
+    CONNECTED_ACCOUNT ||--o{ CONNECTED_ACCOUNT_SYNC_JOB : requests
+    USER o|--o{ CONNECTED_ACCOUNT_SYNC_JOB : requested_by
+    CONNECTED_ACCOUNT_SYNC_JOB ||--o{ CONNECTED_ACCOUNT_SYNC_CHUNK : checkpoints
+
+    CONNECTED_ACCOUNT_SYNC_JOB {
+        uuid id PK
+        uuid connected_account_id FK
+        date requested_from
+        date requested_to
+        date fetch_from
+        date fetch_to
+        enum source
+        enum status
+        uuid requested_by_user_id FK
+        datetime created_at
+        datetime started_at
+        datetime updated_at
+        datetime completed_at
+        datetime lease_until
+        uuid lease_token
+        string sanitized_final_error_code
+    }
+
+    CONNECTED_ACCOUNT_SYNC_CHUNK {
+        uuid id PK
+        uuid job_id FK
+        date from_date
+        date to_date
+        int sequence
+        enum status
+        int attempt_count
+        datetime next_attempt_at
+        int observation_count
+        string sanitized_error_code
+    }
+```
+
+At most one queued or running job can exist for a connected account. Chunk sequence is unique within a job and ordered newest to oldest. Jobs contain no credentials or raw provider responses and are retained for 30 days after completion. See [ADR-012](../decisions/ADR-012-connected-account-analytics.md) for the lifecycle and retention boundary.

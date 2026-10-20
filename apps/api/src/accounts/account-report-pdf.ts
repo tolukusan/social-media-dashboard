@@ -18,7 +18,18 @@ type AccountReport = {
     previous: number | null;
     difference: number | null;
     percentageChange: number | null;
+    coverage?: {
+      status: 'COMPLETE' | 'PARTIAL' | 'NONE';
+      requestedDays: number | null;
+      observedDays: number | null;
+      snapshotDate?: string | null;
+    };
   }>;
+  coverage?: {
+    requestedDays?: number;
+    latestSuccessfulHistoryFetchAt?: string | null;
+    postSnapshotRetentionDays?: number | null;
+  };
   series: Array<{ date: string; values: Record<string, number | null> }>;
   topPosts: Array<{
     externalPostId: string;
@@ -90,15 +101,31 @@ export async function renderAccountReportPdf(report: AccountReport) {
     doc.text(
       `Compared with: ${report.previousPeriod.from} to ${report.previousPeriod.to}`,
     );
-  if (report.account.lastSyncedAt)
+  if (
+    report.account.lastSyncedAt &&
+    !report.coverage?.latestSuccessfulHistoryFetchAt
+  )
     doc.text(
       `Latest account sync: ${new Date(report.account.lastSyncedAt).toISOString()}`,
     );
+  if (report.coverage?.requestedDays) {
+    doc.text(
+      `Requested coverage: ${report.coverage.requestedDays} calendar days.`,
+    );
+    if (report.coverage.latestSuccessfulHistoryFetchAt)
+      doc.text(
+        `Latest successful history fetch: ${new Date(report.coverage.latestSuccessfulHistoryFetchAt).toISOString()}. This does not mean every date has data.`,
+      );
+    if (report.coverage.postSnapshotRetentionDays)
+      doc.text(
+        `Post snapshots are retained for up to ${report.coverage.postSnapshotRetentionDays} days; the content list is not a full-period ranking.`,
+      );
+  }
 
   doc.moveDown(1).fillColor('#172033').fontSize(14).text('Key metrics');
   doc.moveDown(0.35);
   for (const metric of report.metrics) {
-    ensureRoom(doc, 48);
+    ensureRoom(doc, 58);
     const current = number(metric.value, metric.unit);
     const change =
       metric.difference === null
@@ -110,11 +137,25 @@ export async function renderAccountReportPdf(report: AccountReport) {
         : ` (${metric.percentageChange > 0 ? '+' : ''}${metric.percentageChange}%)`;
     doc.fontSize(10).fillColor('#344054').text(metric.label, { width });
     doc.fontSize(13).fillColor('#172033').text(current, { continued: true });
-    doc
-      .fontSize(9)
-      .fillColor('#667085')
-      .text(`  ${change}${pct}`)
-      .moveDown(0.45);
+    doc.fontSize(9).fillColor('#667085').text(`  ${change}${pct}`);
+    if (metric.coverage?.status === 'PARTIAL')
+      doc
+        .fontSize(8)
+        .fillColor('#9a6700')
+        .text(
+          `Partial total — ${metric.coverage.observedDays ?? 0} of ${metric.coverage.requestedDays ?? report.coverage?.requestedDays ?? 0} days available`,
+        );
+    else if (metric.coverage?.status === 'NONE')
+      doc
+        .fontSize(8)
+        .fillColor('#667085')
+        .text('No saved history for this period.');
+    else if (metric.coverage?.snapshotDate)
+      doc
+        .fontSize(8)
+        .fillColor('#667085')
+        .text(`Snapshot observed ${metric.coverage.snapshotDate}.`);
+    doc.moveDown(0.45);
   }
 
   doc.moveDown(0.4).fillColor('#172033').fontSize(14).text('Daily activity');
@@ -145,13 +186,23 @@ export async function renderAccountReportPdf(report: AccountReport) {
     .moveDown(0.8)
     .fillColor('#172033')
     .fontSize(14)
-    .text(report.account.kind === 'EMAIL' ? 'Email campaigns' : 'Top content');
+    .text(
+      report.account.kind === 'EMAIL'
+        ? 'Email campaigns'
+        : report.coverage?.postSnapshotRetentionDays
+          ? 'Recent content'
+          : 'Top content',
+    );
   doc.moveDown(0.3);
   if (!report.topPosts.length) {
     doc
       .fontSize(9)
       .fillColor('#667085')
-      .text('No content rows are available for the selected period.');
+      .text(
+        report.coverage?.postSnapshotRetentionDays
+          ? `No content rows are available. Post snapshots are retained for up to ${report.coverage.postSnapshotRetentionDays} days; account metrics may cover a longer period.`
+          : 'No content rows are available for the selected period.',
+      );
   } else {
     report.topPosts.forEach((post, index) => {
       ensureRoom(doc, 42);

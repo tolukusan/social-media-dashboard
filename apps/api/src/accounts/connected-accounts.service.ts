@@ -31,6 +31,8 @@ import {
 import { AccountProviderClient } from './account-provider-client.js';
 import { renderAccountReportPdf } from './account-report-pdf.js';
 import { AccountAnalyticsService } from '../account-analytics/account-analytics.service.js';
+import { planMetaHistory, type MetaProvider } from './account-history-plan.js';
+import { accountMetricCoverage } from './account-coverage.js';
 
 const accountPublicSelect = {
   id: true,
@@ -52,6 +54,14 @@ const accountPublicSelect = {
 type AccountRecord = Prisma.ConnectedAccountGetPayload<{
   select: typeof accountPublicSelect;
 }>;
+type WorkerAccount = {
+  id: string;
+  provider: ConnectedAccountProvider;
+  externalAccountId: string;
+  active: boolean;
+  credentialCiphertext: string | null;
+  tokenExpiresAt: Date | null;
+};
 type PublicAccountInput = Pick<
   AccountRecord,
   | 'id'
@@ -189,6 +199,7 @@ type AccountMetricRow = {
   metricCode: string;
   scope: 'DAILY' | 'SNAPSHOT';
   metricDate: Date;
+  retrievedAt: Date;
   value: Prisma.Decimal;
 };
 
@@ -243,6 +254,8 @@ function calculated(value: number | null, previous: number | null) {
 @Injectable()
 export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
+  private workerTimer?: ReturnType<typeof setInterval>;
+  private workerTickRunning = false;
   private readonly syncing = new Set<string>();
 
   constructor(
@@ -266,11 +279,17 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       60 * 60 * 1000,
     );
     this.timer.unref();
+    this.workerTimer = setInterval(() => {
+      void this.pollSyncJobs().catch(() => undefined);
+    }, 10 * 1000);
+    this.workerTimer.unref();
+    void this.pollSyncJobs().catch(() => undefined);
     void this.cleanupExpiredData().catch(() => undefined);
   }
 
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+    if (this.workerTimer) clearInterval(this.workerTimer);
   }
 
   options() {
@@ -283,7 +302,11 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
           'YOUTUBE',
           'ZOHO_CAMPAIGNS',
         ] as const
-      ).map((provider) => ({ provider, ...providerSetup(provider) })),
+      ).map((provider) => ({
+        provider,
+        ...providerSetup(provider),
+        capabilities: this.capabilities(provider),
+      })),
       reportingTimezone: process.env.REPORTING_TIMEZONE ?? 'Africa/Lagos',
       syncMode: 'MANUAL_AND_DAILY',
       dataTypes: {
@@ -464,6 +487,20 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
           });
           if (!account) continue;
           const to = this.today();
+          if (
+            account.provider === 'INSTAGRAM' ||
+            account.provider === 'FACEBOOK'
+          ) {
+            await this.enqueueMetaSync(
+              accountId,
+              this.shiftDay(to, -364),
+              to,
+              'OAUTH',
+              attempt.userId,
+              true,
+            );
+            continue;
+          }
           // Seed the current and preceding 30-day periods so the dashboard
           // opens with a meaningful month-over-month comparison and content.
           const currentFrom = this.shiftDay(to, -29);
@@ -490,6 +527,25 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
     this.validateRange(from, to);
     const account = await this.getActiveAccount(id);
     this.validateProviderRange(account.provider, from, to);
+    if (account.provider === 'INSTAGRAM' || account.provider === 'FACEBOOK') {
+      const queued = await this.enqueueMetaSync(
+        id,
+        from,
+        to,
+        'MANUAL',
+        actorId,
+      );
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: actorId,
+          entityType: 'ConnectedAccount',
+          entityId: id,
+          action: 'CONNECTED_ACCOUNT_SYNC_QUEUED',
+          metadata: { provider: account.provider, from, to, jobId: queued.id },
+        },
+      });
+      return { ...queued, queued: true };
+    }
     const result = await this.syncAccount(id, from, to, false);
     await this.prisma.auditLog.create({
       data: {
@@ -507,6 +563,720 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       posts: result.posts.length,
       emailCampaigns: result.emailCampaigns.length,
     };
+  }
+
+  async enqueueSyncJob(id: string, from: string, to: string, actorId: string) {
+    this.validateRange(from, to);
+    const account = await this.getActiveAccount(id);
+    if (account.provider !== 'INSTAGRAM' && account.provider !== 'FACEBOOK')
+      throw new BadRequestException({
+        code: 'ASYNC_SYNC_META_ONLY',
+        message:
+          'Background history sync is available for Instagram and Facebook accounts.',
+      });
+    this.validateProviderRange(account.provider, from, to);
+    const queued = await this.enqueueMetaSync(id, from, to, 'MANUAL', actorId);
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: actorId,
+        entityType: 'ConnectedAccount',
+        entityId: id,
+        action: 'CONNECTED_ACCOUNT_SYNC_QUEUED',
+        metadata: { provider: account.provider, from, to, jobId: queued.id },
+      },
+    });
+    return {
+      ...queued,
+      queued: true,
+    };
+  }
+
+  async activeSyncJob(id: string) {
+    await this.getAccount(id);
+    const job = await this.prisma.connectedAccountSyncJob.findFirst({
+      where: { connectedAccountId: id, status: { in: ['QUEUED', 'RUNNING'] } },
+      orderBy: { createdAt: 'desc' },
+      include: { chunks: { orderBy: { sequence: 'asc' } } },
+    });
+    return job ? this.syncJobSummary(job, job.chunks) : null;
+  }
+
+  async syncJob(id: string, jobId: string) {
+    await this.getAccount(id);
+    const job = await this.prisma.connectedAccountSyncJob.findFirst({
+      where: { id: jobId, connectedAccountId: id },
+      include: { chunks: { orderBy: { sequence: 'asc' } } },
+    });
+    if (!job)
+      throw new NotFoundException({
+        code: 'ACCOUNT_SYNC_JOB_NOT_FOUND',
+        message: 'The sync job was not found for this account.',
+      });
+    return this.syncJobSummary(job, job.chunks);
+  }
+
+  private async enqueueMetaSync(
+    accountId: string,
+    from: string,
+    to: string,
+    source: 'MANUAL' | 'SCHEDULED' | 'OAUTH',
+    requestedByUserId: string | null,
+    bootstrap = false,
+  ) {
+    const account = await this.getActiveAccount(accountId);
+    if (account.provider !== 'INSTAGRAM' && account.provider !== 'FACEBOOK')
+      throw new BadRequestException({
+        code: 'META_SYNC_UNSUPPORTED',
+        message: 'History sync is available only for Instagram and Facebook.',
+      });
+    const plan = planMetaHistory(
+      account.provider as MetaProvider,
+      from,
+      to,
+      this.today(),
+    );
+    const active = await this.prisma.connectedAccountSyncJob.findFirst({
+      where: {
+        connectedAccountId: accountId,
+        status: { in: ['QUEUED', 'RUNNING'] },
+      },
+      include: { chunks: { orderBy: { sequence: 'asc' } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (active)
+      return {
+        ...this.syncJobSummary(active, active.chunks),
+        alreadyRunning: true,
+      };
+
+    const now = new Date();
+    const id = randomUUID();
+    try {
+      const job = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.connectedAccountSyncJob.create({
+          data: {
+            id,
+            connectedAccountId: accountId,
+            requestedFrom: dateValue(from),
+            requestedTo: dateValue(to),
+            fetchFrom: plan.fetchFrom ? dateValue(plan.fetchFrom) : null,
+            fetchTo: plan.fetchTo ? dateValue(plan.fetchTo) : null,
+            source,
+            requestedByUserId,
+            status: plan.chunks.length ? 'QUEUED' : 'SUCCEEDED',
+            completedAt: plan.chunks.length ? null : now,
+          },
+        });
+        if (plan.chunks.length)
+          await tx.connectedAccountSyncChunk.createMany({
+            data: plan.chunks.map((chunk) => ({
+              id: randomUUID(),
+              jobId: id,
+              fromDate: dateValue(chunk.from),
+              toDate: dateValue(chunk.to),
+              sequence: chunk.sequence,
+            })),
+          });
+        if (bootstrap)
+          await tx.connectedAccount.updateMany({
+            where: { id: accountId, historyBootstrapEnqueuedAt: null },
+            data: { historyBootstrapEnqueuedAt: now },
+          });
+        return created;
+      });
+      return {
+        ...this.syncJobSummary(
+          job,
+          plan.chunks.map((chunk) => ({
+            status: 'QUEUED',
+            attemptCount: 0,
+            observationCount: 0,
+            errorCode: null,
+            fromDate: dateValue(chunk.from),
+            toDate: dateValue(chunk.to),
+            sequence: chunk.sequence,
+          })),
+        ),
+        alreadyRunning: false,
+      };
+    } catch (error) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== 'P2002'
+      )
+        throw error;
+      const winner = await this.prisma.connectedAccountSyncJob.findFirst({
+        where: {
+          connectedAccountId: accountId,
+          status: { in: ['QUEUED', 'RUNNING'] },
+        },
+        include: { chunks: { orderBy: { sequence: 'asc' } } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!winner) throw error;
+      return {
+        ...this.syncJobSummary(winner, winner.chunks),
+        alreadyRunning: true,
+      };
+    }
+  }
+
+  private syncJobSummary(
+    job: {
+      id: string;
+      status: string;
+      source: string;
+      requestedFrom: Date;
+      requestedTo: Date;
+      fetchFrom: Date | null;
+      fetchTo: Date | null;
+      createdAt: Date;
+      startedAt: Date | null;
+      updatedAt: Date;
+      completedAt: Date | null;
+      finalErrorCode: string | null;
+    },
+    chunks: Array<{
+      status: string;
+      attemptCount: number;
+      observationCount: number;
+      errorCode: string | null;
+      fromDate: Date;
+      toDate: Date;
+      sequence: number;
+    }> = [],
+  ) {
+    const completedChunks = chunks.filter(
+      (chunk) =>
+        chunk.status === 'SUCCEEDED' ||
+        (chunk.status === 'FAILED' &&
+          (chunk.attemptCount >= 4 ||
+            !this.retryableSyncError(chunk.errorCode ?? ''))),
+    ).length;
+    return {
+      id: job.id,
+      source: job.source,
+      status: job.status,
+      requestedPeriod: {
+        from: job.requestedFrom.toISOString().slice(0, 10),
+        to: job.requestedTo.toISOString().slice(0, 10),
+      },
+      fetchablePeriod:
+        job.fetchFrom && job.fetchTo
+          ? {
+              from: job.fetchFrom.toISOString().slice(0, 10),
+              to: job.fetchTo.toISOString().slice(0, 10),
+            }
+          : null,
+      completedChunks,
+      totalChunks: chunks.length,
+      successfulChunks: chunks.filter((chunk) => chunk.status === 'SUCCEEDED')
+        .length,
+      failedChunks: chunks.filter((chunk) => chunk.status === 'FAILED').length,
+      observationCount: chunks.reduce(
+        (sum, chunk) => sum + chunk.observationCount,
+        0,
+      ),
+      errors: chunks
+        .filter((chunk) => chunk.status === 'FAILED' && chunk.errorCode)
+        .map((chunk) => ({
+          code: chunk.errorCode,
+          from: chunk.fromDate.toISOString().slice(0, 10),
+          to: chunk.toDate.toISOString().slice(0, 10),
+          attempts: chunk.attemptCount,
+        })),
+      finalErrorCode: job.finalErrorCode,
+      createdAt: job.createdAt.toISOString(),
+      startedAt: job.startedAt?.toISOString() ?? null,
+      updatedAt: job.updatedAt.toISOString(),
+      completedAt: job.completedAt?.toISOString() ?? null,
+    };
+  }
+
+  private async pollSyncJobs() {
+    if (
+      this.workerTickRunning ||
+      process.env.INTEGRATIONS_SCHEDULER_ENABLED === 'false' ||
+      process.env.TEST_DATABASE_URL
+    )
+      return;
+    this.workerTickRunning = true;
+    try {
+      const claimed = await Promise.all([
+        this.claimSyncJob(),
+        this.claimSyncJob(),
+      ]);
+      await Promise.all(
+        claimed
+          .filter((job): job is { id: string; leaseToken: string } =>
+            Boolean(job),
+          )
+          .map((job) => this.processSyncJob(job.id, job.leaseToken)),
+      );
+    } finally {
+      this.workerTickRunning = false;
+    }
+  }
+
+  private async claimSyncJob(): Promise<{
+    id: string;
+    leaseToken: string;
+  } | null> {
+    const now = new Date();
+    const candidates = await this.prisma.connectedAccountSyncJob.findMany({
+      where: {
+        connectedAccount: { is: { active: true } },
+        chunks: {
+          some: {
+            OR: [
+              { status: 'QUEUED' },
+              { status: 'FAILED', nextAttemptAt: { lte: now } },
+              {
+                status: 'RUNNING',
+                updatedAt: { lte: new Date(now.getTime() - 5 * 60_000) },
+              },
+            ],
+          },
+        },
+        OR: [
+          { status: 'QUEUED' },
+          { status: 'RUNNING', leaseUntil: { lte: now } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 10,
+      select: { id: true, status: true, leaseUntil: true },
+    });
+    for (const candidate of candidates) {
+      const leaseToken = randomUUID();
+      const claim = await this.prisma.connectedAccountSyncJob.updateMany({
+        where: {
+          id: candidate.id,
+          status: candidate.status,
+          ...(candidate.status === 'RUNNING'
+            ? { leaseUntil: { lte: now } }
+            : {}),
+        },
+        data: {
+          status: 'RUNNING',
+          leaseToken,
+          leaseUntil: new Date(now.getTime() + 5 * 60_000),
+        },
+      });
+      if (claim.count !== 1) continue;
+      if (candidate.status === 'RUNNING')
+        await this.prisma.connectedAccountSyncChunk.updateMany({
+          where: { jobId: candidate.id, status: 'RUNNING' },
+          data: { status: 'QUEUED' },
+        });
+      await this.prisma.connectedAccountSyncJob.updateMany({
+        where: { id: candidate.id, leaseToken, startedAt: null },
+        data: { startedAt: now },
+      });
+      return { id: candidate.id, leaseToken };
+    }
+    return null;
+  }
+
+  private async processSyncJob(jobId: string, leaseToken: string) {
+    const heartbeat = setInterval(() => {
+      void this.prisma.connectedAccountSyncJob
+        .updateMany({
+          where: { id: jobId, status: 'RUNNING', leaseToken },
+          data: { leaseUntil: new Date(Date.now() + 5 * 60_000) },
+        })
+        .catch(() => undefined);
+    }, 30_000);
+    heartbeat.unref();
+    try {
+      const job = await this.prisma.connectedAccountSyncJob.findUnique({
+        where: { id: jobId },
+        include: { connectedAccount: true },
+      });
+      if (
+        !job ||
+        job.status !== 'RUNNING' ||
+        job.leaseToken !== leaseToken ||
+        !job.connectedAccount.active
+      )
+        return;
+      if (
+        job.connectedAccount.provider !== 'INSTAGRAM' &&
+        job.connectedAccount.provider !== 'FACEBOOK'
+      )
+        throw new AccountProviderFailure(
+          'META_SYNC_UNSUPPORTED',
+          'This job is not a Meta history job.',
+        );
+
+      if (!job.snapshotRecordedAt)
+        await this.captureJobAudienceSnapshot(
+          job.id,
+          leaseToken,
+          job.connectedAccount,
+        );
+      if (!job.contentRefreshRecordedAt)
+        await this.captureJobRecentContent(
+          job.id,
+          leaseToken,
+          job.connectedAccount,
+        );
+
+      const now = new Date();
+      const chunk = await this.prisma.connectedAccountSyncChunk.findFirst({
+        where: {
+          jobId,
+          OR: [
+            { status: 'QUEUED' },
+            { status: 'FAILED', nextAttemptAt: { lte: now } },
+          ],
+        },
+        orderBy: { sequence: 'asc' },
+      });
+      if (!chunk) {
+        await this.finishSyncJob(jobId, leaseToken);
+        return;
+      }
+      const started = await this.prisma.$transaction(async (tx) => {
+        await this.jobWriteGuard(job.connectedAccountId, jobId, leaseToken)(tx);
+        return tx.connectedAccountSyncChunk.update({
+          where: { id: chunk.id },
+          data: {
+            status: 'RUNNING',
+            attemptCount: { increment: 1 },
+            errorCode: null,
+          },
+        });
+      });
+      const credentials = await this.workerCredentials(job.connectedAccount);
+      const from = chunk.fromDate.toISOString().slice(0, 10);
+      const to = chunk.toDate.toISOString().slice(0, 10);
+      const metrics = await this.providerClient.syncMetaAccountMetrics(
+        {
+          provider: job.connectedAccount.provider,
+          externalAccountId: job.connectedAccount.externalAccountId,
+        },
+        credentials,
+        from,
+        to,
+      );
+      await this.saveSync(
+        job.connectedAccountId,
+        job.connectedAccount.provider,
+        { metrics, posts: [], emailCampaigns: [], caveats: [] },
+        from,
+        to,
+        this.jobWriteGuard(job.connectedAccountId, jobId, leaseToken),
+      );
+      await this.completeSyncChunk(job, leaseToken, chunk.id, {
+        success: true,
+        observationCount: metrics.length,
+      });
+    } catch (error) {
+      if (
+        error instanceof AccountProviderFailure &&
+        error.code === 'SYNC_JOB_LEASE_LOST'
+      )
+        return;
+      const code = this.errorCode(error);
+      const current = await this.prisma.connectedAccountSyncJob.findFirst({
+        where: { id: jobId, status: 'RUNNING', leaseToken },
+        include: { chunks: { where: { status: 'RUNNING' }, take: 1 } },
+      });
+      const runningChunk = current?.chunks[0];
+      if (runningChunk)
+        await this.completeSyncChunk(current, leaseToken, runningChunk.id, {
+          success: false,
+          errorCode: code,
+          retryAfterMs:
+            error instanceof AccountProviderFailure
+              ? error.retryAfterMs
+              : undefined,
+        }).catch(() => undefined);
+    } finally {
+      clearInterval(heartbeat);
+    }
+  }
+
+  private async captureJobAudienceSnapshot(
+    jobId: string,
+    leaseToken: string,
+    account: WorkerAccount,
+  ) {
+    try {
+      const credentials = await this.workerCredentials(account);
+      const snapshot = await this.providerClient.fetchMetaAudienceSnapshot(
+        {
+          provider: account.provider as MetaProvider,
+          externalAccountId: account.externalAccountId,
+        },
+        credentials,
+        this.today(),
+      );
+      if (snapshot)
+        await this.saveSync(
+          account.id,
+          account.provider,
+          { metrics: [snapshot], posts: [], emailCampaigns: [], caveats: [] },
+          snapshot.date,
+          snapshot.date,
+          this.jobWriteGuard(account.id, jobId, leaseToken),
+        );
+    } catch (error) {
+      if (
+        error instanceof AccountProviderFailure &&
+        error.code === 'SYNC_JOB_LEASE_LOST'
+      )
+        throw error;
+      // A missing audience snapshot does not block daily history metrics. Its
+      // absence remains visible in the report's snapshot coverage metadata.
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await this.jobWriteGuard(account.id, jobId, leaseToken)(tx);
+      await tx.connectedAccountSyncJob.update({
+        where: { id: jobId },
+        data: { snapshotRecordedAt: new Date() },
+      });
+    });
+  }
+
+  private async workerCredentials(account: WorkerAccount) {
+    if (!account.active || !account.credentialCiphertext)
+      throw new AccountProviderFailure(
+        'ACCOUNT_CREDENTIALS_MISSING',
+        'Reconnect this account before syncing.',
+      );
+    let credentials = decryptCredentials(account.credentialCiphertext);
+    if (
+      credentials.expiresAt &&
+      Date.parse(credentials.expiresAt) <= Date.now() + 2 * 60_000
+    ) {
+      credentials = await this.providerClient.refreshCredentials(
+        account.provider,
+        credentials,
+      );
+      await this.prisma.connectedAccount.updateMany({
+        where: { id: account.id, active: true },
+        data: {
+          credentialCiphertext: encryptCredentials(credentials),
+          tokenExpiresAt: credentials.expiresAt
+            ? new Date(credentials.expiresAt)
+            : null,
+        },
+      });
+    }
+    return credentials;
+  }
+
+  private async captureJobRecentContent(
+    jobId: string,
+    leaseToken: string,
+    account: WorkerAccount,
+  ) {
+    try {
+      const credentials = await this.workerCredentials(account);
+      const to = this.today();
+      const from = this.shiftDay(to, -29);
+      const posts = await this.providerClient.syncMetaRecentContent(
+        {
+          provider: account.provider as MetaProvider,
+          externalAccountId: account.externalAccountId,
+        },
+        credentials,
+        from,
+        to,
+      );
+      await this.saveSync(
+        account.id,
+        account.provider,
+        { metrics: [], posts, emailCampaigns: [], caveats: [] },
+        from,
+        to,
+        this.jobWriteGuard(account.id, jobId, leaseToken),
+      );
+    } catch (error) {
+      if (
+        error instanceof AccountProviderFailure &&
+        error.code === 'SYNC_JOB_LEASE_LOST'
+      )
+        throw error;
+      // Recent post refresh is deliberately bounded and independent of the
+      // account-metric backfill; unavailable post insights do not block it.
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await this.jobWriteGuard(account.id, jobId, leaseToken)(tx);
+      await tx.connectedAccountSyncJob.update({
+        where: { id: jobId },
+        data: { contentRefreshRecordedAt: new Date() },
+      });
+    });
+  }
+
+  private jobWriteGuard(accountId: string, jobId: string, leaseToken: string) {
+    return async (tx: Prisma.TransactionClient) => {
+      const accounts = await tx.$queryRaw<Array<{ active: boolean }>>`
+        SELECT "active"
+        FROM "social_media_dashboard"."ConnectedAccount"
+        WHERE "id" = ${accountId}::uuid
+        FOR UPDATE
+      `;
+      const jobs = await tx.$queryRaw<
+        Array<{ status: string; leaseToken: string | null }>
+      >`
+        SELECT "status", "leaseToken"
+        FROM "social_media_dashboard"."ConnectedAccountSyncJob"
+        WHERE "id" = ${jobId}::uuid
+        FOR UPDATE
+      `;
+      if (
+        !accounts[0]?.active ||
+        jobs[0]?.status !== 'RUNNING' ||
+        jobs[0]?.leaseToken !== leaseToken
+      )
+        throw new AccountProviderFailure(
+          'SYNC_JOB_LEASE_LOST',
+          'This sync job is no longer active.',
+        );
+    };
+  }
+
+  private async completeSyncChunk(
+    job: { id: string; connectedAccountId: string },
+    leaseToken: string,
+    chunkId: string,
+    outcome:
+      | { success: true; observationCount: number }
+      | { success: false; errorCode: string; retryAfterMs?: number },
+  ) {
+    const now = new Date();
+    const attempt = outcome.success
+      ? null
+      : await this.prisma.connectedAccountSyncChunk.findUnique({
+          where: { id: chunkId },
+          select: { attemptCount: true },
+        });
+    const retries = [60_000, 5 * 60_000, 15 * 60_000];
+    const retryDelay =
+      !outcome.success &&
+      this.retryableSyncError(outcome.errorCode) &&
+      (attempt?.attemptCount ?? 4) <= retries.length
+        ? Math.max(
+            retries[(attempt?.attemptCount ?? 4) - 1] ?? 0,
+            outcome.retryAfterMs ?? 0,
+          )
+        : null;
+    await this.prisma.$transaction(async (tx) => {
+      await this.jobWriteGuard(job.connectedAccountId, job.id, leaseToken)(tx);
+      await tx.connectedAccountSyncChunk.update({
+        where: { id: chunkId },
+        data: outcome.success
+          ? {
+              status: 'SUCCEEDED',
+              observationCount: outcome.observationCount,
+              errorCode: null,
+            }
+          : {
+              status: 'FAILED',
+              errorCode: outcome.errorCode,
+              nextAttemptAt: retryDelay
+                ? new Date(now.getTime() + retryDelay)
+                : new Date('9999-12-31T00:00:00.000Z'),
+            },
+      });
+      const chunks = await tx.connectedAccountSyncChunk.findMany({
+        where: { jobId: job.id },
+        select: {
+          status: true,
+          errorCode: true,
+          attemptCount: true,
+          nextAttemptAt: true,
+        },
+      });
+      const hasQueued = chunks.some((item) => item.status === 'QUEUED');
+      const hasRunning = chunks.some((item) => item.status === 'RUNNING');
+      const hasRetry = chunks.some(
+        (item) =>
+          item.status === 'FAILED' &&
+          item.attemptCount < 4 &&
+          this.retryableSyncError(item.errorCode ?? '') &&
+          item.nextAttemptAt.getTime() <
+            new Date('9999-12-31T00:00:00.000Z').getTime(),
+      );
+      const finished = !hasQueued && !hasRunning && !hasRetry;
+      const successful = chunks.filter(
+        (item) => item.status === 'SUCCEEDED',
+      ).length;
+      const failed = chunks.filter((item) => item.status === 'FAILED').length;
+      const status = !finished
+        ? 'QUEUED'
+        : failed === 0
+          ? 'SUCCEEDED'
+          : successful > 0
+            ? 'PARTIAL'
+            : 'FAILED';
+      await tx.connectedAccountSyncJob.update({
+        where: { id: job.id },
+        data: {
+          status,
+          leaseToken: null,
+          leaseUntil: null,
+          completedAt: finished ? now : null,
+          finalErrorCode:
+            finished && failed
+              ? outcome.success
+                ? (chunks.find((item) => item.status === 'FAILED')?.errorCode ??
+                  null)
+                : outcome.errorCode
+              : null,
+        },
+      });
+      if (outcome.success)
+        await tx.connectedAccount.updateMany({
+          where: { id: job.connectedAccountId, active: true },
+          data: { lastSyncedAt: now, lastSyncErrorCode: null },
+        });
+      else if (finished)
+        await tx.connectedAccount.updateMany({
+          where: { id: job.connectedAccountId, active: true },
+          data: { lastSyncErrorCode: outcome.errorCode },
+        });
+    });
+  }
+
+  private async finishSyncJob(jobId: string, leaseToken: string) {
+    const job = await this.prisma.connectedAccountSyncJob.findUnique({
+      where: { id: jobId },
+      select: { connectedAccountId: true },
+    });
+    if (!job) return;
+    await this.prisma.$transaction(async (tx) => {
+      await this.jobWriteGuard(job.connectedAccountId, jobId, leaseToken)(tx);
+      const chunks = await tx.connectedAccountSyncChunk.findMany({
+        where: { jobId },
+        select: { status: true, errorCode: true },
+      });
+      const failed = chunks.filter((chunk) => chunk.status === 'FAILED');
+      const succeeded = chunks.filter((chunk) => chunk.status === 'SUCCEEDED');
+      const status = failed.length
+        ? succeeded.length
+          ? 'PARTIAL'
+          : 'FAILED'
+        : 'SUCCEEDED';
+      await tx.connectedAccountSyncJob.update({
+        where: { id: jobId },
+        data: {
+          status,
+          leaseToken: null,
+          leaseUntil: null,
+          completedAt: new Date(),
+          finalErrorCode: failed[0]?.errorCode ?? null,
+        },
+      });
+    });
+  }
+
+  private retryableSyncError(code: string) {
+    return ['PROVIDER_RATE_LIMITED', 'PROVIDER_UNAVAILABLE'].includes(code);
   }
 
   private async syncAccount(
@@ -562,6 +1332,7 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
         credentials,
         from,
         to,
+        this.today(),
       );
       await this.saveSync(account.id, account.provider, result, from, to);
       await this.prisma.connectedAccount.update({
@@ -598,6 +1369,7 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
     result: ProviderSyncResult,
     from: string,
     to: string,
+    writeGuard?: (tx: Prisma.TransactionClient) => Promise<void>,
   ) {
     const observations = new Map<
       string,
@@ -610,15 +1382,19 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       }
     >();
     for (const metric of result.metrics) {
-      const observation = observations.get(metric.date) ?? {
+      const isSnapshot = metric.scope === 'SNAPSHOT';
+      const observationKey = `${metric.scope}:${metric.date}`;
+      const observation = observations.get(observationKey) ?? {
         date: metric.date,
         scope: 'ACCOUNT' as const,
         sourceObjectId: 'ACCOUNT' as const,
-        sourceObservationKey: `account:${metric.date}`,
+        sourceObservationKey: isSnapshot
+          ? `account-snapshot:${metric.date}`
+          : `account:${metric.date}`,
         values: {},
       };
       observation.values[metric.code] = metric.value;
-      observations.set(metric.date, observation);
+      observations.set(observationKey, observation);
     }
     const accountObservations = [...observations.values()];
     const contentObservations = result.posts.map((post) => ({
@@ -651,6 +1427,8 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       provider,
       [...accountObservations, ...contentObservations, ...campaignObservations],
       this.providerClient.sourceApiVersion(provider),
+      undefined,
+      writeGuard,
     );
   }
 
@@ -665,15 +1443,39 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       });
     this.validateProviderRange(account.provider, from, to);
     const previous = previousRange(from, to);
-    const [rows, previousRows, posts, previousSnapshotRow, startSnapshot] =
-      await Promise.all([
-        this.accountMetricRows(id, from, to),
-        this.accountMetricRows(id, previous.from, previous.to),
-        this.contentObservations(id, from, to),
-        this.latestAudienceSnapshot(id, this.shiftDay(previous.to, 1)),
-        this.latestAudienceSnapshot(id, from),
-      ]);
-    const currentSnapshot = this.latestSnapshot(rows, 'AUDIENCE_SIZE', to);
+    const [
+      rows,
+      previousRows,
+      posts,
+      previousSnapshotRow,
+      startSnapshot,
+      latestHistoryJob,
+    ] = await Promise.all([
+      this.accountMetricRows(id, from, to),
+      this.accountMetricRows(id, previous.from, previous.to),
+      this.contentObservations(id, from, to),
+      this.latestAudienceSnapshot(id, this.shiftDay(previous.to, 1)),
+      this.latestAudienceSnapshot(id, from),
+      this.prisma.connectedAccountSyncJob?.findFirst
+        ? this.prisma.connectedAccountSyncJob.findFirst({
+            where: {
+              connectedAccountId: id,
+              status: { in: ['SUCCEEDED', 'PARTIAL'] },
+              completedAt: { not: null },
+            },
+            orderBy: { completedAt: 'desc' },
+            select: { completedAt: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    const currentSnapshotRow = this.latestSnapshotRow(
+      rows,
+      'AUDIENCE_SIZE',
+      to,
+    );
+    const currentSnapshot = currentSnapshotRow
+      ? numberValue(currentSnapshotRow.value)
+      : null;
     const previousSnapshot = previousSnapshotRow
       ? numberValue(previousSnapshotRow.value)
       : null;
@@ -683,12 +1485,27 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       ];
     const currentTotals = this.totals(rows);
     const previousTotals = this.totals(previousRows);
-    const audienceDelta = this.audienceDelta(
-      account.provider,
-      rows,
-      startSnapshot ? numberValue(startSnapshot.value) : null,
-      currentSnapshot,
+    const boundarySnapshotsMatch = Boolean(
+      startSnapshot &&
+      startSnapshot.metricDate.toISOString().slice(0, 10) ===
+        this.shiftDay(from, -1) &&
+      currentSnapshotRow?.metricDate.toISOString().slice(0, 10) === to,
     );
+    const audienceDelta = boundarySnapshotsMatch
+      ? this.audienceDelta(
+          account.provider,
+          rows,
+          startSnapshot ? numberValue(startSnapshot.value) : null,
+          currentSnapshot,
+        )
+      : account.provider === 'LINKEDIN' || account.provider === 'YOUTUBE'
+        ? this.audienceDelta(
+            account.provider,
+            rows,
+            startSnapshot ? numberValue(startSnapshot.value) : null,
+            currentSnapshot,
+          )
+        : null;
     const previousAudienceDelta = await this.previousAudienceDelta(
       account.provider,
       id,
@@ -709,11 +1526,71 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
         previousSnapshot,
         previousAudienceDelta,
       );
+      const coverage =
+        definition.mode === 'SUM'
+          ? accountMetricCoverage(
+              rows
+                .filter(
+                  (row) =>
+                    row.metricCode === definition.code && row.scope === 'DAILY',
+                )
+                .map((row) => ({
+                  date: row.metricDate.toISOString().slice(0, 10),
+                  value: numberValue(row.value),
+                })),
+              from,
+              to,
+            )
+          : {
+              status:
+                current !== null ? ('COMPLETE' as const) : ('NONE' as const),
+              requestedDays: null,
+              observedDays: null,
+              firstObservedDate:
+                definition.code === 'AUDIENCE_SIZE' && currentSnapshotRow
+                  ? currentSnapshotRow.metricDate.toISOString().slice(0, 10)
+                  : null,
+              lastObservedDate:
+                definition.code === 'AUDIENCE_SIZE' && currentSnapshotRow
+                  ? currentSnapshotRow.metricDate.toISOString().slice(0, 10)
+                  : null,
+              snapshotDate:
+                definition.code === 'AUDIENCE_SIZE' && currentSnapshotRow
+                  ? currentSnapshotRow.metricDate.toISOString().slice(0, 10)
+                  : null,
+            };
+      const previousCoverage =
+        definition.mode === 'SUM'
+          ? accountMetricCoverage(
+              previousRows
+                .filter(
+                  (row) =>
+                    row.metricCode === definition.code && row.scope === 'DAILY',
+                )
+                .map((row) => ({
+                  date: row.metricDate.toISOString().slice(0, 10),
+                  value: numberValue(row.value),
+                })),
+              previous.from,
+              previous.to,
+            )
+          : {
+              status: old !== null ? ('COMPLETE' as const) : ('NONE' as const),
+            };
+      const comparisonAllowed =
+        definition.mode === 'SUM'
+          ? coverage.status === 'COMPLETE' &&
+            previousCoverage.status === 'COMPLETE'
+          : current !== null && old !== null;
+      const change = calculated(current, old);
       return {
         ...definition,
         value: current,
         previous: old,
-        ...calculated(current, old),
+        difference: comparisonAllowed ? change.difference : null,
+        percentageChange: comparisonAllowed ? change.percentageChange : null,
+        coverage,
+        previousCoverage,
       };
     });
     const audienceSnapshots = rows
@@ -724,6 +1601,8 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
     const priorAudience = startSnapshot
       ? numberValue(startSnapshot.value)
       : null;
+    let priorAudienceDate =
+      startSnapshot?.metricDate.toISOString().slice(0, 10) ?? null;
     let previousAudience = priorAudience;
     let snapshotIndex = 0;
     const series = dayRange(from, to).map((date) => {
@@ -773,10 +1652,14 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
             audienceSnapshots[snapshotIndex].metricDate
               .toISOString()
               .slice(0, 10) === date &&
-            previousAudience !== null
+            previousAudience !== null &&
+            priorAudienceDate === this.shiftDay(date, -1)
           )
             values.AUDIENCE_CHANGE = current - previousAudience;
           previousAudience = current;
+          priorAudienceDate = audienceSnapshots[snapshotIndex].metricDate
+            .toISOString()
+            .slice(0, 10);
           snapshotIndex += 1;
         }
         if (values.AUDIENCE_CHANGE === undefined) values.AUDIENCE_CHANGE = null;
@@ -815,6 +1698,15 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       metrics,
       series,
       topPosts,
+      coverage: {
+        requestedDays: dayDiff(from, to),
+        latestSuccessfulHistoryFetchAt:
+          latestHistoryJob?.completedAt?.toISOString() ?? null,
+        postSnapshotRetentionDays:
+          account.provider === 'INSTAGRAM' || account.provider === 'FACEBOOK'
+            ? 90
+            : null,
+      },
       caveats: this.caveats(account.provider),
       dataAvailableThrough: account.lastSyncedAt,
       generatedAt: now.toISOString(),
@@ -1050,6 +1942,28 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      await tx.connectedAccount.update({
+        where: { id },
+        data: {
+          active: false,
+          credentialCiphertext: null,
+          tokenExpiresAt: null,
+        },
+      });
+      if (tx.connectedAccountSyncJob)
+        await tx.connectedAccountSyncJob.updateMany({
+          where: {
+            connectedAccountId: id,
+            status: { in: ['QUEUED', 'RUNNING'] },
+          },
+          data: {
+            status: 'CANCELLED',
+            completedAt: new Date(),
+            leaseToken: null,
+            leaseUntil: null,
+            finalErrorCode: 'ACCOUNT_DISCONNECTED',
+          },
+        });
       await tx.auditLog.create({
         data: {
           actorUserId: actorId,
@@ -1061,14 +1975,6 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
             providerAccessRevocation,
             historicalAnalyticsRetained: true,
           },
-        },
-      });
-      await tx.connectedAccount.update({
-        where: { id },
-        data: {
-          active: false,
-          credentialCiphertext: null,
-          tokenExpiresAt: null,
         },
       });
     });
@@ -1096,6 +2002,31 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
         message: 'Disconnect the account before deleting its stored data.',
       });
     await this.prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ active: boolean }>>`
+        SELECT "active"
+        FROM "social_media_dashboard"."ConnectedAccount"
+        WHERE "id" = ${id}::uuid
+        FOR UPDATE
+      `;
+      if (locked[0]?.active)
+        throw new ConflictException({
+          code: 'ACCOUNT_MUST_BE_DISCONNECTED',
+          message: 'Disconnect the account before deleting its stored data.',
+        });
+      if (tx.connectedAccountSyncJob)
+        await tx.connectedAccountSyncJob.updateMany({
+          where: {
+            connectedAccountId: id,
+            status: { in: ['QUEUED', 'RUNNING'] },
+          },
+          data: {
+            status: 'CANCELLED',
+            completedAt: new Date(),
+            leaseToken: null,
+            leaseUntil: null,
+            finalErrorCode: 'ACCOUNT_DATA_DELETED',
+          },
+        });
       const records = await tx.connectedAccountAnalyticsRecord.findMany({
         where: { connectedAccountId: id },
         select: { id: true },
@@ -1139,6 +2070,12 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
         ],
       },
     });
+    await this.prisma.connectedAccountSyncJob.deleteMany({
+      where: {
+        completedAt: { lt: new Date(now.getTime() - 30 * 86_400_000) },
+        status: { in: ['SUCCEEDED', 'PARTIAL', 'FAILED', 'CANCELLED'] },
+      },
+    });
     await this.accountAnalytics.purgeExpired(now);
     const expiredProfiles = await this.prisma.connectedAccount.findMany({
       where: { provider: 'LINKEDIN', profileMetadataExpiresAt: { lt: now } },
@@ -1174,6 +2111,25 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       // period-scoped top content stay current together.
       const from = this.shiftDay(to, -29);
       try {
+        if (
+          account.provider === 'INSTAGRAM' ||
+          account.provider === 'FACEBOOK'
+        ) {
+          const accountDetails = await this.prisma.connectedAccount.findUnique({
+            where: { id: account.id },
+            select: { historyBootstrapEnqueuedAt: true },
+          });
+          const bootstrap = !accountDetails?.historyBootstrapEnqueuedAt;
+          await this.enqueueMetaSync(
+            account.id,
+            bootstrap ? this.shiftDay(to, -364) : from,
+            to,
+            'SCHEDULED',
+            null,
+            bootstrap,
+          );
+          continue;
+        }
         await this.syncAccount(account.id, from, to, true);
       } catch {
         // The account's lastSyncErrorCode records the failure without logging
@@ -1212,6 +2168,7 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
             ? ('SNAPSHOT' as const)
             : ('DAILY' as const),
         metricDate: record.recordDate,
+        retrievedAt: record.retrievedAt,
         value: item.value,
       })),
     );
@@ -1248,6 +2205,7 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
           metricCode: item.metricDefinition.code,
           scope: 'SNAPSHOT',
           metricDate: record.recordDate,
+          retrievedAt: record.retrievedAt,
           value: item.value,
         }
       : null;
@@ -1301,6 +2259,16 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
       this.latestAudienceSnapshot(accountId, range.from),
     ]);
     const last = this.latestSnapshot(rows, 'AUDIENCE_SIZE', range.to);
+    if (provider === 'INSTAGRAM' || provider === 'FACEBOOK') {
+      const beforeDate = before?.metricDate.toISOString().slice(0, 10);
+      const lastRow = this.latestSnapshotRow(rows, 'AUDIENCE_SIZE', range.to);
+      if (
+        !before ||
+        beforeDate !== this.shiftDay(range.from, -1) ||
+        lastRow?.metricDate.toISOString().slice(0, 10) !== range.to
+      )
+        return null;
+    }
     return this.audienceDelta(
       provider,
       rows,
@@ -1353,7 +2321,19 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
     code: string,
     end: string,
   ) {
-    const row = rows
+    const row = this.latestSnapshotRow(rows, code, end);
+    return row ? numberValue(row.value) : null;
+  }
+
+  private latestSnapshotRow<
+    T extends {
+      metricCode: string;
+      scope: string;
+      metricDate: Date;
+      value: Prisma.Decimal;
+    },
+  >(rows: T[], code: string, end: string) {
+    return rows
       .filter(
         (item) =>
           item.scope === 'SNAPSHOT' &&
@@ -1361,7 +2341,6 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
           item.metricDate <= dateValue(end),
       )
       .sort((a, b) => b.metricDate.getTime() - a.metricDate.getTime())[0];
-    return row ? numberValue(row.value) : null;
   }
 
   private totals(
@@ -1414,25 +2393,77 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
 
   private retentionInfo(provider: ConnectedAccountProvider) {
     if (provider === 'INSTAGRAM' || provider === 'FACEBOOK')
-      return { reportingDays: 90, postSnapshotDays: 90 };
+      return {
+        reportingDays: 365,
+        postSnapshotDays: 90,
+        ...this.capabilities(provider),
+      };
     if (provider === 'LINKEDIN')
-      return { reportingDays: 364, postSnapshotDays: 42 };
-    return { reportingDays: null, postSnapshotDays: null };
+      return {
+        reportingDays: 364,
+        postSnapshotDays: 42,
+        ...this.capabilities(provider),
+      };
+    return {
+      reportingDays: null,
+      postSnapshotDays: null,
+      ...this.capabilities(provider),
+    };
+  }
+
+  private capabilities(provider: ConnectedAccountProvider) {
+    if (provider === 'INSTAGRAM')
+      return {
+        maxReportDays: 365,
+        accountMetricRetentionDays: 365,
+        postSnapshotRetentionDays: 90,
+        historyFetchDays: 90,
+      };
+    if (provider === 'FACEBOOK')
+      return {
+        maxReportDays: 365,
+        accountMetricRetentionDays: 365,
+        postSnapshotRetentionDays: 90,
+        historyFetchDays: 365,
+      };
+    if (provider === 'LINKEDIN')
+      return {
+        maxReportDays: 365,
+        accountMetricRetentionDays: 364,
+        postSnapshotRetentionDays: 42,
+        historyFetchDays: 365,
+      };
+    if (provider === 'YOUTUBE')
+      return {
+        maxReportDays: 365,
+        accountMetricRetentionDays: null,
+        postSnapshotRetentionDays: null,
+        historyFetchDays: null,
+      };
+    return {
+      maxReportDays: 3650,
+      accountMetricRetentionDays: null,
+      postSnapshotRetentionDays: null,
+      historyFetchDays: null,
+    };
   }
 
   private caveats(provider: ConnectedAccountProvider) {
     if (provider === 'INSTAGRAM')
       return [
-        'Instagram insights are limited to the provider’s available 90-day window. Views and reach use separate provider definitions.',
-        'Follower change compares total follower snapshots collected by this app; the first sync creates the baseline.',
-        'Top-content ranking is based on up to 20 eligible media items synced for the selected period; post view counts are lifetime totals.',
+        'Instagram supplies recent account history (up to 90 days). Older days already collected remain available in Marketwise; missing dates are shown as gaps.',
+        'Account metrics are retained for up to 365 days after retrieval. Post snapshots keep their separate 90-day retention.',
+        'Daily reach observations are not a deduplicated count of unique accounts across the reporting period.',
+        'Follower count is a snapshot from the date it was retrieved; historical follower values are not reconstructed.',
+        'Top content uses only eligible posts retained for this report period and is not a complete annual ranking.',
       ];
     if (provider === 'FACEBOOK')
       return [
         'Page visits count visits to the Page profile. Paid and mixed content views are excluded; organic media views appear only when the provider explicitly returns the unpaid breakdown.',
         'Follower change compares provider follower-count snapshots when available.',
-        'This app retains Facebook Page analytics and post snapshots for up to 90 days.',
-        'Top-content ranking is based on up to 20 eligible published posts; post view counts are lifetime totals.',
+        'Facebook account metrics are retained for up to 365 days after retrieval. Post snapshots keep their separate 90-day retention.',
+        'Daily reach observations are not a deduplicated count of unique people across the reporting period.',
+        'Top content uses only eligible posts retained for this report period and is not a complete annual ranking.',
       ];
     if (provider === 'LINKEDIN')
       return [
@@ -1474,7 +2505,7 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
     const days = dayDiff(from, to);
     const maxDays =
       provider === 'INSTAGRAM' || provider === 'FACEBOOK'
-        ? 90
+        ? 365
         : provider === 'LINKEDIN'
           ? 365
           : provider === 'YOUTUBE'
@@ -1483,18 +2514,14 @@ export class ConnectedAccountsService implements OnModuleInit, OnModuleDestroy {
     if (days > maxDays)
       throw new BadRequestException({
         code: 'ACCOUNT_DATE_RANGE_TOO_WIDE',
-        message: `${provider === 'INSTAGRAM' ? 'Instagram and Facebook' : provider === 'LINKEDIN' ? 'LinkedIn' : 'This provider'} reports can be synced for up to ${maxDays} days at a time.`,
+        message: `${provider === 'INSTAGRAM' || provider === 'FACEBOOK' ? 'Instagram and Facebook' : provider === 'LINKEDIN' ? 'LinkedIn' : 'This provider'} reports can cover up to ${maxDays} calendar days at a time.`,
       });
-    const lookback =
-      provider === 'INSTAGRAM' || provider === 'FACEBOOK'
-        ? 90
-        : provider === 'LINKEDIN'
-          ? 365
-          : null;
+    const lookback = provider === 'LINKEDIN' ? 365 : null;
     if (lookback && dayDiff(from, this.today()) > lookback)
       throw new BadRequestException({
         code: 'ACCOUNT_DATA_RETENTION_WINDOW',
-        message: `${provider === 'INSTAGRAM' ? 'Instagram' : provider === 'FACEBOOK' ? 'Facebook' : 'LinkedIn'} has no data available before its current reporting window.`,
+        message:
+          'LinkedIn has no data available before its current reporting window.',
       });
   }
 

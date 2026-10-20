@@ -939,9 +939,17 @@ Provider fields use system-managed definitions keyed by provider, source metric 
 
 ## Provider retention and provenance
 
-`PerformanceMetricValue` now optionally records its source connection and source-data expiry, allowing campaign and account values to be retained/deleted at value grain. Provider metric definitions declare applicable retention days; LinkedIn Ads and Page reporting values currently expire after 364 days, while future content metrics may set a shorter period. Expired values are hidden from analytics and purged by the API retention worker. The one-day safety buffer keeps current LinkedIn reporting retention below its one-year maximum. Existing provider-managed rows are backfilled additively; data that cannot be classified safely is not automatically deleted. Member profile/activity data is outside this metric model.
+`PerformanceMetricValue` now optionally records its source connection and source-data expiry, allowing campaign and account values to be retained/deleted at value grain. Provider metric definitions declare applicable retention days; LinkedIn Ads and Page reporting values expire after 364 days, organic Instagram and Facebook account metrics after 365 days, and Meta content/post snapshots after 90 days. Expired values are hidden from analytics and purged by the API retention worker. The one-day LinkedIn safety buffer remains below its one-year maximum. Existing provider-managed rows are backfilled additively; data that cannot be classified safely is not automatically deleted. Member profile/activity data is outside this metric model.
 
 See [ADR-012](../decisions/ADR-012-connected-account-analytics.md) and the [implementation plan](../plans/completion/connected-account-analytics.md) for acceptance and operational limits.
+
+### Meta reporting range, fetch history, and durable jobs (2026-10-20)
+
+Connected Instagram and Facebook account reports accept up to 365 inclusive calendar days. Report reads use retained observations without applying the provider fetch lookback. Account-metric values expire 365 days after retrieval; Instagram's fetch planner intersects requested dates with its latest 90 days, while Facebook's application backfill scope is up to 365 days in 30-day chunks. Instagram and Facebook `CONTENT` values continue to expire after 90 days. An additive migration extends only matching Meta account values that are still unexpired and calculates their new expiry from `retrievedAt`; it does not restore expired values.
+
+`ConnectedAccountSyncJob` owns the requested and fetchable periods, source, status, requester, lease, and lifecycle timestamps. `ConnectedAccountSyncChunk` stores inclusive date spans, stable sequence, attempts, retry time, observation count, and a sanitized error code. A partial unique index enforces at most one queued/running job per connected account. The API worker claims and checkpoints chunks in PostgreSQL; each chunk's observations are idempotent under the existing source keys. Jobs retain no credentials or provider payloads and are purged 30 days after completion. Disconnect and explicit data deletion cancel active jobs; write guards prevent a stale worker from persisting after cancellation.
+
+Analytics response coverage is calculated from actual stored metric dates. A real zero is observed; an absent value remains missing. Daily metric coverage reports COMPLETE/PARTIAL/NONE, and snapshot metrics include their observation date. Consumers must show partial totals and retain gaps. The current follower count uses its true retrieval date, not a historical request date. Recent post refresh remains bounded and separate from account-history backfill.
 
 ## Approved lifecycle and registration additions (2026-10-18)
 
