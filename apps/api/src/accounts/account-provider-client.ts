@@ -1538,7 +1538,7 @@ export class AccountProviderClient {
       startDate: from,
       endDate: to,
       dimensions: 'video',
-      metrics: 'views,estimatedMinutesWatched,likes,comments,shares',
+      metrics: 'views,likes,comments,shares',
       sort: '-views',
       maxResults: '10',
     }))
@@ -1570,7 +1570,6 @@ export class AccountProviderClient {
       const metricValues: Record<string, number> = {};
       for (const [source, target] of [
         ['views', 'VIEWS'],
-        ['estimatedMinutesWatched', 'WATCH_TIME_MINUTES'],
         ['likes', 'LIKES'],
         ['comments', 'COMMENTS'],
         ['shares', 'SHARES'],

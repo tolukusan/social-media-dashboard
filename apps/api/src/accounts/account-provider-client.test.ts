@@ -387,12 +387,15 @@ describe('account provider read-only analytics', () => {
       sourceMetric: 'statistics.subscriberCount',
       value: 950,
     });
+    expect(result.metrics).toContainEqual(
+      expect.objectContaining({ code: 'WATCH_TIME_MINUTES', value: 120 }),
+    );
     expect(result.posts).toEqual([
       expect.objectContaining({
         externalPostId: 'video_123',
         title: 'Useful video',
         dataScope: 'DATE_RANGE',
-        metricValues: { VIEWS: 42, WATCH_TIME_MINUTES: 90, LIKES: 6 },
+        metricValues: { VIEWS: 42, LIKES: 6 },
       }),
     ]);
     expect(

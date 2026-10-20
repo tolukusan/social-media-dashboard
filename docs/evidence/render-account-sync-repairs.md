@@ -1,0 +1,6 @@
+# Render account sync repairs — 2026-10-20
+
+- Render API had `INTEGRATIONS_SCHEDULER_ENABLED=false`, disabling Meta history workers. Enabled the setting and deployed. Existing Instagram bootstrap resumed successfully; the live report showed 172 followers, 544 views, 180 accounts reached and 16 content interactions for the selected period. No account reconnect or data reset was required.
+- Zoho's account displayed a successful update with zero campaigns sent during September 21–October 20. A failed browser fetch also affected Render's own log viewer temporarily; it was not evidence of a Zoho permission failure. Empty reports require checking campaign send dates and the selected Zoho organisation.
+- YouTube retry returned `UNSUPPORTED_PROVIDER_METRIC`. The top-video adapter emitted CONTENT WATCH_TIME_MINUTES, while the canonical seed defines watch time only for ACCOUNT. Removed watch time from the video request/output; preserved daily account watch time, supported video metrics, missing values, provider scope and catalogue validation. No schema/catalogue migration, new metric, or calculation change.
+- Regression test first reproduced the unsupported video watch-time output, then passed after correction; it also asserts account watch time remains present.
