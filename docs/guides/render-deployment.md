@@ -44,6 +44,8 @@ Render terminates public TLS and supplies the API's `PORT`. The API binds to `0.
 
    Preserve any query parameters already present: add `&schema=social_media_dashboard` if the URL already has a query string. URL-encode special characters in usernames/passwords if constructing the URL yourself. Do not use the external URL in the API service.
 
+   Prisma defaults a missing schema parameter to social_media_dashboard and rejects a conflicting explicit schema. For a failed first installation with P3018, see the [non-destructive recovery notes](../evidence/render-fresh-migration-recovery.md).
+
 ### Free database limitation
 
 Render's Free PostgreSQL instance expires after 30 days and does not include managed backups. Treat it as a temporary demo database. Keep a separate encrypted backup and test that it restores. For long-term data, choose a supported paid database before the free instance expires; this guide does not upgrade anything automatically.
