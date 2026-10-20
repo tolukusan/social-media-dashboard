@@ -141,7 +141,7 @@ test('Management can review Accounts but cannot start provider connections', asy
 test('compares accounts and keeps provider-specific measures and content separate', async ({
   page,
 }) => {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL!;
+  const apiUrl = process.env.E2E_API_URL!;
   const baseUrl = process.env.E2E_BASE_URL!;
   const accounts = [
     {

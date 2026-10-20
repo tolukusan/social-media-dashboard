@@ -16,7 +16,7 @@ async function signIn(page: Page, role = 'administrator') {
 }
 
 async function createCampaign(page: Page) {
-  const api = process.env.NEXT_PUBLIC_API_URL!;
+  const api = process.env.E2E_API_URL!;
   const user = await (await page.request.get(`${api}/auth/me`)).json();
   const csrf = await (await page.request.get(`${api}/auth/csrf`)).json();
   const name = `Dataset campaign ${randomUUID()}`;

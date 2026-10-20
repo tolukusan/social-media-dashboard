@@ -119,6 +119,12 @@ Append a short row per executed task; keep detailed results in the progress/evid
 
 Documentation organisation follow-up (2026-10-06): complete. See the [25-file move record](documentation-reorganisation.md). Active links, moved-document integrity, archive exclusion, and maintained Markdown formatting verified. No product task statuses changed.
 
+### Staging consolidation and deployment-preparation follow-up — 2026-10-20
+
+| Task      | Status           | Evidence                                                                                                                                                                                                                        | Verification                                                                                                      | Remaining condition                                                                                      |
+| --------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| DEPLOY-01 | Prepared locally | [Render setup guide](../../guides/render-deployment.md), [implementation progress](../../evidence/IMPLEMENTATION_PROGRESS.md#staging-consolidation-and-render-deployment-preparation--2026-10-20), same-origin proxy smoke test | Lint, typecheck, 142 unit, 84 integration, API/web builds, docs format, focused proxy E2E, and 25 full E2E passed | User-owned Render setup, deployment, live provider consent, SMTP delivery, and production restore remain |
+
 Each implementation report must identify behaviour, files changed, tests added/updated, commands/results, migration impact, documentation changes, and remaining risks.
 
 ### Integration execution addition — 2026-10-08

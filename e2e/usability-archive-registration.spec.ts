@@ -22,7 +22,7 @@ async function mutate(
   method: string,
   body?: unknown,
 ) {
-  const api = process.env.NEXT_PUBLIC_API_URL!;
+  const api = process.env.E2E_API_URL!;
   const csrf = (await page.context().cookies(api)).find(
     (c) => c.name === 'csrf_token',
   )!;
@@ -133,7 +133,7 @@ test('dataset reports stay separate while Archive restores or deletes the campai
   page,
 }) => {
   await login(page);
-  const api = process.env.NEXT_PUBLIC_API_URL!;
+  const api = process.env.E2E_API_URL!;
   const me = await (await page.request.get(`${api}/auth/me`)).json();
   const name = `Archive dataset journey ${randomUUID()}`;
   const created = await mutate(page, '/campaigns', 'POST', {

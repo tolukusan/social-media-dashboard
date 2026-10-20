@@ -3,8 +3,10 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module.js';
+import { resolveApiPort } from './server-config.js';
 
 async function bootstrap() {
+  const port = resolveApiPort(process.env);
   const app = await NestFactory.create(AppModule);
   app.use(
     (
@@ -34,7 +36,7 @@ async function bootstrap() {
     origin: process.env.APP_ORIGIN ?? 'http://localhost:3000',
     credentials: true,
   });
-  await app.listen(Number(process.env.API_PORT ?? 4000));
+  await app.listen(port, '0.0.0.0');
 }
 
 void bootstrap();

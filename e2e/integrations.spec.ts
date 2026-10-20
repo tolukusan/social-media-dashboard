@@ -20,7 +20,7 @@ test('Administrator can prepare a mapped connection without keys, enable schedul
   page,
 }, testInfo) => {
   await signIn(page);
-  const api = process.env.NEXT_PUBLIC_API_URL!;
+  const api = process.env.E2E_API_URL!;
   const me = await (await page.request.get(`${api}/auth/me`)).json();
   const channels = await (await page.request.get(`${api}/channels`)).json();
   const channel = channels.find(

@@ -34,7 +34,7 @@ https://talisman-large-proactive.ngrok-free.dev/api/v1/accounts/oauth/callback
 
 That tunnel forwards to **API port 4000**, not website port 3000. Verify it is still active before reusing it. A hosted HTTPS API replaces ngrok.
 
-For production use same-site HTTPS addresses, such as `https://dashboard.example.com` and `https://api.example.com`. Authentication uses SameSite=Lax cookies; unrelated web/API domains can block authenticated requests.
+For a Render deployment, use the public HTTPS **web origin** for callbacks. The browser calls the web service at `/api/v1/...`; Next.js proxies the request to the API service so cookies stay on the web origin. Do not register the separate API hostname as the callback for this deployment. The exact Render setup is in the [Render deployment guide](render-deployment.md).
 
 The callback must match exactly in the backend and every provider console: scheme, hostname, port if present, and path. This callback has no trailing slash.
 
@@ -86,7 +86,7 @@ Never run `prisma migrate reset`, demo-data commands, or test-database preparati
    NODE_ENV=development
    REPORTING_TIMEZONE=Africa/Lagos
    SESSION_COOKIE_NAME=smd_session
-   INTEGRATION_OAUTH_REDIRECT_URI=https://<public-api-host>/api/v1/accounts/oauth/callback
+   INTEGRATION_OAUTH_REDIRECT_URI=https://<public-web-host>/api/v1/accounts/oauth/callback
    INTEGRATION_TOKEN_ENCRYPTION_KEY=<base64-key>
    INTEGRATIONS_SCHEDULER_ENABLED=true
    ```
@@ -113,13 +113,13 @@ pnpm --filter @smd/api prisma:generate
 pnpm --filter @smd/api exec prisma migrate deploy
 ```
 
-For a fresh database only, set `SEED_ADMIN_EMAIL` and a strong `SEED_ADMIN_PASSWORD` in the API's private environment, then run:
+For a fresh local database only, set `SEED_ADMIN_EMAIL` and a strong `SEED_ADMIN_PASSWORD` in the API's private environment, then run:
 
 ```powershell
 pnpm --filter @smd/api prisma:seed
 ```
 
-Remove the seed password from the environment afterward. Existing installations should use their existing administrator. Do not create demo data in production. Select reporting currency in Administration after login.
+Remove the seed password from the environment afterward. Existing installations should use their existing administrator. In production, the seed creates an Administrator only if none exists and skips an existing one; use the temporary Render initialization command in the [Render guide](render-deployment.md). Do not create demo data in production. Select reporting currency in Administration after login.
 
 ## 5. Start locally and check the tunnel
 

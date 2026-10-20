@@ -219,6 +219,10 @@ If a release fails before an irreversible migration:
 
 - restore previous app version
 
+## Current platform procedure
+
+The approved architecture above remains the platform-neutral deployment plan. The implemented field-by-field Render procedure, same-origin API proxy, callback registration, and fresh/existing database workflows are in the current [Render deployment guide](../guides/render-deployment.md). No Render services are claimed to exist unless a separate deployment record says so.
+
 If data migration is destructive or incompatible:
 
 - follow the migration-specific backup/restore plan

@@ -20,7 +20,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-The web app runs at `http://localhost:3000`, with the NestJS REST API at `http://localhost:4000/api/v1`. Administrator seed credentials belong only in the local environment. After an active Administrator or Marketing Officer exists, `pnpm --filter @smd/api demo:prepare` creates deterministic local walkthrough data. Do not run demo preparation in production.
+The web app runs at `http://localhost:3000`, with the NestJS REST API at `http://localhost:4000/api/v1`. Administrator seed credentials belong only in the local environment. After an active Administrator or Marketing Officer exists, `pnpm --filter @smd/api demo:prepare` creates deterministic local walkthrough data. Do not run demo preparation in production. For the two-service Render deployment and safe database initialization steps, see the [Render deployment guide](docs/guides/render-deployment.md).
 
 ```text
 pnpm lint

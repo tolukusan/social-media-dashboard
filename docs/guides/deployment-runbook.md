@@ -9,14 +9,15 @@ API environment:
 - `NODE_ENV=production`
 - `DATABASE_URL` for the application database
 - `APP_ORIGIN` set to the exact HTTPS web origin
-- `API_PORT`
+- `PORT` supplied by the platform; `API_PORT` is the local fallback
 - `SESSION_COOKIE_NAME` when the default is not used
 - `REPORTING_TIMEZONE`
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` when self-service email recovery is enabled
 
-Web environment:
+Web environment (Render production):
 
-- `NEXT_PUBLIC_API_URL` set to the public API URL ending in `/api/v1`
+- `NEXT_PUBLIC_API_URL=/api/v1`
+- `SMD_API_ORIGIN` set to the HTTPS API origin only, without `/api/v1`; Next.js proxies browser requests from the web origin
 
 Do not commit production values. Production `APP_ORIGIN` must use HTTPS. CORS and unsafe-request Origin validation use that exact origin.
 
@@ -31,17 +32,17 @@ Do not commit production values. Production `APP_ORIGIN` must use HTTPS. CORS an
 
 ## Database and application rollout
 
-Run database migrations before starting the new API version:
+The Render API start command applies committed migrations before the server starts. A migration failure prevents startup:
 
 ```text
-pnpm --filter @smd/api prisma:generate
-pnpm --filter @smd/api exec prisma migrate deploy
-pnpm build
+pnpm --filter @smd/api exec prisma migrate deploy && node apps/api/dist/src/main.js
 ```
 
 Do not use `prisma migrate reset` or destructive reset commands against an existing environment. The catalogue seed may be run when the deployment process explicitly requires the deterministic fixed catalogue. Do not run the demo-data command in production.
 
 Start the API and web processes using the deployment platform's normal process manager. The API health endpoint is `/api/v1/health`.
+
+For field-by-field Render configuration, first-admin initialization, safe existing-database restoration, and same-origin OAuth URLs, follow the [Render deployment guide](render-deployment.md). It is the current platform-specific procedure.
 
 ## Post-deployment smoke
 
@@ -71,7 +72,7 @@ They remove only stale session records and recovery tokens beyond their document
 
 ### Connected-account analytics and Meta history jobs
 
-The connected-account worker and retention sweep run inside the API process. Keep at least one API process continuously running and set `INTEGRATIONS_SCHEDULER_ENABLED=true` (or leave it unset) to enable daily refresh, queued Meta history jobs, and expiry cleanup. A deployment that sleeps or stops the API cannot promise daily account history collection. Do not run multiple ad hoc workers: PostgreSQL leases and the one-active-job-per-account constraint coordinate the existing worker process.
+The connected-account worker and retention sweep run inside the API process. Keep at least one API process continuously running and set `INTEGRATIONS_SCHEDULER_ENABLED=true` (or leave it unset) to enable daily refresh, queued Meta history jobs, and expiry cleanup. A deployment that sleeps or stops the API cannot promise daily account history collection. Do not run multiple ad hoc workers: PostgreSQL leases and the one-active-job-per-account constraint coordinate the existing worker process. For the initial Render Free demo, leave the setting `false` and synchronize manually.
 
 For a release that adds Meta annual history, take a verified PostgreSQL backup first, then deploy the additive migration before starting the API version that claims sync jobs:
 

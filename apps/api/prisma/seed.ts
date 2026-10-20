@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import argon2 from 'argon2';
+import { getAdminSeedAction } from '../src/seed-admin-policy.js';
 import { PrismaPg } from '@prisma/adapter-pg';
 import {
   PrismaClient,
@@ -977,23 +978,59 @@ async function main() {
           definition.aggregationStrategy ?? AggregationStrategy.SUM,
       },
     });
-  if (process.env.SEED_ADMIN_EMAIL && process.env.SEED_ADMIN_PASSWORD) {
+  const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.SEED_ADMIN_PASSWORD;
+  if (
+    process.env.NODE_ENV === 'production' &&
+    Boolean(email) !== Boolean(password)
+  )
+    throw new Error(
+      'Set both SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD for first-time production initialization.',
+    );
+  if (email && password) {
     const role = await prisma.role.findUniqueOrThrow({
       where: { code: 'ADMIN' },
     });
-    const passwordHash = await argon2.hash(process.env.SEED_ADMIN_PASSWORD, {
-      type: argon2.argon2id,
+    const existingAdmin =
+      process.env.NODE_ENV === 'production'
+        ? Boolean(
+            await prisma.user.findFirst({
+              where: { roleId: role.id },
+              select: { id: true },
+            }),
+          )
+        : false;
+    const action = getAdminSeedAction({
+      production: process.env.NODE_ENV === 'production',
+      administratorExists: existingAdmin,
+      credentialsConfigured: true,
     });
-    await prisma.user.upsert({
-      where: { email: process.env.SEED_ADMIN_EMAIL.toLowerCase() },
-      update: { active: true, roleId: role.id, passwordHash },
-      create: {
-        name: 'Local Administrator',
-        email: process.env.SEED_ADMIN_EMAIL.toLowerCase(),
-        roleId: role.id,
-        passwordHash,
-      },
-    });
+    if (action !== 'skip') {
+      const passwordHash = await argon2.hash(password, {
+        type: argon2.argon2id,
+      });
+      if (action === 'create') {
+        await prisma.user.create({
+          data: {
+            name: 'Local Administrator',
+            email,
+            roleId: role.id,
+            passwordHash,
+          },
+        });
+      } else {
+        await prisma.user.upsert({
+          where: { email },
+          update: { active: true, roleId: role.id, passwordHash },
+          create: {
+            name: 'Local Administrator',
+            email,
+            roleId: role.id,
+            passwordHash,
+          },
+        });
+      }
+    }
   }
 }
 

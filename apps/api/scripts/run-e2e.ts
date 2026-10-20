@@ -30,6 +30,8 @@ const apiUrl = `http://localhost:${apiPort}/api/v1`;
 const webUrl = `http://localhost:${webPort}`;
 const providerEnvironment = {
   INTEGRATION_OAUTH_REDIRECT_URI: '',
+  INTEGRATION_OAUTH_API_ORIGIN: 'http://localhost:3101',
+  INTEGRATION_OAUTH_ALLOWED_CALLBACK_ORIGINS: 'http://localhost:3101',
   INTEGRATION_TOKEN_ENCRYPTION_KEY: '',
   INTEGRATION_META_APP_ID: '',
   INTEGRATION_META_APP_SECRET: '',
@@ -99,8 +101,11 @@ const env: NodeJS.ProcessEnv = {
   DATABASE_URL: databaseUrl,
   TEST_DATABASE_URL: databaseUrl,
   API_PORT: String(apiPort),
+  PORT: String(apiPort),
   APP_ORIGIN: webUrl,
-  NEXT_PUBLIC_API_URL: apiUrl,
+  NEXT_PUBLIC_API_URL: '/api/v1',
+  SMD_API_ORIGIN: `http://localhost:${apiPort}`,
+  E2E_API_URL: `${webUrl}/api/v1`,
   E2E_BASE_URL: webUrl,
 };
 const webEnv: NodeJS.ProcessEnv = {
