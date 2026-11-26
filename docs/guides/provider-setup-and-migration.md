@@ -268,7 +268,7 @@ References: [Pages API](https://developers.facebook.com/docs/pages-api/), [Insta
 3. For a new owner choose **Create app**, enter its name, associated LinkedIn Page, privacy-policy URL, and required contact/branding information.
 4. Complete app/Page verification. Ask the Page administrator to approve verification if required.
 5. Open **Products**.
-6. Enable/request **Sign In with LinkedIn using OpenID Connect** for `openid` and `profile`.
+6. Do not add **Sign In with LinkedIn using OpenID Connect**; Marketwise does not request `openid` or `profile`, and LinkedIn may block other products on an app that has Community Management API.
 7. Request **Community Management API** access. Complete its application/access-tier process and wait for approval. A client ID or Share on LinkedIn alone does not provide organisation analytics.
 8. Open **Auth**.
 9. Add the exact shared Accounts callback to authorised redirect URLs and save.
@@ -281,7 +281,7 @@ References: [Pages API](https://developers.facebook.com/docs/pages-api/), [Insta
     ```
 
 11. The API version is a supported six-digit release, not `v2` and not an invented current month. Check LinkedIn's supported versions before choosing it.
-12. Confirm approved products grant all requested scopes: `openid`, `profile`, `rw_organization_admin`, `r_organization_social`.
+12. Confirm approved products grant all requested scopes: `rw_organization_admin`, `r_organization_social`.
 13. Ensure the consenting member administers the intended organisation Page.
 14. Restart the API. Accounts should show configuration ready.
 15. Click **Connect**, consent, and confirm the correct organisation appears.

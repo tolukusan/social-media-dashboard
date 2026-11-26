@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type {
   ConnectedAccountProvider,
   EmailCampaignObservation,
@@ -92,6 +92,8 @@ function providerDate(value: unknown): string | null {
 
 @Injectable()
 export class AccountProviderClient {
+  private readonly logger = new Logger(AccountProviderClient.name);
+
   sourceApiVersion(provider: ConnectedAccountProvider) {
     if (provider === 'INSTAGRAM' || provider === 'FACEBOOK')
       return `Meta Graph ${process.env.INTEGRATION_META_API_VERSION ?? 'configured-version'}`;
@@ -138,7 +140,7 @@ export class AccountProviderClient {
       url.searchParams.set('state', state);
       url.searchParams.set(
         'scope',
-        'openid profile rw_organization_admin r_organization_social',
+        'rw_organization_admin r_organization_social',
       );
       return url.toString();
     }
@@ -1207,33 +1209,29 @@ export class AccountProviderClient {
     };
     const start = Date.parse(`${from}T00:00:00.000Z`);
     const end = Date.parse(`${this.nextDay(to)}T00:00:00.000Z`);
-    const pageUrl = new URL(
-      'https://api.linkedin.com/rest/organizationPageStatistics',
+    const timeIntervals = `(timeRange:(start:${start},end:${end}),timeGranularityType:DAY)`;
+    const encodedOrg = encodeURIComponent(orgUrn);
+    const pageUrl = this.linkedInRestUrl('organizationPageStatistics', [
+      ['q', 'organization'],
+      ['organization', encodedOrg],
+      ['timeIntervals', timeIntervals],
+    ]);
+    const followersUrl = this.linkedInRestUrl(
+      'organizationalEntityFollowerStatistics',
+      [
+        ['q', 'organizationalEntity'],
+        ['organizationalEntity', encodedOrg],
+        ['timeIntervals', timeIntervals],
+      ],
     );
-    pageUrl.searchParams.set('q', 'organization');
-    pageUrl.searchParams.set('organization', orgUrn);
-    pageUrl.searchParams.set('timeIntervals.timeGranularityType', 'DAY');
-    pageUrl.searchParams.set('timeIntervals.timeRange.start', String(start));
-    pageUrl.searchParams.set('timeIntervals.timeRange.end', String(end));
-    const followersUrl = new URL(
-      'https://api.linkedin.com/rest/organizationalEntityFollowerStatistics',
+    const sharesUrl = this.linkedInRestUrl(
+      'organizationalEntityShareStatistics',
+      [
+        ['q', 'organizationalEntity'],
+        ['organizationalEntity', encodedOrg],
+        ['timeIntervals', timeIntervals],
+      ],
     );
-    followersUrl.searchParams.set('q', 'organizationalEntity');
-    followersUrl.searchParams.set('organizationalEntity', orgUrn);
-    followersUrl.searchParams.set('timeIntervals.timeGranularityType', 'DAY');
-    followersUrl.searchParams.set(
-      'timeIntervals.timeRange.start',
-      String(start),
-    );
-    followersUrl.searchParams.set('timeIntervals.timeRange.end', String(end));
-    const sharesUrl = new URL(
-      'https://api.linkedin.com/rest/organizationalEntityShareStatistics',
-    );
-    sharesUrl.searchParams.set('q', 'organizationalEntity');
-    sharesUrl.searchParams.set('organizationalEntity', orgUrn);
-    sharesUrl.searchParams.set('timeIntervals.timeGranularityType', 'DAY');
-    sharesUrl.searchParams.set('timeIntervals.timeRange.start', String(start));
-    sharesUrl.searchParams.set('timeIntervals.timeRange.end', String(end));
     const [pageStats, followerStats, shareStats] = await Promise.all([
       this.requestJson(pageUrl, credentials.accessToken, headers),
       this.requestJson(followersUrl, credentials.accessToken, headers),
@@ -1383,27 +1381,23 @@ export class AccountProviderClient {
       post.urn.startsWith('urn:li:ugcPost:'),
     );
     const requests: Array<Promise<Record<string, unknown>>> = [];
+    const encodedOrg = encodeURIComponent(organizationUrn);
+    const urnList = (posts: typeof candidates) =>
+      `List(${posts.map((post) => encodeURIComponent(post.urn)).join(',')})`;
     if (shareUrns.length) {
-      const url = new URL(
-        'https://api.linkedin.com/rest/organizationalEntityShareStatistics',
-      );
-      url.searchParams.set('q', 'organizationalEntity');
-      url.searchParams.set('organizationalEntity', organizationUrn);
-      url.searchParams.set(
-        'shares',
-        `List(${shareUrns.map((post) => post.urn).join(',')})`,
-      );
+      const url = this.linkedInRestUrl('organizationalEntityShareStatistics', [
+        ['q', 'organizationalEntity'],
+        ['organizationalEntity', encodedOrg],
+        ['shares', urnList(shareUrns)],
+      ]);
       requests.push(this.requestJson(url, token, headers));
     }
     if (ugcUrns.length) {
-      const url = new URL(
-        'https://api.linkedin.com/rest/organizationalEntityShareStatistics',
-      );
-      url.searchParams.set('q', 'organizationalEntity');
-      url.searchParams.set('organizationalEntity', organizationUrn);
-      ugcUrns.forEach((post, index) =>
-        url.searchParams.set(`ugcPosts[${index}]`, post.urn),
-      );
+      const url = this.linkedInRestUrl('organizationalEntityShareStatistics', [
+        ['q', 'organizationalEntity'],
+        ['organizationalEntity', encodedOrg],
+        ['ugcPosts', urnList(ugcUrns)],
+      ]);
       requests.push(this.requestJson(url, token, headers));
     }
     const statistics = (await Promise.all(requests)).flatMap((result) =>
@@ -2002,6 +1996,37 @@ export class AccountProviderClient {
     return Number.isFinite(delay) && delay > 0 ? delay : undefined;
   }
 
+  // LinkedIn Rest.li 2.0 query syntax: values are passed pre-encoded so that
+  // structural characters such as ( ) : , stay literal while URN values are
+  // percent-encoded. URLSearchParams would encode the structural characters.
+  private linkedInRestUrl(path: string, params: Array<[string, string]>) {
+    const url = new URL(`https://api.linkedin.com/rest/${path}`);
+    url.search = params.map(([key, value]) => `${key}=${value}`).join('&');
+    return url;
+  }
+
+  // Logs the provider's error status and a bounded excerpt of its error body
+  // so failed syncs can be diagnosed. The query string is dropped because some
+  // providers accept tokens there; request headers are never logged.
+  private async logProviderError(response: Response) {
+    let endpoint = 'unknown';
+    try {
+      const url = new URL(response.url);
+      endpoint = `${url.origin}${url.pathname}`;
+    } catch {
+      // Keep the placeholder endpoint.
+    }
+    let excerpt = '';
+    try {
+      excerpt = (await response.text()).slice(0, 500).replace(/\s+/g, ' ');
+    } catch {
+      excerpt = '<unreadable body>';
+    }
+    this.logger.warn(
+      `PROVIDER_HTTP_ERROR status=${response.status} endpoint=${endpoint} body=${excerpt}`,
+    );
+  }
+
   private wait(milliseconds: number) {
     return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
   }
@@ -2009,7 +2034,7 @@ export class AccountProviderClient {
   private async readJson(response: Response): Promise<Record<string, unknown>> {
     if (!response.ok) {
       const retryAfter = response.headers.get('retry-after');
-      await response.body?.cancel();
+      await this.logProviderError(response);
       if (response.status === 401)
         providerFailure(
           'TOKEN_EXPIRED',

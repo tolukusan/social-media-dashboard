@@ -633,6 +633,24 @@ describe('account provider read-only analytics', () => {
       }),
     ]);
     expect(result.emailCampaigns).toEqual([]);
+
+    // Rest.li 2.0 rejects dotted timeIntervals params and requires structural
+    // characters to stay unencoded while URN values are percent-encoded.
+    const searches = fetcher.mock.calls.map(
+      ([input]) => new URL(input.toString()).search,
+    );
+    const end = start + 24 * 60 * 60 * 1000;
+    const interval = `timeIntervals=(timeRange:(start:${start},end:${end}),timeGranularityType:DAY)`;
+    expect(searches).toEqual(
+      expect.arrayContaining([
+        `?q=organization&organization=urn%3Ali%3Aorganization%3A987654&${interval}`,
+        `?q=organizationalEntity&organizationalEntity=urn%3Ali%3Aorganization%3A987654&${interval}`,
+        '?q=organizationalEntity&organizationalEntity=urn%3Ali%3Aorganization%3A987654&shares=List(urn%3Ali%3Ashare%3Afixture123)',
+      ]),
+    );
+    expect(searches.some((search) => search.includes('timeIntervals.'))).toBe(
+      false,
+    );
   });
 
   it('keeps Zoho Campaigns totals in cumulative email reports from a golden payload', async () => {

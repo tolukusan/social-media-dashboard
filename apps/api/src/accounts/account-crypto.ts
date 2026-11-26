@@ -147,12 +147,7 @@ const providerConfig: Record<
   },
   LINKEDIN: {
     accountKind: 'SOCIAL',
-    scopes: [
-      'openid',
-      'profile',
-      'rw_organization_admin',
-      'r_organization_social',
-    ],
+    scopes: ['rw_organization_admin', 'r_organization_social'],
     notes: [
       'LinkedIn Community Management API approval and organization administrator access are required. This app only calls read endpoints.',
     ],
